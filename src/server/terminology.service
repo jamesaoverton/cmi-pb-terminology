@@ -1,0 +1,11 @@
+[Unit]
+Description=Terminology Flask App
+
+[Service]
+Restart=always
+WorkingDirectory=/var/www/terminology/
+ExecStart=/var/www/terminology/src/server/run.sh
+
+[Install]
+WantedBy=local.target
+

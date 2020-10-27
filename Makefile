@@ -5,11 +5,17 @@
 # - [owl](cmi-pb.owl)
 
 
+.PHONY: all
 all: build/cmi-pb.db build/predicates.txt
 
+.PHONY: update
 update:
 	rm -rf build/terminology.xlsx $(TABLES)
 	make all
+
+.PHONY: fetch
+fetch: | build
+	curl -o build/cmi-pb.db https://droid.ontodev.com/CMI-PB/branches/master/views/build/cmi-pb.db
 
 TABLES := src/ontology/upper.tsv src/ontology/terminology.tsv
 PREFIXES := --prefixes build/prefixes.json
