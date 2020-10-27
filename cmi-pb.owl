@@ -1,0 +1,924 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+     xml:base="http://www.w3.org/2002/07/owl"
+     xmlns:obo="http://purl.obolibrary.org/obo/"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+    <Ontology/>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Annotation properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/IAO_0000112 -->
+
+    <AnnotationProperty rdf:about="http://purl.obolibrary.org/obo/IAO_0000112">
+        <obo:IAO_0000115 xml:lang="en">A phrase describing how a class name should be used. May also include other kinds of examples that facilitate immediate understanding of a class semantics, such as widely known prototypical subclasses or instances of the class. Although essential for high level terms, examples for low level terms (e.g., Affymetrix HU133 array) are not</obo:IAO_0000115>
+        <obo:IAO_0000115 xml:lang="en">A phrase describing how a term should be used and/or a citation to a work which uses it. May also include other kinds of examples that facilitate immediate understanding, such as widely know prototypes or instances of a class, or cases where a relation is said to hold.</obo:IAO_0000115>
+        <obo:IAO_0000119 xml:lang="en">GROUP:OBI:&lt;http://purl.obolibrary.org/obo/obi&gt;</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">example of usage</rdfs:label>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/IAO_0000115 -->
+
+    <AnnotationProperty rdf:about="http://purl.obolibrary.org/obo/IAO_0000115">
+        <obo:IAO_0000115 xml:lang="en">The official OBI definition, explaining the meaning of a class or property. Shall be Aristotelian, formalized and normalized. Can be augmented with colloquial definitions.</obo:IAO_0000115>
+        <obo:IAO_0000115 xml:lang="en">The official definition, explaining the meaning of a class or property. Shall be Aristotelian, formalized and normalized. Can be augmented with colloquial definitions.</obo:IAO_0000115>
+        <obo:IAO_0000119 xml:lang="en">GROUP:OBI:&lt;http://purl.obolibrary.org/obo/obi&gt;</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">definition</rdfs:label>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/IAO_0000118 -->
+
+    <AnnotationProperty rdf:about="http://purl.obolibrary.org/obo/IAO_0000118">
+        <obo:IAO_0000115 xml:lang="en">An alternative name for a class or property which means the same thing as the preferred name (semantically equivalent)</obo:IAO_0000115>
+        <obo:IAO_0000119 xml:lang="en">GROUP:OBI:&lt;http://purl.obolibrary.org/obo/obi&gt;</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">alternative term</rdfs:label>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/IAO_0000119 -->
+
+    <AnnotationProperty rdf:about="http://purl.obolibrary.org/obo/IAO_0000119">
+        <obo:IAO_0000115 xml:lang="en">Formal citation, e.g. identifier in external database to indicate / attribute source(s) for the definition. Free text indicate / attribute source(s) for the definition. EXAMPLE: Author Name, URI, MeSH Term C04, PUBMED ID, Wiki uri on 31.01.2007</obo:IAO_0000115>
+        <obo:IAO_0000115 xml:lang="en">formal citation, e.g. identifier in external database to indicate / attribute source(s) for the definition. Free text indicate / attribute source(s) for the definition. EXAMPLE: Author Name, URI, MeSH Term C04, PUBMED ID, Wiki uri on 31.01.2007</obo:IAO_0000115>
+        <obo:IAO_0000119 xml:lang="en">Discussion on obo-discuss mailing-list, see http://bit.ly/hgm99w</obo:IAO_0000119>
+        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Discussion on obo-discuss mailing-list, see http://bit.ly/hgm99w</obo:IAO_0000119>
+        <obo:IAO_0000119 xml:lang="en">GROUP:OBI:&lt;http://purl.obolibrary.org/obo/obi&gt;</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">definition source</rdfs:label>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://www.w3.org/2000/01/rdf-schema#label -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2000/01/rdf-schema#label">
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">label</rdfs:label>
+    </AnnotationProperty>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Classes
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/BFO_0000015 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/BFO_0000015">
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+        <obo:IAO_0000112 xml:lang="en">a process of cell-division, \ a beating of the heart</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a process of meiosis</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a process of sleeping</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">the course of a disease</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">the flight of a bird</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">the life of an organism</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">your process of aging.</obo:IAO_0000112>
+        <obo:IAO_0000115 xml:lang="en">An occurrent that has temporal proper parts and for some time t, p s-depends_on some material entity at t.</obo:IAO_0000115>
+        <obo:IAO_0000115 xml:lang="en">p is a process = Def. p is an occurrent that has temporal proper parts and for some time t, p s-depends_on some material entity at t. (axiom label in BFO2 Reference: [083-003])</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">process</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/BFO_0000040 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/BFO_0000040">
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+        <obo:IAO_0000112 xml:lang="en">a flame</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a forest fire</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a human being</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a hurricane</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a photon</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a puff of smoke</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a sea wave</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">a tornado</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">an aggregate of human beings.</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">an energy wave</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">an epidemic</obo:IAO_0000112>
+        <obo:IAO_0000112 xml:lang="en">the undetached arm of a human being</obo:IAO_0000112>
+        <obo:IAO_0000115 xml:lang="en">An independent continuant that is spatially extended whose identity is independent of that of other entities and can be maintained through time.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">material entity</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CHEBI_35371 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CHEBI_35371">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/COB_0000013"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lipooligosaccharide</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CHEBI_60004 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CHEBI_60004">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mixture is a chemical substance composed of multiple molecules, at least two of which are of a different kind.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mixture</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000000 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000000">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
+        <obo:IAO_0000112 xml:lang="en">PMID:18089833.Cancer Res. 2007 Dec 15;67(24):12018-25. &quot;...Epithelial cells were harvested from histologically confirmed adenocarcinomas ..&quot;</obo:IAO_0000112>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A material entity of anatomical origin (part of or deriving from an organism) that has as its parts a maximally connected cell compartment surrounded by a plasma membrane.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000084 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000084">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A type of lymphocyte whose defining characteristic is the expression of a T cell receptor complex.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000576 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000576">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Myeloid mononuclear recirculating leukocyte that can act as a precursor of tissue macrophages, osteoclasts and some populations of tissue dendritic cells.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">monocyte</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000623 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000623">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A lymphocyte that can spontaneously kill a variety of target cells without prior antigenic activation via germline encoded activation receptors and also regulate immune responses via cytokine release and direct contact with other cells.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">natural killer cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000624 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000624">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mature alpha-beta T cell that expresses an alpha-beta T cell receptor and the CD4 coreceptor.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000625 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000625">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A T cell expressing an alpha-beta T cell receptor and the CD8 coreceptor.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000767 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000767">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Any of the immature or mature forms of a granular leukocyte that in its mature form has an irregularly shaped, pale-staining nucleus that is partially constricted into two lobes, and with cytoplasm that contains coarse, bluish-black granules of variable size. Basophils contain vasoactive amines such as histamine and serotonin, which are released on appropriate stimulation. A basophil is CD123-positive, CD193-positive, CD203c-positive, and FceRIa-positive.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">basophil</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000792 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000792">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD4-positive, CD25-positive, alpha-beta T cell that regulates overall immune responses as well as the responses of other T cell subsets through direct cell-cell contact and cytokine release.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, CD25-positive, alpha-beta regulatory T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000794 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000794">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD8-positive, alpha-beta T cell that is capable of killing target cells in an antigen specific manner with the phenotype perforin-positive and granzyme B-positive.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta cytotoxic T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000860 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000860">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A monocyte that responds rapidly to microbial stimuli by secreting cytokines and antimicrobial factors and which is characterized by high expression of CCR2 in both rodents and humans, negative for the lineage markers CD3, CD19, and CD20, and of larger size than non-classical monocytes.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">classical monocyte</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000895 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000895">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An antigen inexperienced CD4-positive, alpha-beta T cell with the phenotype CCR7-positive, CD127-positive and CD62L-positive. This cell type develops in the thymus. This cell type is also described as being CD25-negative, CD62L-high, and CD44-low.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD4-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000900 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000900">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD8-positive, alpha-beta T cell that has not experienced activation via antigen contact and has the phenotype CD45RA-positive, CCR7-positive and CD127-positive. This cell type is also described as being CD25-negative, CD62L-high and CD44-low.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD8-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000904 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000904">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta memory T cell with the phenotype CCR7-positive, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD4-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000905 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000905">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta memory T cell with the phenotype CCR7-negative, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD4-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000907 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000907">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta memory T cell with the phenotype CCR7-positive, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD8-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000913 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000913">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta memory T cell with the phenotype CCR7-negative, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD8-positive, alpha-beta T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000934 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000934">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD4-positive, alpha-beta T cell that has cytotoxic function.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta cytotoxic T cell</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0000980 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0000980">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An activated mature (naive or memory) B cell that is secreting immunoglobulin, typified by being CD27-positive, CD38-positive, CD138-negative.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plasmablast</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0001057 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0001057">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A myeloid dendritic cell with the phenotype HLA-DRA-positive.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">myeloid dendritic cell, human</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0001058 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0001058">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A plasmacytoid dendritic cell with the phenotype HLA-DRA-positive, CD123-positive, and CD11c-negative.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plasmacytoid dendritic cell, human</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0001201 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0001201">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A B cell that is CD19-positive.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">B cell, CD19-positive</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0002393 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0002393">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A monocyte that has characteristics of both patrolling and inflammatory monocytes.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">intermediate monocyte</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/CL_0002396 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/CL_0002396">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A patrolling monocyte that is CD14-low and CD16-positive.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD14-low, CD16-positive monocyte</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/COB_0000013 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/COB_0000013">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
+        <obo:IAO_0000115>A material entity that consists of two or more atoms that are all connected via covalent bonds such that any atom can be transitively connected with any other atom.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">molecular entity</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/COB_0000061 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/COB_0000061">
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">information</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/GO_0043234 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/GO_0043234">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A stable macromolecular complex composed (only) of two or more polypeptide subunits along with any covalently attached molecules (such as lipid anchors or oligosaccharide) or non-protein prosthetic groups (such as nucleotides or metal ions). Prosthetic group in this context refers to a tightly bound cofactor. The component polypeptide subunits may be identical.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">protein complex</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/IAO_0000003 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/IAO_0000003">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/COB_0000061"/>
+        <obo:IAO_0000112 xml:lang="en">Examples of measurement unit labels are liters, inches, weight per volume.</obo:IAO_0000112>
+        <obo:IAO_0000115 xml:lang="en">A measurement unit label is as a label that is part of a scalar measurement datum and denotes a unit of measure.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">measurement unit label</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/NCIT_C163046 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/NCIT_C163046">
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Mean Fluorescence Intensity Unit</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/NCIT_C2660 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/NCIT_C2660">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Tetanus toxoid vaccine</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/NCIT_C67377 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/NCIT_C67377">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/IAO_0000003"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">International Unit per Milliliter</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0000011 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0000011">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000015"/>
+        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Injecting mice with a vaccine in order to test its efficacy</obo:IAO_0000112>
+        <obo:IAO_0000115 xml:lang="en">A process that realizes a plan which is the concretization of a plan specification.</obo:IAO_0000115>
+        <obo:IAO_0000115 xml:lang="en">A processual entity that realizes a plan which is the concretization of a plan specification.</obo:IAO_0000115>
+        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">branch derived</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">planned process</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0000655 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0000655">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood drawn from a human for glucose assay</obo:IAO_0000112>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">a material entity derived from a portion of blood collected from an organism</obo:IAO_0000115>
+        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Bjoern Peters</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood specimen</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0000917 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0000917">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">type of sample used in the PCIRN influenza network</obo:IAO_0000112>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A specimen obtained using a cotton swab on a stick, passed up the nostril to obtain a sample of
+exudate and epithelial debris for microbiological or cellular examination.</obo:IAO_0000115>
+        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">WEB: http://www.wpro.who.int/NR/rdonlyres/EFD2B9A7-2265-4AD0-BC98-97937B4FA83C/0/manualonanimalaidiagnosisandsurveillance.pdf</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">nasal swab specimen</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0002508 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0002508">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A specimen that is derived from sputum.</obo:IAO_0000115>
+        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Chris Stoeckert, Penn Medicine Biobank</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sputum specimen</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0002776 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0002776">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0000011"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">automatic cell gating</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0002777 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0002777">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0000011"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manual cell gating</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0100016 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0100016">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <obo:IAO_0000112 xml:lang="en">PMID: 18217225.Sex Transm Dis. 2008 Jan;35(1):55-60. Review.Human immunodeficiency virus viral load in blood plasma and semen: review and implications of empirical findings.</obo:IAO_0000112>
+        <obo:IAO_0000115 xml:lang="en">a material entity which corresponds to the liquid component of blood, in which the blood cells are suspended.</obo:IAO_0000115>
+        <obo:IAO_0000118 xml:lang="en">plasma</obo:IAO_0000118>
+        <obo:IAO_0000119 xml:lang="en">WEB: http://en.wikipedia.org/wiki/Blood_plasma</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood plasma specimen</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_0100051 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_0100051">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
+        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Biobanking of blood taken and stored in a freezer for potential future investigations stores specimen.</obo:IAO_0000112>
+        <obo:IAO_0000115 xml:lang="en">A material entity that has the specimen role.</obo:IAO_0000115>
+        <obo:IAO_0000119 xml:lang="en">GROUP: OBI Biomaterial Branch</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">specimen</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/OBI_1110044 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/OBI_1110044">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mixed cell population obtained by processing whole blood. The cells are characterized by having a similar density and are largely mononuclear cells (includes T cells, B cells, and other cell types).</obo:IAO_0000115>
+        <obo:IAO_0000118>PBMC cell culture sample</obo:IAO_0000118>
+        <obo:IAO_0000119 xml:lang="en">IEDB</obo:IAO_0000119>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cultured PBMC cell population</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PATO_0000001 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PATO_0000001">
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">characteristic</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PATO_0000383 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PATO_0000383">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PATO_0000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A biological sex quality inhering in an individual or a population that only produces gametes that can be fertilised by male gametes.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Female</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PATO_0000384 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PATO_0000384">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PATO_0000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A biological sex quality inhering in an individual or a population whose sex organs contain only male gametes.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Male</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_000000001 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_000000001">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/COB_0000013"/>
+        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">antithrombin III is a protein</obo:IAO_0000112>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An amino acid chain that is produced de novo by ribosome-mediated translation of a genetically-encoded mRNA, and any derivatives thereof.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_00005025 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_00005025">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG3 heavy chain protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_000050252 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_000050252">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An immunoglobulin heavy chain protein in which the constant region is encoded by some IgG gene segment.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG heavy chain protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_000050253 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_000050253">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An IgG heavy chain protein in which the constant region is encoded by the IgG1 gene segment.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG1 heavy chain protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_000050254 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_000050254">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An IgG heavy chain protein in which the constant region is encoded by the IgG2 gene segment.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG2 heavy chain protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_000050256 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_000050256">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An IgG heavy chain protein in which the constant region is encoded by the IgG4 gene segment.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG4 heavy chain protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/PR_000050258 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/PR_000050258">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An immunoglobulin heavy chain protein in which the constant region is encoded by the IgE gene segment.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgE heavy chain protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/UO_0000274 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/UO_0000274">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/IAO_0000003"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ug/ml microgram per milliliter</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/VO_0000001 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/VO_0000001">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
+        <obo:IAO_0000115>A vaccine is a processed material with the function that when administered, it prevents or ameliorates a disorder in a target organism by inducing or modifying adaptive immune responses specific to the antigens in the vaccine.</obo:IAO_0000115>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vaccine</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/VO_0000738 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/VO_0000738">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <obo:IAO_0000118>DTP vaccine</obo:IAO_0000118>
+        <obo:IAO_0000118>DTaP vaccine</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DTaP vaccine (Diphtheria-Tetanus-Pertussis vaccine)</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/VO_0003106 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/VO_0003106">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <obo:IAO_0000118>DTP vaccine</obo:IAO_0000118>
+        <obo:IAO_0000118 xml:lang="en">DTwP vaccine</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DTwP vaccine (diphtheria, tetanus and whole cell pertussis vaccine)</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://purl.obolibrary.org/obo/VO_0010784 -->
+
+    <Class rdf:about="http://purl.obolibrary.org/obo/VO_0010784">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Measles virus protein</rdfs:label>
+    </Class>
+    
+
+
+    <!-- http://www.w3.org/1999/02/22-rdf-syntax-ns#Property -->
+
+    <Class rdf:about="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+    
+
+
+    <!-- https://ontology.iedb.org/ontology/ONTIE_0003550 -->
+
+    <Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003550">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/GO_0043234"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin complex</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://ontology.iedb.org/ontology/ONTIE_0003551 -->
+
+    <Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003551">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/GO_0043234"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin complex, inactivated by PFA</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://ontology.iedb.org/ontology/ONTIE_0003552 -->
+
+    <Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003552">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/GO_0043234"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin complex, inactivated mutant</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://ontology.iedb.org/ontology/ONTIE_0003553 -->
+
+    <Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003553">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CHEBI_60004"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Mixture of Fim2 and Fim3</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/A0A171JW18 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/A0A171JW18">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fimbrial protein Fim3</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/C8C508 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/C8C508">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Adenylate cyclase toxin</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/O23748 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/O23748">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pollen allergen, Betv1</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P01012 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P01012">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Ovalbumin</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P04958 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P04958">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Tetanus toxin</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P04977 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P04977">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 1</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P04978 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P04978">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 2</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P04979 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P04979">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 3</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P04981 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P04981">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 5</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P0A3R5 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P0A3R5">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 4</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P12255 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P12255">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Filamentous hemagglutinin</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P14283 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P14283">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertactin autotransporter</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P14946 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P14946">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pollen allergen Lol p 1</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P30438 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/P30438">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Major allergen I polypeptide chain 1</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/Q15116 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/Q15116">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Programmed cell death protein 1</rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/Q5I8X0 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/Q5I8X0">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fimbrial protein </rdfs:label>
+    </Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/Q5PY51 -->
+
+    <Class rdf:about="https://www.uniprot.org/uniprot/Q5PY51">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Diphtheria toxin</rdfs:label>
+    </Class>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Individuals
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://www.w3.org/1999/02/22-rdf-syntax-ns#type -->
+
+    <NamedIndividual rdf:about="http://www.w3.org/1999/02/22-rdf-syntax-ns#type">
+        <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">type</rdfs:label>
+    </NamedIndividual>
+    
+
+
+    <!-- http://www.w3.org/2000/01/rdf-schema#subClassOf -->
+
+    <NamedIndividual rdf:about="http://www.w3.org/2000/01/rdf-schema#subClassOf">
+        <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">subclass of</rdfs:label>
+    </NamedIndividual>
+</rdf:RDF>
+
+
+
+<!-- Generated by the OWL API (version 4.5.6) https://github.com/owlcs/owlapi -->
+
