@@ -2,3 +2,4 @@ build/
 .cogs/
 junk/
 .venv/
+.git-credentials
