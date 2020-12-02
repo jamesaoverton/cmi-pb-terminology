@@ -23,4 +23,4 @@ def cmi(id=None):
     if request.args and "text" in request.args:
         return gizmos.search.search(db, request.args["text"])
     else:
-        return gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True)
+        return gizmos.tree.tree(db, id, title="CMI-PB Terminology", href="./{curie}", predicate_ids=predicate_ids, include_search=True)
