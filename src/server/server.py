@@ -2,7 +2,6 @@
 
 import gizmos.tree
 import gizmos.search
-
 from flask import Flask, request
 
 app = Flask(__name__)
@@ -21,6 +20,12 @@ predicate_ids = [
 def cmi(id=None):
     db = "build/cmi-pb.db"
     if request.args and "text" in request.args:
-        return gizmos.search.search(db, request.args["text"])
+        x = gizmos.search.search(db, request.args["text"])
     else:
-        return gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True)
+        x = gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True)
+    y = open("src/server/templates/header.html", "r").read()
+    body_ind = x.find("<body")
+    end_ind = x.find(">", body_ind)
+    end_body = x.find("</body")
+    fin = x[:(end_ind + 1)] + "\n"+ y + "\n"+x[(end_ind+1):end_body] + "\n" + open("src/server/templates/footer.html", "r").read() + x[end_body]
+    return fin
