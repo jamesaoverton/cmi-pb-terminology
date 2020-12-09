@@ -3,7 +3,6 @@
 import gizmos.tree
 import gizmos.search
 from flask import Flask, request, render_template_string
-from jinja2 import Environment, BaseLoader
 
 app = Flask(__name__)
 predicate_ids = [
@@ -19,16 +18,11 @@ predicate_ids = [
 @app.route('/')
 @app.route('/<id>')
 def cmi(id=None):
+    db = "build/cmi-pb.db"
     if request.args and "text" in request.args:
-        x = gizmos.search.search(db, request.args["text"])
+        source = gizmos.search.search(db, request.args["text"])
+        return source
     else:
-        db = "build/cmi-pb.db"
-        x = gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True, standalone = False)
-        source = "{% extends './templates/layout.html' %}\n{% block content %}\n" + source + "\n{% endblock %}"
-        return render_template_string(source)
-    # y = open("src/server/templates/header.html", "r").read()
-    # body_ind = x.find("<body")
-    # end_ind = x.find(">", body_ind)
-    # end_body = x.find("</body")
-    # fin = x[:(end_ind + 1)] + "\n"+ y + "\n"+x[(end_ind+1):end_body] + "\n" + open("src/server/templates/footer.html", "r").read() + x[end_body]
-    return x
+        source = gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True, standalone = False)
+    source = "{% extends 'layout.html' %}\n{% block content %}\n" + source + "\n{% endblock %}"
+    return render_template_string(source)
