@@ -2,8 +2,8 @@
 
 import gizmos.tree
 import gizmos.search
-from flask import Flask, request
-from jinja2 import Environment, FileSystemLoader
+from flask import Flask, request, render_template_string
+from jinja2 import Environment, BaseLoader
 
 app = Flask(__name__)
 predicate_ids = [
@@ -16,16 +16,29 @@ predicate_ids = [
   "rdfs:subClassOf",
 ]
 
+class TermLoader(BaseLoader):
+    def __init__(self, db, id, predicate_ids):
+        self.db = db
+        self.id = id
+        self.predicate_ids = predicate_ids
+    def get_source(self, environment, template):
+        source = gizmos.tree.tree(self.db, self.id, href="./{curie}", predicate_ids=self.predicate_ids, include_search=True, standalone = False)
+        source = "{% extends './templates/layout.html' %}\n{% block content %}\n" + source + "\n{% endblock %}"
+        return source, None, lambda: False
+
 @app.route('/')
 @app.route('/<id>')
 def cmi(id=None):
-    db = "build/cmi-pb.db"
     if request.args and "text" in request.args:
         x = gizmos.search.search(db, request.args["text"])
     else:
-        loader = FileSystemLoader("./templates/")
-        x = gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True, standalone = False)
 
+
+
+        # db = "build/cmi-pb.db"
+        # x = gizmos.tree.tree(db, id, href="./{curie}", predicate_ids=predicate_ids, include_search=True, standalone = False)
+        # source = "{% extends './templates/layout.html' %}\n{% block content %}\n" + source + "\n{% endblock %}"
+        # return render_template_string(source)
     # y = open("src/server/templates/header.html", "r").read()
     # body_ind = x.find("<body")
     # end_ind = x.find(">", body_ind)
