@@ -3,7 +3,7 @@
 import gizmos.tree
 import gizmos.search
 
-from flask import Flask, request
+from flask import Flask, request, render_template
 
 app = Flask(__name__)
 predicate_ids = [
@@ -23,4 +23,5 @@ def cmi(id=None):
     if request.args and "text" in request.args:
         return gizmos.search.search(db, request.args["text"])
     else:
-        return gizmos.tree.tree(db, id, title="CMI-PB Terminology", href="./{curie}", predicate_ids=predicate_ids, include_search=True)
+        html = gizmos.tree.tree(db, id, title="CMI-PB Terminology", href="./{curie}", predicate_ids=predicate_ids, include_search=True, standalone=False)
+        return render_template("base.html", content=html)
