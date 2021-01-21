@@ -1,5 +1,5 @@
-ID	Label	Type	Parent
-ID	LABEL	TYPE	C %
+ID	Label	Type	Parent	Comment
+ID	LABEL	TYPE	C %	A comment
 BFO:0000040	material entity	owl:Class	owl:Thing
 VO:0000001	vaccine	owl:Class	material entity
 COB:0000013	molecular entity	owl:Class	material entity		
@@ -14,6 +14,7 @@ PATO:0000001	characteristic	owl:Class	owl:Thing
 COB:0000061	information	owl:Class	owl:Thing
 IAO:0000003	measurement unit label	owl:Class	information
 rdfs:label	label	owl:AnnotationProperty
+rdfs:comment	comment	owl:AnnotationProperty
 IAO:0000118	alternative term	owl:AnnotationProperty
 IAO:0000115	definition	owl:AnnotationProperty
 IAO:0000119	definition source	owl:AnnotationProperty

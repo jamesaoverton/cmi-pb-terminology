@@ -4,6 +4,7 @@ rdfs	http://www.w3.org/2000/01/rdf-schema#
 xsd	http://www.w3.org/2001/XMLSchema#
 owl	http://www.w3.org/2002/07/owl#
 uniprot	https://www.uniprot.org/uniprot/
+dc	http://purl.org/dc/terms/
 BFO	http://purl.obolibrary.org/obo/BFO_
 COB	http://purl.obolibrary.org/obo/COB_
 CHEBI	http://purl.obolibrary.org/obo/CHEBI_

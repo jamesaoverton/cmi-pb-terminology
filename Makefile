@@ -1,13 +1,16 @@
 ### Workflow
 #
 # - [terminology](https://docs.google.com/spreadsheets/d/1xCrNM8Rv3v04ii1Fd8GMNTSwHzreo74t4DGsAeTsMbk/edit#gid=0)
+# - [all](all)
 # - [tree](./src/server/tree.sh)
 # - [db](build/cmi-pb.db)
 # - [owl](cmi-pb.owl)
 
 
+.PHONY: all
 all: build/cmi-pb.db build/predicates.txt
 
+.PHONY: update
 update:
 	rm -rf build/terminology.xlsx $(TABLES)
 	make all
@@ -54,6 +57,10 @@ build/prefixes.json: src/ontology/prefixes.tsv
 cmi-pb.owl: build/prefixes.json $(TABLES) build/imports.owl | build/robot.jar
 	$(ROBOT) template \
 	$(foreach T,$(TABLES),--template $(T)) \
+	annotate \
+	--ontology-iri "https://cmi-pb.org/terminology/cmi-pb.owl" \
+	--annotation rdfs:comment "Comment" \
+	--annotation dc:title "CMI-PB" \
 	merge \
 	--input build/imports.owl \
 	--include-annotations true \

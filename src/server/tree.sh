@@ -4,6 +4,7 @@
 
 cd ../..
 
+TITLE="CMI-PB Terminology"
 URL="http://example.com?${QUERY_STRING}"
 ID=$(urlp --query --query_field=id "${URL}")
 DB=$(urlp --query --query_field=db "${URL}")
@@ -21,9 +22,9 @@ if [[ ${DB} ]]; then
 
     # Generate the tree view
     if [[ ${ID} ]]; then
-    	python3 -m gizmos.tree "${DB_PATH}" ${ID} -d -P build/predicates.txt
+    	python3 -m gizmos.tree "${DB_PATH}" ${ID} -d -P build/predicates.txt -t "${TITLE}"
     else
-    	python3 -m gizmos.tree "${DB_PATH}" -d -P build/predicates.txt
+    	python3 -m gizmos.tree "${DB_PATH}" -d -P build/predicates.txt -t "${TITLE}"
     fi
 else
     echo "Content-Type: text/html"
