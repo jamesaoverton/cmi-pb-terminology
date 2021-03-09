@@ -5,6 +5,7 @@
 # - [tree](./src/server/tree.sh)
 # - [db](build/cmi-pb.db)
 # - [owl](cmi-pb.owl)
+# - [images](images/)
 
 
 .PHONY: all
@@ -69,7 +70,7 @@ cmi-pb.owl: build/prefixes.json $(TABLES) build/imports.owl | build/robot.jar
 build/cmi-pb-tree.html: cmi-pb.owl | build/robot-tree.jar
 	$(ROBOT_TREE) tree --input $< --tree $@
 
-build/prefixes.sql: build/prefixes.tsv | build
+build/prefixes.sql: src/ontology/prefixes.tsv | build
 	echo "CREATE TABLE IF NOT EXISTS prefix (" > $@
 	echo "  prefix TEXT PRIMARY KEY," >> $@
 	echo "  base TEXT NOT NULL" >> $@
@@ -89,19 +90,19 @@ build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
 # Imports
 
 IMPORTS := bfo chebi cl cob go obi pr vo
-OWL_IMPORTS := $(foreach I,$(IMPORTS),build/$(I).owl)
+OWL_IMPORTS := $(foreach I,$(IMPORTS),build/$(I).owl.gz)
 DBS := build/cmi-pb.db $(foreach I,$(IMPORTS),build/$(I).db)
 MODULES := $(foreach I,$(IMPORTS),build/$(I)-import.ttl)
 
 dbs: $(DBS)
 
 $(OWL_IMPORTS): | build
-	curl -Lk -o $@ http://purl.obolibrary.org/obo/$(notdir $@)
+	curl -Lk http://purl.obolibrary.org/obo/$(subst .gz,,$(notdir $@)) | gzip > $@
 
-build/%.db: build/%.owl | build/rdftab build/prefixes.sql
+build/%.db: build/%.owl.gz | build/rdftab build/prefixes.sql
 	rm -rf $@
 	sqlite3 $@ < build/prefixes.sql
-	./build/rdftab $@ < $<
+	zcat $< | ./build/rdftab $@
 
 build/terms.txt: src/ontology/upper.tsv src/ontology/terminology.tsv
 	cut -f1 $< \
