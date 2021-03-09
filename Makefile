@@ -91,7 +91,7 @@ build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
 
 # Imports
 
-IMPORTS := bfo cl cob go obi pr vo
+IMPORTS := bfo chebi cl cob go obi pr vo
 OWL_IMPORTS := $(foreach I,$(IMPORTS),build/$(I).owl.gz)
 DBS := build/cmi-pb.db $(foreach I,$(IMPORTS),build/$(I).db)
 MODULES := $(foreach I,$(IMPORTS),build/$(I)-import.ttl)
