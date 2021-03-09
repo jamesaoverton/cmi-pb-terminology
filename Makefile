@@ -33,8 +33,12 @@ build/robot-tree.jar: | build
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 	RDFTAB_URL := https://github.com/ontodev/rdftab.rs/releases/download/v0.1.1/rdftab-x86_64-apple-darwin
+	JSON_SED := sed 's/\(.*\)	\(.*\)/    "\1": "\2",/'
+	SQL_SED := sed 's/\(.*\)	\(.*\)/("\1", "\2"),/'
 else
 	RDFTAB_URL := https://github.com/ontodev/rdftab.rs/releases/download/v0.1.1/rdftab-x86_64-unknown-linux-musl
+	JSON_SED := sed 's/\(.*\)\t\(.*\)/    "\1": "\2",/'
+	SQL_SED := sed 's/\(.*\)\t\(.*\)/("\1", "\2"),/'
 endif
 
 build/rdftab: | build
@@ -49,8 +53,7 @@ src/ontology/%.tsv: build/terminology.xlsx
 
 build/prefixes.json: src/ontology/prefixes.tsv
 	echo '{ "@context": {' > $@
-	tail -n+2 $< \
-	| sed 's/\(.*\)\t\(.*\)/    "\1": "\2",/' \
+	tail -n+2 $< | $(JSON_SED) \
 	>> $@
 	echo '    "CMI-PB": "http://example.com/cmi-pb/"' >> $@
 	echo '} }' >> $@
@@ -76,8 +79,7 @@ build/prefixes.sql: src/ontology/prefixes.tsv | build
 	echo "  base TEXT NOT NULL" >> $@
 	echo ");" >> $@
 	echo "INSERT OR IGNORE INTO prefix VALUES" >> $@
-	tail -n+2 $< \
-	| sed 's/\(.*\)\t\(.*\)/("\1", "\2"),/' \
+	tail -n+2 $< | $(SQL_SED) \
 	>> $@
 	echo '("CMI-PB", "http://example.com/cmi-pb/");' >> $@
 

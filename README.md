@@ -24,11 +24,6 @@ You can install the Python library via `pip`:
 pip install git+https://github.com/jamesaoverton/cmi-pb-terminology.git
 ```
 
-Two environment variables are expected:
-
-1. `CMI_PB_TERMINOLOGY_URL` is the URL of the `cmi-pb.db` file
-2. `CMI_PB_TERMINOLOGY_SECRET`
-
 ## 3. Test Server
 
 We provide a simple Flask server that will serve terminology pages without
