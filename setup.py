@@ -6,8 +6,10 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
+install_requires = ["ontodev-gizmos"]
+
 setup(
-    name="terminology",
+    name="cmi-pb-terminology",
     version="0.0.1",
     description="Terminology tools for the Computational Modelling of Immunology Pertussis Boost project.",
     long_description=long_description,
@@ -22,8 +24,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
     ],
-    package_dir={"": "src"},
-    packages=find_packages(where="src"),
+    install_requires=install_requires,
+    packages=find_packages(exclude="test"),
     python_requires=">=3.6, <4",
-    install_requires=["ontodev-gizmos"],
 )
