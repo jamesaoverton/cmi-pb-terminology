@@ -24,6 +24,11 @@ def search(text, db=None):
     return gizmos.search.search(db, text)
 
 
+def term(db=None):
+    """Return the HTML tree browser at the top-level Class."""
+    return term(None, db=db)
+
+
 def term(term_id, db=None):
     """Return the HTML tree browser at a given term ID.
     If term_id is None, return the top-level."""
@@ -36,5 +41,5 @@ def term(term_id, db=None):
         href="./{curie}",
         predicate_ids=PREDICATE_IDS,
         include_search=False,
-        standalone=True,
+        standalone=False,
     )
