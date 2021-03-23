@@ -31,7 +31,8 @@ def main():
                   JOIN statements s2 ON s1.object = s2.subject
                 WHERE s1.subject IN ({proteins_str})
                   AND s1.predicate = 'uniprot_core:recommendedName'
-                  AND s2.predicate = 'uniprot_core:fullName';""")
+                  AND s2.predicate = 'uniprot_core:fullName';"""
+        )
         for res in cur.fetchall():
             uniprot = res[0].split(":")[1]
             details[uniprot] = {"label": res[1]}
@@ -61,7 +62,8 @@ def main():
                   JOIN statements s2 ON s1.object = s2.subject
                 WHERE s1.subject IN ({proteins_str})
                   AND s1.predicate = 'uniprot_core:alternativeName'
-                  AND s2.predicate = 'uniprot_core:fullName';""")
+                  AND s2.predicate = 'uniprot_core:fullName';"""
+        )
         for res in cur.fetchall():
             uniprot = res[0].split(":")[1]
             if uniprot not in synonyms:
@@ -83,13 +85,26 @@ def main():
 
     # Build the ROBOT template
     with open(args.output, "w") as f:
-        writer = csv.DictWriter(f, fieldnames=["uniprot_id", "parent", "label", "short_label", "synonyms"], delimiter="\t", lineterminator="\n")
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["uniprot_id", "parent", "label", "short_label", "synonyms"],
+            delimiter="\t",
+            lineterminator="\n",
+        )
         writer.writeheader()
         # Write ROBOT template strings
-        writer.writerow({"uniprot_id": "ID", "parent": "SC %", "label": "LABEL", "short_label": "A CMI_PB:shortLabel", "synonyms": "A IAO:0000118 SPLIT=|"})
+        writer.writerow(
+            {
+                "uniprot_id": "ID",
+                "parent": "SC %",
+                "label": "LABEL",
+                "short_label": "A CMI_PB:shortLabel",
+                "synonyms": "A IAO:0000118 SPLIT=|",
+            }
+        )
         # Write all rows
         writer.writerows(rows)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
