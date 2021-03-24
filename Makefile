@@ -133,7 +133,7 @@ $(OWL_IMPORTS): | build
 build/%.db: build/%.owl.gz | build/rdftab build/prefixes.sql
 	rm -rf $@
 	sqlite3 $@ < build/prefixes.sql
-	zcat $< | ./build/rdftab $@
+	zcat < $< | ./build/rdftab $@
 
 build/terms.txt: src/ontology/upper.tsv src/ontology/terminology.tsv
 	cut -f1 $< \
@@ -150,7 +150,7 @@ build/terms.txt: src/ontology/upper.tsv src/ontology/terminology.tsv
 build/predicates.txt: src/ontology/upper.tsv
 	grep "owl:AnnotationProperty\|rdf:Property" $< | cut -f1 > $@
 
-ANN_PROPS := IAO:0000112 IAO:0000115 IAO:0000118 IAO:0000119
+ANN_PROPS := IAO:0000112 IAO:0000115 IAO:0000118 IAO:0000119 oio:hasExactSynonym oio:hasBroadSynonym oio:hasNarrowSynonym oio:hasRelatedSynonym
 
 build/%-import.ttl: build/%.db build/terms.txt
 	$(eval ANNS := $(foreach A,$(ANN_PROPS),-p $(A)))
