@@ -7,6 +7,7 @@ CMI_PB_DB = "build/cmi-pb.db"
 
 PREDICATE_IDS = [
     "rdfs:label",
+    "CMI-PB:shortLabel",
     "IAO:0000118",
     "IAO:0000115",
     "IAO:0000119",
