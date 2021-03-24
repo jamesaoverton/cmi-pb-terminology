@@ -957,6 +957,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/A0A171JW18">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">fim3</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fimbrial protein Fim3</rdfs:label>
     </owl:Class>
     
@@ -1523,6 +1524,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P04977">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ptxA</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 1</rdfs:label>
     </owl:Class>
     
@@ -1532,6 +1534,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P04978">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ptxB</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 2</rdfs:label>
     </owl:Class>
     
@@ -1541,6 +1544,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P04979">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ptxC</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 3</rdfs:label>
     </owl:Class>
     
@@ -1550,6 +1554,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P04981">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ptxE</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 5</rdfs:label>
     </owl:Class>
     
@@ -1813,6 +1818,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P0A3R5">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ptxD</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin subunit 4</rdfs:label>
     </owl:Class>
     
@@ -3509,7 +3515,8 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q5I8X0">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
-        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fimbrial protein </rdfs:label>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">fim2</cmi-pb:shortLabel>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fimbrial protein</rdfs:label>
     </owl:Class>
     
 
