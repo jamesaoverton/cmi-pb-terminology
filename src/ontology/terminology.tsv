@@ -1,5 +1,5 @@
 Column	Label	IRI	Source Ontology Label	Parent	Comments
-		ID	LABEL	C %	
+	A CMI-PB:shortLabel	ID	LABEL	C %	
 subject.infancy_vac	aP	http://purl.obolibrary.org/obo/VO_0000738	DTaP vaccine (Diphtheria-Tetanus-Pertussis vaccine)	vaccine
 subject.infancy_vac 	wP	http://purl.obolibrary.org/obo/VO_0003106	DTwP vaccine (diphtheria, tetanus and whole cell pertussis vaccine)	vaccine
 subject.biological_sex 	Male	http://purl.obolibrary.org/obo/PATO_0000384	Male	characteristic

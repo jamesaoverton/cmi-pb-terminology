@@ -5,15 +5,29 @@ import gizmos.search
 
 CMI_PB_DB = "build/cmi-pb.db"
 
+# Predicates to display in browser
 PREDICATE_IDS = [
     "rdfs:label",
     "CMI-PB:shortLabel",
     "IAO:0000118",
+    "oio:hasExactSynonym",
+    "oio:hasBroadSynonym",
+    "oio:hasNarrowSynonym",
+    "oio:hasRelatedSynonym",
     "IAO:0000115",
     "IAO:0000119",
     "IAO:0000112",
     "rdf:type",
     "rdfs:subClassOf",
+]
+
+# Synonyms to search under
+SYNONYMS = [
+    "IAO:0000118",
+    "oio:hasExactSynonym",
+    "oio:hasBroadSynonym",
+    "oio:hasNarrowSynonym",
+    "oio:hasRelatedSynonym",
 ]
 
 
@@ -22,7 +36,7 @@ def search(text, db=None):
     Return the results in JSON format for Typeahead search."""
     if not db:
         db = CMI_PB_DB
-    return gizmos.search.search(db, text)
+    return gizmos.search.search(db, text, short_label="CMI-PB:shortLabel", synonyms=SYNONYMS)
 
 
 def term(db=None):

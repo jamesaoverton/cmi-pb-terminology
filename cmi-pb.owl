@@ -8,7 +8,8 @@
      xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
      xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
      xmlns:terms="http://purl.org/dc/terms/"
-     xmlns:cmi-pb="http://example.com/cmi-pb/">
+     xmlns:cmi-pb="http://example.com/cmi-pb/"
+     xmlns:oboInOwl="http://www.geneontology.org/formats/oboInOwl#">
     <owl:Ontology rdf:about="https://cmi-pb.org/terminology/cmi-pb.owl">
         <terms:title rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CMI-PB</terms:title>
         <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Comment</rdfs:comment>
@@ -77,6 +78,30 @@
         <obo:IAO_0000119 xml:lang="en">GROUP:OBI:&lt;http://purl.obolibrary.org/obo/obi&gt;</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">definition source</rdfs:label>
     </owl:AnnotationProperty>
+    
+
+
+    <!-- http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym -->
+
+    <owl:AnnotationProperty rdf:about="http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym"/>
+    
+
+
+    <!-- http://www.geneontology.org/formats/oboInOwl#hasExactSynonym -->
+
+    <owl:AnnotationProperty rdf:about="http://www.geneontology.org/formats/oboInOwl#hasExactSynonym"/>
+    
+
+
+    <!-- http://www.geneontology.org/formats/oboInOwl#hasNarrowSynonym -->
+
+    <owl:AnnotationProperty rdf:about="http://www.geneontology.org/formats/oboInOwl#hasNarrowSynonym"/>
+    
+
+
+    <!-- http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym -->
+
+    <owl:AnnotationProperty rdf:about="http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym"/>
     
 
 
@@ -151,6 +176,9 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CHEBI_35371">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/COB_0000013"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LOS</cmi-pb:shortLabel>
+        <oboInOwl:hasRelatedSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LOS</oboInOwl:hasRelatedSynonym>
+        <oboInOwl:hasRelatedSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lipooligosaccharides</oboInOwl:hasRelatedSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lipooligosaccharide</rdfs:label>
     </owl:Class>
     
@@ -161,6 +189,7 @@
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CHEBI_60004">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mixture is a chemical substance composed of multiple molecules, at least two of which are of a different kind.</obo:IAO_0000115>
+        <oboInOwl:hasRelatedSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Mischung</oboInOwl:hasRelatedSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mixture</rdfs:label>
     </owl:Class>
     
@@ -181,7 +210,13 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000084">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD3 Tcells</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A type of lymphocyte whose defining characteristic is the expression of a T cell receptor complex.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T-lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasRelatedSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immature T cell</oboInOwl:hasRelatedSynonym>
+        <oboInOwl:hasRelatedSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mature T cell</oboInOwl:hasRelatedSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T cell</rdfs:label>
     </owl:Class>
     
@@ -191,6 +226,8 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000576">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD33HLADR</cmi-pb:shortLabel>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Monocytes</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Myeloid mononuclear recirculating leukocyte that can act as a precursor of tissue macrophages, osteoclasts and some populations of tissue dendritic cells.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">monocyte</rdfs:label>
     </owl:Class>
@@ -201,7 +238,11 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000623">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">NK </cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A lymphocyte that can spontaneously kill a variety of target cells without prior antigenic activation via germline encoded activation receptors and also regulate immune responses via cytokine release and direct contact with other cells.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">large granular lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">null cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">NK cell</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">natural killer cell</rdfs:label>
     </owl:Class>
     
@@ -211,7 +252,11 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000624">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4Tcells</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mature alpha-beta T cell that expresses an alpha-beta T cell receptor and the CD4 coreceptor.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -221,7 +266,11 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000625">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8Tcells</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A T cell expressing an alpha-beta T cell receptor and the CD8 coreceptor.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -231,7 +280,12 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000767">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Basophils</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Any of the immature or mature forms of a granular leukocyte that in its mature form has an irregularly shaped, pale-staining nucleus that is partially constricted into two lobes, and with cytoplasm that contains coarse, bluish-black granules of variable size. Basophils contain vasoactive amines such as histamine and serotonin, which are released on appropriate stimulation. A basophil is CD123-positive, CD193-positive, CD203c-positive, and FceRIa-positive.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">polymorphonuclear leucocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">polymorphonuclear leukocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">basophilic leucocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">basophilic leukocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">basophil</rdfs:label>
     </owl:Class>
     
@@ -241,7 +295,16 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000792">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Tregs</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD4-positive, CD25-positive, alpha-beta T cell that regulates overall immune responses as well as the responses of other T cell subsets through direct cell-cell contact and cytokine release.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>Treg</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">suppressor T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">suppressor T lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">suppressor T-cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">suppressor T-lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, CD25-positive, alpha-beta regulatory T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, CD25-positive, alpha-beta regulatory T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, CD25-positive, alpha-beta regulatory T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, CD25-positive, alpha-beta regulatory T cell</rdfs:label>
     </owl:Class>
     
@@ -251,7 +314,19 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000794">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TemraCD8</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD8-positive, alpha-beta T cell that is capable of killing target cells in an antigen specific manner with the phenotype perforin-positive and granzyme B-positive.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cytotoxic T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cytotoxic T lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cytotoxic T-cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cytotoxic T-lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">killer T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">killer T lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">killer T-cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">killer T-lymphocyte</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta cytotoxic T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta cytotoxic T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta cytotoxic T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta cytotoxic T cell</rdfs:label>
     </owl:Class>
     
@@ -261,7 +336,9 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000860">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Classical_Monocytes</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A monocyte that responds rapidly to microbial stimuli by secreting cytokines and antimicrobial factors and which is characterized by high expression of CCR2 in both rodents and humans, negative for the lineage markers CD3, CD19, and CD20, and of larger size than non-classical monocytes.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">inflammatory monocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">classical monocyte</rdfs:label>
     </owl:Class>
     
@@ -271,7 +348,14 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000895">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">NaiveCD4</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An antigen inexperienced CD4-positive, alpha-beta T cell with the phenotype CCR7-positive, CD127-positive and CD62L-positive. This cell type develops in the thymus. This cell type is also described as being CD25-negative, CD62L-high, and CD44-low.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>naive CD4+ T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T.4Nve.Sp</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Th0</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD4-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD4-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD4-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD4-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -281,7 +365,13 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000900">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">NaiveCD8</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD8-positive, alpha-beta T cell that has not experienced activation via antigen contact and has the phenotype CD45RA-positive, CCR7-positive and CD127-positive. This cell type is also described as being CD25-negative, CD62L-high and CD44-low.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>naive CD8+ T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-dervied CD8-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-dervied CD8-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-dervied CD8-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasNarrowSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">T.8Nve.Sp</oboInOwl:hasNarrowSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">naive thymus-derived CD8-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -291,7 +381,16 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000904">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TcmCD4</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta memory T cell with the phenotype CCR7-positive, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>central memory CD4+ T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD4-positive, alpha-beta memory T cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD4-positive, alpha-beta memory T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD4-positive, alpha-beta memory T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD4-positive, alpha-beta memory T-lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD4-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD4-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD4-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD4-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -301,7 +400,16 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000905">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TemCD4</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta memory T cell with the phenotype CCR7-negative, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD4+ T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD4-positive, alpha-beta memory T cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD4-positive, alpha-beta memory T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD4-positive, alpha-beta memory T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD4-positive, alpha-beta memory T-lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD4-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD4-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD4-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD4-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -311,7 +419,16 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000907">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TcmCD8</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta memory T cell with the phenotype CCR7-positive, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>central memory CD8+ T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD8-positive, alpha-beta memory T cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD8-positive, alpha-beta memory T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD8-positive, alpha-beta memory T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central CD8-positive, alpha-beta memory T-lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD8-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD8-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD8-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">central memory CD8-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -321,7 +438,16 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000913">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TemCD8</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD8-positive, alpha-beta memory T cell with the phenotype CCR7-negative, CD127-positive, CD45RA-negative, CD45RO-positive, and CD25-negative.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>effector memory CD8+ T cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD8-positive, alpha-beta memory T cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD8-positive, alpha-beta memory T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD8-positive, alpha-beta memory T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector CD8-positive, alpha-beta memory T-lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD8-positive, alpha-beta T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD8-positive, alpha-beta T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD8-positive, alpha-beta T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">effector memory CD8-positive, alpha-beta T cell</rdfs:label>
     </owl:Class>
     
@@ -331,7 +457,11 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000934">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TemraCD4</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A CD4-positive, alpha-beta T cell that has cytotoxic function.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta cytotoxic T lymphocyte</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta cytotoxic T-cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta cytotoxic T-lymphocyte</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD4-positive, alpha-beta cytotoxic T cell</rdfs:label>
     </owl:Class>
     
@@ -341,7 +471,10 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0000980">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ASCs (Plasmablasts)</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An activated mature (naive or memory) B cell that is secreting immunoglobulin, typified by being CD27-positive, CD38-positive, CD138-negative.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>CD20-negative B cell</oboInOwl:hasBroadSynonym>
+        <oboInOwl:hasExactSynonym>CD27-positive, CD38-positive, CD20-negative B cell</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plasmablast</rdfs:label>
     </owl:Class>
     
@@ -351,7 +484,9 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0001057">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mDC</cmi-pb:shortLabel>
         <obo:IAO_0000115>A myeloid dendritic cell with the phenotype HLA-DRA-positive.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>myeloid dendritic cell</oboInOwl:hasBroadSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">myeloid dendritic cell, human</rdfs:label>
     </owl:Class>
     
@@ -361,7 +496,9 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0001058">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pDC</cmi-pb:shortLabel>
         <obo:IAO_0000115>A plasmacytoid dendritic cell with the phenotype HLA-DRA-positive, CD123-positive, and CD11c-negative.</obo:IAO_0000115>
+        <oboInOwl:hasBroadSynonym>plasmacytoid dendritic cell</oboInOwl:hasBroadSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plasmacytoid dendritic cell, human</rdfs:label>
     </owl:Class>
     
@@ -371,7 +508,13 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0001201">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Bcells</cmi-pb:shortLabel>
         <obo:IAO_0000115>A B cell that is CD19-positive.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym>B lymphocyte, CD19-positive</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym>B-cell, CD19-positive</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym>B-lymphocyte, CD19-positive</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym>CD19+ B cell</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym>CD19-positive B cell</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">B cell, CD19-positive</rdfs:label>
     </owl:Class>
     
@@ -381,6 +524,7 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0002393">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Intermediate_Monocytes</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A monocyte that has characteristics of both patrolling and inflammatory monocytes.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">intermediate monocyte</rdfs:label>
     </owl:Class>
@@ -391,7 +535,9 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/CL_0002396">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CL_0000000"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Non-Classical_Monocytes</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A patrolling monocyte that is CD14-low and CD16-positive.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym>non-classical monocyte, human</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CD14-low, CD16-positive monocyte</rdfs:label>
     </owl:Class>
     
@@ -421,6 +567,7 @@
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/GO_0043234">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A stable macromolecular complex composed (only) of two or more polypeptide subunits along with any covalently attached molecules (such as lipid anchors or oligosaccharide) or non-protein prosthetic groups (such as nucleotides or metal ions). Prosthetic group in this context refers to a tightly bound cofactor. The component polypeptide subunits may be identical.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">protein-protein complex</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">protein complex</rdfs:label>
     </owl:Class>
     
@@ -440,6 +587,7 @@
     <!-- http://purl.obolibrary.org/obo/NCIT_C163046 -->
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/NCIT_C163046">
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">MFI</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Mean Fluorescence Intensity Unit</rdfs:label>
     </owl:Class>
     
@@ -458,6 +606,7 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/NCIT_C67377">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/IAO_0000003"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IU/ML</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">International Unit per Milliliter</rdfs:label>
     </owl:Class>
     
@@ -480,6 +629,7 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0000655">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Blood</cmi-pb:shortLabel>
         <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood drawn from a human for glucose assay</obo:IAO_0000112>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">a material entity derived from a portion of blood collected from an organism</obo:IAO_0000115>
         <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Bjoern Peters</obo:IAO_0000119>
@@ -492,6 +642,7 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0000917">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">nasal swab</cmi-pb:shortLabel>
         <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">type of sample used in the PCIRN influenza network</obo:IAO_0000112>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A specimen obtained using a cotton swab on a stick, passed up the nostril to obtain a sample of
 exudate and epithelial debris for microbiological or cellular examination.</obo:IAO_0000115>
@@ -505,6 +656,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0002508">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sputum</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A specimen that is derived from sputum.</obo:IAO_0000115>
         <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Chris Stoeckert, Penn Medicine Biobank</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sputum specimen</rdfs:label>
@@ -516,6 +668,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0002776">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0000011"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Automated</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">automatic cell gating</rdfs:label>
     </owl:Class>
     
@@ -525,6 +678,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0002777">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0000011"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Manual</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manual cell gating</rdfs:label>
     </owl:Class>
     
@@ -534,6 +688,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0100016">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood plasma</cmi-pb:shortLabel>
         <obo:IAO_0000112 xml:lang="en">PMID: 18217225.Sex Transm Dis. 2008 Jan;35(1):55-60. Review.Human immunodeficiency virus viral load in blood plasma and semen: review and implications of empirical findings.</obo:IAO_0000112>
         <obo:IAO_0000115 xml:lang="en">a material entity which corresponds to the liquid component of blood, in which the blood cells are suspended.</obo:IAO_0000115>
         <obo:IAO_0000118 xml:lang="en">plasma</obo:IAO_0000118>
@@ -559,6 +714,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_1110044">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PBMC</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mixed cell population obtained by processing whole blood. The cells are characterized by having a similar density and are largely mononuclear cells (includes T cells, B cells, and other cell types).</obo:IAO_0000115>
         <obo:IAO_0000118>PBMC cell culture sample</obo:IAO_0000118>
         <obo:IAO_0000119 xml:lang="en">IEDB</obo:IAO_0000119>
@@ -581,6 +737,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PATO_0000383">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PATO_0000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Female</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A biological sex quality inhering in an individual or a population that only produces gametes that can be fertilised by male gametes.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Female</rdfs:label>
     </owl:Class>
@@ -591,6 +748,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PATO_0000384">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PATO_0000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Male</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A biological sex quality inhering in an individual or a population whose sex organs contain only male gametes.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Male</rdfs:label>
     </owl:Class>
@@ -603,6 +761,8 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/COB_0000013"/>
         <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">antithrombin III is a protein</obo:IAO_0000112>
         <obo:IAO_0000115>An amino acid chain that is produced de novo by ribosome-mediated translation of a genetically-encoded mRNA, and any derivatives thereof.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym>natural protein</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasNarrowSynonym>native protein</oboInOwl:hasNarrowSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">protein</rdfs:label>
     </owl:Class>
     
@@ -612,6 +772,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_00005025">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG3</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG3 heavy chain protein</rdfs:label>
     </owl:Class>
     
@@ -621,7 +782,12 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_000050252">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An immunoglobulin heavy chain protein in which the constant region is encoded by some IgG gene segment.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgHG</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin G heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin gamma heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin heavy chain gamma</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG heavy chain protein</rdfs:label>
     </owl:Class>
     
@@ -631,7 +797,12 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_000050253">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG1</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An IgG heavy chain protein in which the constant region is encoded by the IgG1 gene segment.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgHG1</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin G1 heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin gamma 1 heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin heavy chain gamma 1</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG1 heavy chain protein</rdfs:label>
     </owl:Class>
     
@@ -641,7 +812,12 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_000050254">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG2</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An IgG heavy chain protein in which the constant region is encoded by the IgG2 gene segment.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgHG2</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin G2 heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin gamma 2 heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin heavy chain gamma 2</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG2 heavy chain protein</rdfs:label>
     </owl:Class>
     
@@ -651,7 +827,12 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_000050256">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG4</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An IgG heavy chain protein in which the constant region is encoded by the IgG4 gene segment.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgHG4</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin G4 heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin gamma 4 heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin heavy chain gamma 4</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgG4 heavy chain protein</rdfs:label>
     </owl:Class>
     
@@ -661,7 +842,12 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_000050258">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgE</cmi-pb:shortLabel>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">An immunoglobulin heavy chain protein in which the constant region is encoded by the IgE gene segment.</obo:IAO_0000115>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgHE</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin E heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin epsilon heavy chain</oboInOwl:hasExactSynonym>
+        <oboInOwl:hasExactSynonym rdf:datatype="http://www.w3.org/2001/XMLSchema#string">immunoglobulin heavy chain epsilon</oboInOwl:hasExactSynonym>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IgE heavy chain protein</rdfs:label>
     </owl:Class>
     
@@ -671,6 +857,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/UO_0000274">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/IAO_0000003"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">UG/ML</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ug/ml microgram per milliliter</rdfs:label>
     </owl:Class>
     
@@ -690,6 +877,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/VO_0000738">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">aP</cmi-pb:shortLabel>
         <obo:IAO_0000118>DTP vaccine</obo:IAO_0000118>
         <obo:IAO_0000118>DTaP vaccine</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DTaP vaccine (Diphtheria-Tetanus-Pertussis vaccine)</rdfs:label>
@@ -701,6 +889,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/VO_0003106">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">wP</cmi-pb:shortLabel>
         <obo:IAO_0000118>DTP vaccine</obo:IAO_0000118>
         <obo:IAO_0000118 xml:lang="en">DTwP vaccine</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DTwP vaccine (diphtheria, tetanus and whole cell pertussis vaccine)</rdfs:label>
@@ -712,6 +901,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/VO_0010784">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/VO_0000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Measles</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Measles virus protein</rdfs:label>
     </owl:Class>
     
@@ -727,6 +917,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003550">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/GO_0043234"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PT</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin complex</rdfs:label>
     </owl:Class>
     
@@ -736,6 +927,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003551">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/GO_0043234"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1% PFA PT</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin complex, inactivated by PFA</rdfs:label>
     </owl:Class>
     
@@ -745,6 +937,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003552">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/GO_0043234"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PTM</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertussis toxin complex, inactivated mutant</rdfs:label>
     </owl:Class>
     
@@ -754,6 +947,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://ontology.iedb.org/ontology/ONTIE_0003553">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/CHEBI_60004"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">FIM2/3</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Mixture of Fim2 and Fim3</rdfs:label>
     </owl:Class>
     
@@ -785,6 +979,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/C8C508">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACT</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Adenylate cyclase toxin</rdfs:label>
     </owl:Class>
     
@@ -866,6 +1061,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/O23748">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BETV1</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pollen allergen, Betv1</rdfs:label>
     </owl:Class>
     
@@ -1181,6 +1377,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P01012">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OVA</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Ovalbumin</rdfs:label>
     </owl:Class>
     
@@ -1316,6 +1513,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P04958">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TT</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Tetanus toxin</rdfs:label>
     </owl:Class>
     
@@ -1689,6 +1887,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P12255">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">FHA</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Filamentous hemagglutinin</rdfs:label>
     </owl:Class>
     
@@ -1796,6 +1995,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P14283">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PRN</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pertactin autotransporter</rdfs:label>
     </owl:Class>
     
@@ -1818,6 +2018,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P14946">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LOLP1</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pollen allergen Lol p 1</rdfs:label>
     </owl:Class>
     
@@ -2232,6 +2433,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P30438">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">FELD1</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Major allergen I polypeptide chain 1</rdfs:label>
     </owl:Class>
     
@@ -3174,6 +3376,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q15116">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PD1</cmi-pb:shortLabel>
         <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PDCD1</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Programmed cell death protein 1</rdfs:label>
     </owl:Class>
@@ -3315,6 +3518,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q5PY51">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:shortLabel rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DT</cmi-pb:shortLabel>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Diphtheria toxin</rdfs:label>
     </owl:Class>
     
