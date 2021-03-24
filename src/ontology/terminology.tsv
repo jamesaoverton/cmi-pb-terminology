@@ -14,19 +14,19 @@ ab_titer.isotype	IgG4	http://purl.obolibrary.org/obo/PR_000050256	IgG4 heavy cha
 ab_titer.antigen	PT	https://ontology.iedb.org/ontology/ONTIE_0003550	Pertussis toxin complex	protein complex	The 1% PFA is a technical aspect as the protein was fixed with paraformaldehide. I included the detalis only for the Pertussis Toxin.	This is a protein complex, but we don't know where it lives, so we'll put it into ONTIE.
 ab_titer.antigen	1% PFA PT	https://ontology.iedb.org/ontology/ONTIE_0003551	Pertussis toxin complex, inactivated by PFA	protein complex	Same as above in the 1% PFA PT --> All subunits included
 ab_titer.antigen	PTM	https://ontology.iedb.org/ontology/ONTIE_0003552	Pertussis toxin complex, inactivated mutant	protein complex	This is a Pertussis Toxin mutant from List Biologicals only some aa modifications added, not sure how this works with ontologies--> https://www.listlabs.com/products/buy-pertussis-toxin-mutant
-		https://www.uniprot.org/uniprot/P04977	Pertussis toxin subunit 1	protein	The pertussis Toxin is conformed of 5 subunits (S1, S2, S3, S4 and S5). Those are all contained in this term so it is a mixture of all 5 subunits (I added the Ontology ID for all of those)
-		https://www.uniprot.org/uniprot/P04978	Pertussis toxin subunit 2	protein	
-		https://www.uniprot.org/uniprot/P04979	Pertussis toxin subunit 3	protein	
-		https://www.uniprot.org/uniprot/P0A3R5	Pertussis toxin subunit 4	protein	
-		https://www.uniprot.org/uniprot/P04981	Pertussis toxin subunit 5	protein	
+	ptxA	https://www.uniprot.org/uniprot/P04977	Pertussis toxin subunit 1	protein	The pertussis Toxin is conformed of 5 subunits (S1, S2, S3, S4 and S5). Those are all contained in this term so it is a mixture of all 5 subunits (I added the Ontology ID for all of those)
+	ptxB	https://www.uniprot.org/uniprot/P04978	Pertussis toxin subunit 2	protein	
+	ptxC	https://www.uniprot.org/uniprot/P04979	Pertussis toxin subunit 3	protein	
+	ptxD	https://www.uniprot.org/uniprot/P0A3R5	Pertussis toxin subunit 4	protein	
+	ptxE	https://www.uniprot.org/uniprot/P04981	Pertussis toxin subunit 5	protein	
 ab_titer.antigen	ACT	https://www.uniprot.org/uniprot/C8C508	Adenylate cyclase toxin	protein
 ab_titer.antigen	BETV1	https://www.uniprot.org/uniprot/O23748	Pollen allergen, Betv1	protein
 ab_titer.antigen	DT	https://www.uniprot.org/uniprot/Q5PY51	Diphtheria toxin	protein	In this case is the toxoid --> 1% PFA inactivated
 ab_titer.antigen	FELD1	https://www.uniprot.org/uniprot/P30438	Major allergen I polypeptide chain 1	protein	Cat allergen
 ab_titer.antigen	FHA	https://www.uniprot.org/uniprot/P12255	Filamentous hemagglutinin	protein	
 ab_titer.antigen	FIM2/3	https://ontology.iedb.org/ontology/ONTIE_0003553	Mixture of Fim2 and Fim3	mixture	Contains 2 fimbriae proteins FIM2 and FIM3.
-		https://www.uniprot.org/uniprot/Q5I8X0	Fimbrial protein 	protein	Fim2
-		https://www.uniprot.org/uniprot/A0A171JW18	Fimbrial protein Fim3	protein	Fim3
+	fim2	https://www.uniprot.org/uniprot/Q5I8X0	Fimbrial protein 	protein	Fim2
+	fim3	https://www.uniprot.org/uniprot/A0A171JW18	Fimbrial protein Fim3	protein	Fim3
 ab_titer.antigen	LOLP1	https://www.uniprot.org/uniprot/P14946	Pollen allergen Lol p 1	protein	Pollen allergen
 ab_titer.antigen	LOS	http://purl.obolibrary.org/obo/CHEBI_35371	lipooligosaccharide	molecular entity	Bordetella pertussis has a distinctive cell wall lipooligosaccharide (LOS)
 ab_titer.antigen	Measles	http://purl.obolibrary.org/obo/VO_0010784	Measles virus protein	vaccine	Thie refers to the viral proteins
