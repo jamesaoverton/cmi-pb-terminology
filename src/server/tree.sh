@@ -8,6 +8,7 @@ TITLE="CMI-PB Terminology"
 URL="http://example.com?${QUERY_STRING}"
 ID=$(urlp --query --query_field=id "${URL}")
 DB=$(urlp --query --query_field=db "${URL}")
+TEXT=$(urlp --query --query_field=text "${URL}")
 BRANCH=$(git branch --show-current)
 
 if [[ ${DB} ]]; then
@@ -21,10 +22,12 @@ if [[ ${DB} ]]; then
     echo ""
 
     # Generate the tree view
-    if [[ ${ID} ]]; then
-    	python3 -m gizmos.tree "${DB_PATH}" ${ID} -d -P build/predicates.txt -t "${TITLE}"
+    if [[ ${TEXT} ]]; then
+    	python3 -m gizmos.search --short-label ID "${DB_PATH}" "${TEXT}"
+    elif [[ ${ID} ]]; then
+    	python3 -m gizmos.tree "${DB_PATH}" ${ID} -d -P build/predicates.txt -t "${TITLE}" --include-search
     else
-    	python3 -m gizmos.tree "${DB_PATH}" -d -P build/predicates.txt -t "${TITLE}"
+    	python3 -m gizmos.tree "${DB_PATH}" -d -P build/predicates.txt -t "${TITLE}" --include-search
     fi
 else
     echo "Content-Type: text/html"

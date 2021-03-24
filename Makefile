@@ -1,11 +1,10 @@
 ### Workflow
 #
-# - [terminology](https://docs.google.com/spreadsheets/d/1xCrNM8Rv3v04ii1Fd8GMNTSwHzreo74t4DGsAeTsMbk/edit#gid=0)
-# - [all](all)
-# - [tree](./src/server/tree.sh)
-# - [db](build/cmi-pb.db)
-# - [owl](cmi-pb.owl)
-# - [images](images/)
+# - Open the [terminology](https://docs.google.com/spreadsheets/d/1xCrNM8Rv3v04ii1Fd8GMNTSwHzreo74t4DGsAeTsMbk/edit#gid=0) sheet
+# - Run [`make all`](all) to rebuild the terminology
+# - Preview the terminology [tree](./src/server/tree.sh)
+# - Download the [`cmi-pb.owl`](cmi-pb.owl) file
+# - Download the [`cmi-pb.db`](build/cmi-pb.db) database file
 
 
 .PHONY: all
