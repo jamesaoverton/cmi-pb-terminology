@@ -16,7 +16,7 @@ update:
 	rm -rf build/terminology.xlsx $(TABLES)
 	make all
 
-TABLES := src/ontology/upper.tsv src/ontology/terminology.tsv
+TABLES := src/ontology/upper.tsv src/ontology/terminology.tsv build/proteins.tsv
 PREFIXES := --prefixes build/prefixes.json
 ROBOT := java -jar build/robot.jar $(PREFIXES)
 ROBOT_TREE := java -jar build/robot-tree.jar $(PREFIXES)
@@ -87,6 +87,36 @@ build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
 	rm -f $@
 	sqlite3 $@ < $<
 	build/rdftab $@ < cmi-pb.owl
+
+
+### Uniprot Proteins
+# We create a ROBOT template from the Uniport RDF download for all OLink proteins
+
+build/olink_prot_info.csv: | build
+	curl -k -X 'GET' \
+	 'https://www.cmi-pb.org:443/db/olink_prot_info' \
+	 -H 'accept: text/csv' \
+	 -H 'Range-Unit: items' \
+	 > $@
+
+build/uniprot_url.txt: build/olink_prot_info.csv
+	echo "http://www.uniprot.org/uniprot/?query=" > $@.tmp
+	tail -n +2 $< | awk -F ',' '{print $$1}' | tr '\n' '+' | sed 's/+/+OR+/g' | sed 's/+OR+$$//g' >> $@.tmp
+	echo "&format=rdf" >> $@.tmp
+	tr -d '\n' < $@.tmp > $@
+	rm -rf $@.tmp
+
+build/proteins.rdf: build/uniprot_url.txt
+	$(eval URL := $(shell cat $<))
+	curl -Lk "$(URL)" > $@
+
+build/proteins.db: build/prefixes.sql build/proteins.rdf | build/rdftab
+	rm -f $@
+	sqlite3 $@ < $<
+	build/rdftab $@ < $(word 2,$^)
+
+build/proteins.tsv: src/build_proteins.py build/proteins.db build/olink_prot_info.csv
+	python3 $^ $@
 
 
 # Imports
