@@ -98,7 +98,7 @@ def main():
                 "uniprot_id": "ID",
                 "parent": "SC %",
                 "label": "LABEL",
-                "short_label": "A CMI-PB:shortLabel",
+                "short_label": "A CMI-PB:alternativeTerm",
                 "synonyms": "A IAO:0000118 SPLIT=|",
             }
         )

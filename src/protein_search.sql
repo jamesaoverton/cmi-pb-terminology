@@ -17,7 +17,7 @@ INSERT INTO protein_search (id, short_label, label)
   JOIN statements s2 ON s1.stanza = s2.stanza
   WHERE s1.stanza LIKE 'uniprot:%'
     AND s1.predicate = 'rdfs:label'
-    AND s2.predicate = 'CMI-PB:shortLabel';
+    AND s2.predicate = 'CMI-PB:alternativeTerm';
 
 -- Then add the rows with synonyms
 INSERT INTO protein_search
@@ -31,5 +31,5 @@ INSERT INTO protein_search
   JOIN statements s3 ON s1.stanza = s3.stanza
   WHERE s1.stanza LIKE 'uniprot:%'
     AND s1.predicate = 'rdfs:label'
-    AND s2.predicate = 'CMI-PB:shortLabel'
+    AND s2.predicate = 'CMI-PB:alternativeTerm'
     AND s3.predicate = 'IAO:0000118';
