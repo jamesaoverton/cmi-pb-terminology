@@ -8,7 +8,7 @@ CMI_PB_DB = "build/cmi-pb.db"
 # Predicates to display in browser
 PREDICATE_IDS = [
     "rdfs:label",
-    "CMI-PB:shortLabel",
+    "CMI-PB:alternativeTerm",
     "IAO:0000118",
     "oio:hasExactSynonym",
     "oio:hasBroadSynonym",
@@ -36,7 +36,7 @@ def search(text, db=None):
     Return the results in JSON format for Typeahead search."""
     if not db:
         db = CMI_PB_DB
-    return gizmos.search.search(db, text, short_label="CMI-PB:shortLabel", synonyms=SYNONYMS)
+    return gizmos.search.search(db, text, short_label="CMI-PB:alternativeTerm", synonyms=SYNONYMS)
 
 
 def term(db=None):
