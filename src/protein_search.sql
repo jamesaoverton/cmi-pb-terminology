@@ -10,7 +10,7 @@ CREATE TABLE protein_search (
 
 -- Insert ALL proteins with empty synonym value
 INSERT INTO protein_search (id, short_label, label)
-  SELECT s1.stanza AS id,
+  SELECT DISTINCT s1.stanza AS id,
     s2.value AS short_label,
     s1.value AS label
   FROM statements s1
@@ -21,7 +21,7 @@ INSERT INTO protein_search (id, short_label, label)
 
 -- Then add the rows with synonyms
 INSERT INTO protein_search
-  SELECT s1.stanza AS id,
+  SELECT DISTINCT s1.stanza AS id,
     s2.value AS short_label,
     s1.value AS label,
     s3.value AS synonym,
