@@ -30,20 +30,16 @@
 
     <!-- http://example.com/cmi-pb/alternativeTerm -->
 
-    <owl:AnnotationProperty rdf:about="http://example.com/cmi-pb/alternativeTerm"/>
+    <owl:AnnotationProperty rdf:about="http://example.com/cmi-pb/alternativeTerm">
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CMI-PB alternative term</rdfs:label>
+    </owl:AnnotationProperty>
     
 
 
     <!-- http://example.com/cmi-pb/column -->
 
-    <owl:AnnotationProperty rdf:about="http://example.com/cmi-pb/column"/>
-    
-
-
-    <!-- http://example.com/cmi-pb/shortLabel -->
-
-    <owl:AnnotationProperty rdf:about="http://example.com/cmi-pb/shortLabel">
-        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">short label</rdfs:label>
+    <owl:AnnotationProperty rdf:about="http://example.com/cmi-pb/column">
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CMI-PB column</rdfs:label>
     </owl:AnnotationProperty>
     
 
