@@ -109,7 +109,7 @@ build/proteins.rdf: build/uniprot_url.txt
 	$(eval URL := $(shell cat $<))
 	curl -Lk "$(URL)" > $@
 
-build/proteins.db: build/prefixes.sql build/proteins.rdf | build/rdftab
+build/proteins.db: build/prefixes.sql build/uniprot.rdf | build/rdftab
 	rm -f $@
 	sqlite3 $@ < $<
 	build/rdftab $@ < $(word 2,$^)
