@@ -29,7 +29,6 @@ def main():
             f"""SELECT DISTINCT s1.subject, s2.value
                 FROM statements s1
                   JOIN statements s2 ON s1.object = s2.subject
-                WHERE s1.subject IN ({proteins_str})
                   AND s1.predicate = 'uniprot_core:recommendedName'
                   AND s2.predicate = 'uniprot_core:fullName';"""
         )
@@ -43,7 +42,6 @@ def main():
             f"""SELECT DISTINCT s1.subject, s2.value
                 FROM statements s1
                   JOIN statements s2 ON s1.object = s2.subject
-                WHERE s1.subject IN ({proteins_str})
                   AND s1.predicate = 'uniprot_core:encodedBy'
                   AND s2.predicate = 'skos:prefLabel'"""
         )
@@ -60,7 +58,6 @@ def main():
             f"""SELECT DISTINCT s1.subject, s2.value
                 FROM statements s1
                   JOIN statements s2 ON s1.object = s2.subject
-                WHERE s1.subject IN ({proteins_str})
                   AND s1.predicate = 'uniprot_core:alternativeName'
                   AND s2.predicate = 'uniprot_core:fullName';"""
         )

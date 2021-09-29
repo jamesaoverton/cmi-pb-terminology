@@ -2,9 +2,9 @@ Column	Label	CURIE	IRI	Source Ontology Label	Parent	Comments
 A CMI-PB:column	A CMI-PB:alternativeTerm		ID	LABEL	C %	
 subject.infancy_vac	aP	VO:0000738	http://purl.obolibrary.org/obo/VO_0000738	DTaP vaccine (Diphtheria-Tetanus-Pertussis vaccine)	vaccine
 subject.infancy_vac 	wP	VO:0003106	http://purl.obolibrary.org/obo/VO_0003106	DTwP vaccine (diphtheria, tetanus and whole cell pertussis vaccine)	vaccine
-subject.biological_sex 	Male	PATO:0000384	http://purl.obolibrary.org/obo/PATO_0000384	Male	characteristic
-subject.biological_sex 	Female	PATO:0000383	http://purl.obolibrary.org/obo/PATO_0000383	Female	characteristic
-sample.sample_type	Blood	OBI:0000655	http://purl.obolibrary.org/obo/OBI_0000655	blood specimen	specimen	As discussed in the meeting, somehow, we should have PBMCs and plasma samples here. We can discuss this in person.
+subject.biological_sex 	male	PATO:0000384	http://purl.obolibrary.org/obo/PATO_0000384	Male	characteristic
+subject.biological_sex 	female	PATO:0000383	http://purl.obolibrary.org/obo/PATO_0000383	Female	characteristic
+sample.sample_type	blood	OBI:0000655	http://purl.obolibrary.org/obo/OBI_0000655	blood specimen	specimen	As discussed in the meeting, somehow, we should have PBMCs and plasma samples here. We can discuss this in person.
 ab_titer.isotype	IgE	PR:000050258	http://purl.obolibrary.org/obo/PR_000050258	IgE heavy chain protein	protein
 ab_titer.isotype	IgG	PR:000050252	http://purl.obolibrary.org/obo/PR_000050252	IgG heavy chain protein	protein
 ab_titer.isotype	IgG1	PR:000050253	http://purl.obolibrary.org/obo/PR_000050253	IgG1 heavy chain protein	protein
@@ -35,7 +35,6 @@ ab_titer.antigen	PD1	uniprot:Q15116	https://www.uniprot.org/uniprot/Q15116	Progr
 ab_titer.antigen	PRN	uniprot:P14283	https://www.uniprot.org/uniprot/P14283	Pertactin autotransporter	protein
 ab_titer.antigen	TT	uniprot:P04958	https://www.uniprot.org/uniprot/P04958	Tetanus toxin	protein	WARNING: This is the ontology for Tetanus Toxin --> List biologicals sells the Toxoid which is slightly modified
 		NCIT:C2660	http://purl.obolibrary.org/obo/NCIT_C2660	Tetanus toxoid vaccine	vaccine	This is the actual toxoid I think. This is not present at Uniprot
-ab_titer.antigen	Total					This one is not an antigen --> Refers to total and is associated with IgG or IgE --> DISCUSS
 ab_titer.unit 	IU/ML	NCIT:C67377	http://purl.obolibrary.org/obo/NCIT_C67377	International Unit per Milliliter	measurement unit label
 ab_titer.unit 	UG/ML	UO:0000274	http://purl.obolibrary.org/obo/UO_0000274	ug/ml microgram per milliliter	measurement unit label
 ab_titer.unit 	MFI	NCIT:C163046	http://purl.obolibrary.org/obo/NCIT_C163046	Mean Fluorescence Intensity Unit		Mean fluorescence intensity
@@ -46,8 +45,6 @@ cell_type.cell_type_name	mDC	CL:0001057	http://purl.obolibrary.org/obo/CL_000105
 cell_type.cell_type_name	Basophils	CL:0000767	http://purl.obolibrary.org/obo/CL_0000767	basophil	cell	CD45+, CD3e-, CD14-, CD19-, CD4-, CD56-, CD16-, HLA-DR-, CD123++
 cell_type.cell_type_name	Bcells	CL:0001201	http://purl.obolibrary.org/obo/CL_0001201	B cell, CD19-positive	cell	CD45+, CD3e-, CD14-, CD19+	Cell type was not recognized --> Is there any issue with the web/definition? I used the name from the Cell ontology website
 cell_type.cell_type_name	CD33HLADR	CL:0000576	http://purl.obolibrary.org/obo/CL_0000576	monocyte	cell	CD45+, CD33+, HLA-DR+	This is a general gate that can also contain some other cells. We can discuss this. Although the majority will be monocytes, we can have some other subsets.
-cell_type.cell_type_name	CD3CD19				cell	CD45+, CD14-, CD19+, CD3e+	Not sure if doublets exist in the ontology? Those would be T cell + B cell doublets
-cell_type.cell_type_name	CD3CD19neg				cell	CD45+, CD14-, CD19-, CD3e-	Not sure if this gate is both negatives (CD3-CD19-) if that is the case, this is only a gate for subgating
 cell_type.cell_type_name	CD4Tcells	CL:0000624	http://purl.obolibrary.org/obo/CL_0000624	CD4-positive, alpha-beta T cell	cell	CD45+, CD3e+, CD14-,  CD8a-, CD4+
 cell_type.cell_type_name	CD8Tcells	CL:0000625	http://purl.obolibrary.org/obo/CL_0000625	CD8-positive, alpha-beta T cell	cell	CD45+, CD3e+, CD14-,  CD8a+, CD4-
 cell_type.cell_type_name	Classical_Monocytes	CL:0000860	http://purl.obolibrary.org/obo/CL_0000860	classical monocyte	cell	CD45+, CD33+, HLA-DR+, CD14+, CD16-
@@ -60,16 +57,13 @@ cell_type.cell_type_name	TcmCD4	CL:0000904	http://purl.obolibrary.org/obo/CL_000
 cell_type.cell_type_name	TcmCD8	CL:0000907	http://purl.obolibrary.org/obo/CL_0000907	central memory CD8-positive, alpha-beta T cell	cell	CD45+, CD3e+, CD14-, CD8a+, CD4-, CD45RA-, CCR7+
 cell_type.cell_type_name	TemCD4	CL:0000905	http://purl.obolibrary.org/obo/CL_0000905	effector memory CD4-positive, alpha-beta T cell	cell	CD45+, CD3e+, CD14-, CD8a-, CD4+, CD45RA-, CCR7-
 cell_type.cell_type_name	TemCD8	CL:0000913	http://purl.obolibrary.org/obo/CL_0000913	effector memory CD8-positive, alpha-beta T cell	cell	CD45+, CD3e+, CD14-, CD8a+, CD4-, CD45RA-, CCR7-
-cell_type.cell_type_name	TemraCD4	CL:0000934	http://purl.obolibrary.org/obo/CL_0000934	CD4-positive, alpha-beta cytotoxic T cell	cell	CD45+, CD3e+, CD14-, CD8a-, CD4+, CD45RA+, CCR7-
-cell_type.cell_type_name	TemraCD8	CL:0000794	http://purl.obolibrary.org/obo/CL_0000794	CD8-positive, alpha-beta cytotoxic T cell	cell	CD45+, CD3e+, CD14-, CD8a+, CD4-, CD45RA+, CCR7-
+cell_type.cell_type_name	TemraCD4	CL:0001087	http://purl.obolibrary.org/obo/CL_0001087	effector memory CD4-positive, alpha-beta T cell, terminally differentiated	cell	CD45+, CD3e+, CD14-, CD8a-, CD4+, CD45RA+, CCR7-
+cell_type.cell_type_name	TemraCD8	CL:0001062	http://purl.obolibrary.org/obo/CL_0001062	effector memory CD8-positive, alpha-beta T cell, terminally differentiated	cell	CD45+, CD3e+, CD14-, CD8a+, CD4-, CD45RA+, CCR7-
 cell_type.cell_type_name	Tregs	CL:0000792	http://purl.obolibrary.org/obo/CL_0000792	CD4-positive, CD25-positive, alpha-beta regulatory T cell	cell	CD45+, CD3e+, CD14-, CD8a-, CD4+, CD25+
 cell_type.cell_type_name	pDC	CL:0001058	http://purl.obolibrary.org/obo/CL_0001058	plasmacytoid dendritic cell, human	cell	CD45+, CD3e+, CD14-, CD3-, CD19-, CD56-, CD16-, CD123+, HLA-DR+, CD1c-
-cell_type.gating_method	Automated	OBI:0002776	http://purl.obolibrary.org/obo/OBI_0002776	automatic cell gating	planned process	This refers to automated gating --> Used for CyTOF and cell frequencies
-cell_type.gating_method	Manual	OBI:0002777	http://purl.obolibrary.org/obo/OBI_0002777	manual cell gating	planned process	This refers to manual gating --> Used for CyTOF and cell frequencies
+cell_type.gating_method	automated	OBI:0002776	http://purl.obolibrary.org/obo/OBI_0002776	automatic cell gating	planned process	This refers to automated gating --> Used for CyTOF and cell frequencies
+cell_type.gating_method	manual	OBI:0002777	http://purl.obolibrary.org/obo/OBI_0002777	manual cell gating	planned process	This refers to manual gating --> Used for CyTOF and cell frequencies
 sample.sample_type	blood plasma	OBI:0100016	http://purl.obolibrary.org/obo/OBI_0100016	blood plasma specimen	specimen	The plasam in our case if heparinized --> Use of heparin as anticoagulant. There is other anticoagulants that can be used.
 sample.sample_type	PBMC	OBI:1110044	http://purl.obolibrary.org/obo/OBI_1110044	cultured PBMC cell population	specimen	The PBMCs in this project are uncultured (transcriptomics and cell frequencies) and cultured in T cell assays. We should discuss this if needed	http://purl.obolibrary.org/obo/OBI_0000548	isolation of PBMCs
 sample.sample_type	nasal swab	OBI:0000917	http://purl.obolibrary.org/obo/OBI_0000917	nasal swab specimen	specimen
 sample.sample_type	sputum	OBI:0002508	http://purl.obolibrary.org/obo/OBI_0002508	sputum specimen	specimen		http://purl.obolibrary.org/obo/UBERON_0007311	sputum
-subject.biological_sex 	Other					Not able to find anything for this. This is just the result of a questionnaire. Should we generate those ontologies?
-subject.biological_sex 	Unknown					Not able to find anything for this. This is just the result of a questionnaire. Should we generate those ontologies?
-subject.biological_sex 	Not Specified					Not able to find anything for this. This is just the result of a questionnaire. Should we generate those ontologies?
