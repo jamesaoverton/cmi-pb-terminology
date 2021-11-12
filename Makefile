@@ -47,8 +47,8 @@ build/rdftab: | build
 build/terminology.xlsx: | build
 	curl -L -o $@ https://docs.google.com/spreadsheets/d/1xCrNM8Rv3v04ii1Fd8GMNTSwHzreo74t4DGsAeTsMbk/export?format=xlsx
 
-src/ontology/%.tsv: build/terminology.xlsx
-	xlsx2csv -d tab --sheetname $* $< > $@
+#src/ontology/%.tsv: build/terminology.xlsx
+#	xlsx2csv -d tab --sheetname $* $< > $@
 
 build/prefixes.json: src/ontology/prefixes.tsv
 	echo '{ "@context": {' > $@
@@ -82,10 +82,10 @@ build/prefixes.sql: src/ontology/prefixes.tsv | build
 	>> $@
 	echo '("CMI-PB", "http://example.com/cmi-pb/");' >> $@
 
-build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
-	rm -f $@
-	sqlite3 $@ < $<
-	build/rdftab $@ < cmi-pb.owl
+#build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
+#	rm -f $@
+#	sqlite3 $@ < $<
+#	build/rdftab $@ < cmi-pb.owl
 
 
 ### Uniprot Proteins
@@ -165,3 +165,18 @@ clean-imports:
 	rm -rf $(OWL_IMPORTS)
 
 refresh-imports: clean-imports build/imports.owl
+
+GSTSV := "https://docs.google.com/spreadsheets/d/1KlG4KAuuHel8X3G3AGYraOio-8S9k7UkEdDr6avWnTM/export?format=tsv"
+update-tsv: | build
+	curl -L -o src/table.tsv "$(GSTSV)&gid=0"
+	curl -L -o src/column.tsv "$(GSTSV)&gid=704811983"
+	curl -L -o src/datatype.tsv "$(GSTSV)&gid=1518754913"
+	curl -L -o src/prefix.tsv "$(GSTSV)&gid=1105305212"
+	curl -L -o src/ontology/import.tsv "$(GSTSV)&gid=1380652872"
+
+build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv
+	python3 $^ > $@
+
+build/cmi-pb.db: build/cmi-pb.sql
+	rm -f $@
+	sqlite3 $@ < $<
