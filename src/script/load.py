@@ -4,6 +4,8 @@ import csv
 import json
 import re
 
+from sqlalchemy.sql.expression import text as sql_text
+
 required_table_columns = {
     "table",
     "path"
@@ -75,7 +77,7 @@ def create_bad_schema(columns, datatypes, table):
         line = f"  '{row['column']}_meta' TEXT{',' if r < c else ''} -- JSON metadata for {row['column']}"
         output.append(line)
     output.append(");")
-    return '\n'.join(output)
+    return sql_text('\n'.join(output))
 
 def validate_condition(condition, value):
     """Given a condition string and a value string,
@@ -106,7 +108,7 @@ def validate_cell(datatypes, dt_name, nt_name, value):
     # TODO: none of this SQL is properly escaped
     if nt_name:
         nulltype = datatypes[nt_name]
-        result = validate_one(nulltype['condition'], value)
+        result = validate_condition(nulltype['condition'], value)
         if result:
             meta = json.dumps({
                 'value': value,
@@ -151,7 +153,7 @@ def insert_rows(columns, datatypes, table, rows):
         else:
             line += ','
         output.append(line)
-    return '\n'.join(output)
+    return sql_text('\n'.join(output))
 
 if __name__ == "__main__":
     # Read the special tables
