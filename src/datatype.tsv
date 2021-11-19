@@ -1,5 +1,5 @@
 datatype	parent	condition	normalize	description	SQL type	RDF type	HTML type
-text				any text	text	xsd:string	textarea
+text				any text	TEXT	xsd:string	textarea
 empty	text	equals('')		the empty string	null	null	
 trimmed_text	text	exclude(/^\s+|\s+$/)		text that does not begin or end with whitespace			
 description	trimmed_text			a brief description			

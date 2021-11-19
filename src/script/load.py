@@ -4,6 +4,11 @@ import csv
 import json
 import re
 
+from sqlalchemy.sql.expression import text as sql_text
+
+# TODO include synonyms?
+sqlite_types = ['text', 'integer', 'real', 'blob']
+
 required_table_columns = {
     "table",
     "path"
@@ -55,9 +60,10 @@ def create_bad_schema(columns, datatypes, table):
     """Given the columns dict, datatypes dict, and table name,
     generate a SQL schema string,
     including each column C and its matching C_meta column."""
-    output = []
-    output.append(f"DROP TABLE IF EXISTS '{table}';")
-    output.append(f"CREATE TABLE '{table}' (")
+    output = [
+        safe_sql("DROP TABLE IF EXISTS :table;", {"table": table}),
+        safe_sql("CREATE TABLE :table (", {"table": table})
+    ]
     c = len(columns[table].values())
     r = 0
     for row in columns[table].values():
@@ -65,15 +71,16 @@ def create_bad_schema(columns, datatypes, table):
         sql_type = get_SQL_type(datatypes, row['datatype'])
         if not sql_type:
             raise Exception(f"Missing SQL type for {row['datatype']}")
-        line = f"  '{row['column']}' {sql_type.upper()}"
+        if not sql_type.lower() in sqlite_types:
+            raise Exception(f"Unrecognized SQL type '{sql_type}' for {row['datatype']}")
+        line = f"  :col {sql_type}"
+        params = {"col": row["column"]}
         if row['schema'].strip().lower() == 'primary':
             line += ' PRIMARY KEY'
         line += ','
-        if row['description']:
-            line += ' -- ' + row['description']
-        output.append(line)
-        line = f"  '{row['column']}_meta' TEXT{',' if r < c else ''} -- JSON metadata for {row['column']}"
-        output.append(line)
+        output.append(safe_sql(line, params))
+        line = f"  :meta TEXT{',' if r < c else ''}"
+        output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
     output.append(");")
     return '\n'.join(output)
 
@@ -106,13 +113,13 @@ def validate_cell(datatypes, dt_name, nt_name, value):
     # TODO: none of this SQL is properly escaped
     if nt_name:
         nulltype = datatypes[nt_name]
-        result = validate_one(nulltype['condition'], value)
+        result = validate_condition(nulltype['condition'], value)
         if result:
             meta = json.dumps({
                 'value': value,
                 'nulltype': nt_name,
             })
-            return 'NULL', f"json('{meta}')"
+            return None, f"json('{meta}')"
     datatype = datatypes[dt_name]
     condition = datatype['condition']
     if condition:
@@ -127,31 +134,44 @@ def validate_cell(datatypes, dt_name, nt_name, value):
                     'message': 'Validation failure',
                 }],
             })
-            return 'NULL', f"json('{meta}')"
-    return f"'{value}'", 'NULL'
+            return None, f"json('{meta}')"
+    return value, None
 
 def insert_rows(columns, datatypes, table, rows):
     """Given the columns dict, datatypes dict, table name, and list of row dicts,
     return a SQL string for an INSERT statement with VALUES for all the rows."""
     # TODO: None of the SQL is properly escaped
-    output = []
-    output.append(f"INSERT INTO '{table}' VALUES")
+    output = [safe_sql("INSERT INTO :table VALUES", {"table": table})]
     for row in rows:
         values = []
+        params = {}
+        i = 0
         for k, v in row.items():
+            i += 1
             column = columns[table][k]
             datatype = column['datatype']
             nulltype = column['nulltype']
             value, meta = validate_cell(datatypes, datatype, nulltype, v)
-            values += [value, meta]
+            if not value:
+                values += ["NULL", f":meta{i}"]
+                params[f"meta{i}"] = meta
+            else:
+                values += [f":val{i}", "NULL"]
+                params[f"val{i}"] = value
         line = ', '.join(values)
         line = f"({line})"
         if row == rows[-1]:
             line += ';'
         else:
             line += ','
-        output.append(line)
+        output.append(safe_sql(line, params))
     return '\n'.join(output)
+
+def safe_sql(template, params):
+    """Given a SQL query template with variables and a dict of parameters,
+    return an escaped SQL string."""
+    stmt = sql_text(template).bindparams(**params)
+    return str(stmt.compile(compile_kwargs={"literal_binds": True}))
 
 if __name__ == "__main__":
     # Read the special tables
