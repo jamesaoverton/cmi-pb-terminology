@@ -6,77 +6,177 @@ import re
 
 from sqlalchemy.sql.expression import text as sql_text
 
+from validate import validate_rows
+
+
 # TODO include synonyms?
 sqlite_types = ['text', 'integer', 'real', 'blob']
 
-required_table_columns = {
-    "table",
-    "path"
-}
-
-required_column_columns = {
-    "table",
-    "column",
-    "datatype",
-    "nulltype"
-}
-
-required_datatype_columns = {
-    "datatype",
-    "parent",
-    "condition",
-    "SQL type",
-}
-
-def load_required(path, required_columns):
-    """Load a table from a path, checking for the set of required columns,
-    and return a list of dicts."""
+def read_tsv(path):
+    """Given a path, read a TSV file and return a list of row dicts."""
     try:
         with open(path) as f:
             rows = csv.DictReader(f, delimiter="\t")
-            row = next(rows)
-            if not row:
+            rows = list(rows)
+            if len(rows) < 1:
                 raise Exception(f"No rows in {path}")
-            missing_columns = required_columns - set(row.keys())
-            if missing_columns:
-                raise Exception(f"Missing required keys {path}: {', '.join(missing_columns)}")
-            return [row] + list(rows)
+            return rows
     except FileNotFoundError as e:
-        raise Exception(f"There was an error reading {path}", e)
+        raise Exception(f"There was an error reading '{path}'", e)
 
-def get_SQL_type(datatypes, datatype):
-    """Given the datatypes dict and the name of a datatype,
+def read_config_files(table_table_path):
+    """Given the path to a table table TSV file,
+    load and check the special 'table', 'column', and 'datatype' tables,
+    and return a config structure."""
+    special_table_types = ['table', 'column', 'datatype']
+    path = table_table_path
+    rows = read_tsv(path)
+    config = {
+        'table': {},
+        'datatype': {},
+        'special': {
+        }
+    }
+    for t in special_table_types:
+        config['special'][t] = None
+
+    # Load table table
+    for row in rows:
+        for column in ['table', 'path', 'type']:
+            if column not in row or row[column] is None:
+                raise Exception(f"Missing required column '{column}' reading '{path}'")
+        for column in ['table', 'path']:
+            if row[column].strip() == "":
+                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+        for column in ['type']:
+            if row[column].strip() == "":
+                row[column] = None
+        if row['type'] == 'table':
+            if row['path'] != path:
+                raise Exception(f"Special 'table' path '{row['path']}' does not match this path '{path}'")
+        if row['type'] in special_table_types:
+            if config['special'][row['type']]:
+                raise Exception(f"Multiple tables with type '{row['type']}' declared in '{path}'")
+            config['special'][row['type']] = row['table']
+        if row['type'] and row['type'] not in special_table_types:
+            raise Exception(f"Unrecognized table type '{row['type']}' in '{path}'")
+        row['column'] = {}
+        config['table'][row['table']] = row
+
+    for table_type in special_table_types:
+        if config['special'][table_type] is None:
+            raise Exception(f"Missing required '{table_type}' table in '{path}'")
+
+    # Load datatype table
+    table_name = config['special']['datatype']
+    path = config['table'][table_name]['path']
+    rows = read_tsv(path)
+    for row in rows:
+        for column in ['datatype', 'parent', 'condition', 'SQL type']:
+            if column not in row or row[column] is None:
+                raise Exception(f"Missing required column '{column}' reading '{path}'")
+        for column in ['datatype']:
+            if row[column].strip() == "":
+                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+        for column in ['parent', 'condition', 'SQL type']:
+            if row[column].strip() == "":
+                row[column] = None
+        # TODO: validate conditions
+        config['datatype'][row['datatype']] = row
+    # TODO: Check for required datatypes: text, empty, line, word
+
+    # Load column table
+    table_name = config['special']['column']
+    path = config['table'][table_name]['path']
+    rows = read_tsv(path)
+    for row in rows:
+        for column in ['table', 'column', 'nulltype', 'datatype']:
+            if column not in row or row[column] is None:
+                raise Exception(f"Missing required column '{column}' reading '{path}'")
+        for column in ['table', 'column', 'datatype']:
+            if row[column].strip() == "":
+                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+        for column in ['nulltype']:
+            if row[column].strip() == "":
+                row[column] = None
+        if row['table'] not in config['table']:
+            raise Exception(f"Undefined table '{row['table']}' reading '{path}'")
+        if row['nulltype'] and row['nulltype'] not in config['datatype']:
+            raise Exception(f"Undefined nulltype '{row['nulltype']}' reading '{path}'")
+        if row['datatype'] not in config['datatype']:
+            raise Exception(f"Undefined datatype '{row['datatype']}' reading '{path}'")
+        row['configured'] = True
+        config['table'][row['table']]['column'][row['column']] = row
+
+    return config
+
+def read_files_to_sql(config):
+    """Given a config, read TSVs and return a SQL string."""
+    # TODO: determine table load sequence by foreign key relations
+    # fail on circularity
+    table_list = list(config['table'].keys())
+
+    output = []
+    for table_name in table_list:
+        path = config['table'][table_name]['path']
+        rows = read_tsv(path)
+
+        # update columns
+        defined_columns = config['table'][table_name]['column']
+        actual_columns = list(rows[0].keys())
+        all_columns = {}
+        for column_name in actual_columns:
+            column = {
+                'table': table_name,
+                'column': column_name,
+                'nulltype': 'empty',
+                'datatype': 'text',
+            }
+            if column_name in defined_columns:
+                column = defined_columns[column_name]
+            all_columns[column_name] = column
+        config['table'][table_name]['column'] = all_columns
+
+        sql = create_schema(config, table_name)
+        output.append(sql)
+        sql = insert_rows(config, table_name, rows)
+        output.append(sql)
+    return '\n\n'.join(output)
+
+def get_SQL_type(config, datatype):
+    """Given the config structure and the name of a datatype,
     climb the datatype tree (as required),
     and return the first 'SQL type' found."""
-    if not datatype:
+    if 'datatype' not in config:
+        raise Exception("Missing datatypes in config")
+    if datatype not in config['datatype']:
         return None
-    if datatype not in datatypes:
-        return None
-    if datatypes[datatype]['SQL type']:
-       return datatypes[datatype]['SQL type']
-    return get_SQL_type(datatypes, datatypes[datatype]['parent'])
+    if config['datatype'][datatype]['SQL type']:
+       return config['datatype'][datatype]['SQL type']
+    return get_SQL_type(config, config['datatype'][datatype]['parent'])
 
-def create_bad_schema(columns, datatypes, table):
-    """Given the columns dict, datatypes dict, and table name,
+def create_schema(config, table_name):
+    """Given the config structure and a table name,
     generate a SQL schema string,
     including each column C and its matching C_meta column."""
     output = [
-        safe_sql("DROP TABLE IF EXISTS :table;", {"table": table}),
-        safe_sql("CREATE TABLE :table (", {"table": table})
+        safe_sql("DROP TABLE IF EXISTS :table;", {"table": table_name}),
+        safe_sql("CREATE TABLE :table (", {"table": table_name})
     ]
-    c = len(columns[table].values())
+    columns = config['table'][table_name]['column']
+    c = len(columns.values())
     r = 0
-    for row in columns[table].values():
+    for row in columns.values():
         r += 1
-        sql_type = get_SQL_type(datatypes, row['datatype'])
+        sql_type = get_SQL_type(config, row['datatype'])
         if not sql_type:
             raise Exception(f"Missing SQL type for {row['datatype']}")
         if not sql_type.lower() in sqlite_types:
             raise Exception(f"Unrecognized SQL type '{sql_type}' for {row['datatype']}")
         line = f"  :col {sql_type}"
         params = {"col": row["column"]}
-        if row['schema'].strip().lower() == 'primary':
-            line += ' PRIMARY KEY'
+        #if row['structure'].strip().lower() == 'primary':
+        #    line += ' PRIMARY KEY'
         line += ','
         output.append(safe_sql(line, params))
         line = f"  :meta TEXT{',' if r < c else ''}"
@@ -84,88 +184,34 @@ def create_bad_schema(columns, datatypes, table):
     output.append(");")
     return '\n'.join(output)
 
-def validate_condition(condition, value):
-    """Given a condition string and a value string,
-    return True of the condition holds, False otherwise."""
-    # TODO: Implement real conditions.
-    if condition == "equals('')":
-        return value == ""
-    elif condition == "exclude(/\n/)":
-        return '\n' in value
-    elif condition == "exclude(/\s/)":
-        return bool(re.search('\s', value))
-    elif condition == "exclude(/^\s+|\s+$/)":
-        return bool(re.search('^\s+|\s+$', value))
-    elif condition == "in('table', 'column', 'datatype')":
-        return value in ('table', 'column', 'datatype')
-    elif condition == "match(/\w+/)":
-        return bool(re.matches('\w+', value))
-    elif condition == "search(/:/)":
-        return ':' in value
-    else:
-        raise Exception(f"Unhandled condition: {condition}")
-
-def validate_cell(datatypes, dt_name, nt_name, value):
-    """Given the datatypes dict, a datatyoe name, a nulltype name, and a value string,
-    return the pair of a value and the meta
-    to be inserted into the SQL table."""
-    # TODO: Hierarchical validation
-    # TODO: none of this SQL is properly escaped
-    if nt_name:
-        nulltype = datatypes[nt_name]
-        result = validate_condition(nulltype['condition'], value)
-        if result:
-            meta = json.dumps({
-                'value': value,
-                'nulltype': nt_name,
-            })
-            return None, f"json('{meta}')"
-    datatype = datatypes[dt_name]
-    condition = datatype['condition']
-    if condition:
-        result = validate_condition(condition, value)
-        if not result:
-            meta = json.dumps({
-                'value': value,
-                'datatype': dt_name,
-                'messages': [{
-                    'rule': f"datatype:{dt_name}",
-                    'level': 'error',
-                    'message': 'Validation failure',
-                }],
-            })
-            return None, f"json('{meta}')"
-    return value, None
-
-def insert_rows(columns, datatypes, table, rows):
-    """Given the columns dict, datatypes dict, table name, and list of row dicts,
+def insert_rows(config, table_name, rows):
+    """Given the config structure, table name, and list of row dicts,
     return a SQL string for an INSERT statement with VALUES for all the rows."""
-    # TODO: None of the SQL is properly escaped
-    output = [safe_sql("INSERT INTO :table VALUES", {"table": table})]
-    for row in rows:
+    result_rows = validate_rows(config, table_name, rows)
+    lines = []
+    for row in result_rows:
         values = []
         params = {}
-        i = 0
-        for k, v in row.items():
-            i += 1
-            column = columns[table][k]
-            datatype = column['datatype']
-            nulltype = column['nulltype']
-            value, meta = validate_cell(datatypes, datatype, nulltype, v)
-            if not value:
-                values += ["NULL", f":meta{i}"]
-                params[f"meta{i}"] = meta
-            else:
-                values += [f":val{i}", "NULL"]
-                params[f"val{i}"] = value
+        for column, cell in row.items():
+            column = column.replace(' ', '_')
+            value = None
+            if 'nulltype' in cell and cell['nulltype']:
+                value = None
+            elif cell['valid']:
+                value = cell['value']
+                cell.pop('value')
+            values.append(f":{column}")
+            values.append(f":{column}_meta")
+            params[column] = value
+            params[column + '_meta'] = f"json({json.dumps(cell)})"
         line = ', '.join(values)
         line = f"({line})"
-        if row == rows[-1]:
-            line += ';'
-        else:
-            line += ','
-        output.append(safe_sql(line, params))
-    return '\n'.join(output)
+        lines.append(safe_sql(line, params))
+    output = safe_sql("INSERT INTO :table VALUES", {"table": table_name})
+    output += '\n'
+    output += ',\n'.join(lines)
+    output += ';'
+    return output
 
 def safe_sql(template, params):
     """Given a SQL query template with variables and a dict of parameters,
@@ -174,22 +220,6 @@ def safe_sql(template, params):
     return str(stmt.compile(compile_kwargs={"literal_binds": True}))
 
 if __name__ == "__main__":
-    # Read the special tables
-    table_rows = load_required('src/table.tsv', required_table_columns)
-    column_rows = load_required('src/column.tsv', required_column_columns)
-    datatype_rows = load_required('src/datatype.tsv', required_datatype_columns)
-
-    # Build some more convenient dicts
-    datatypes = {x['datatype']:x for x in datatype_rows}
-    columns = {}
-    for row in column_rows:
-        if row['table'] not in columns:
-            columns[row['table']] = {}
-        columns[row['table']][row['column']] = row
-
-    # Generate table schemas and inserts
-    table_schema = create_bad_schema(columns, datatypes, 'table')
-    print(table_schema)
-    table_rows = insert_rows(columns, datatypes, 'table', table_rows)
-    print(table_rows)
-
+    config = read_config_files('src/table.tsv')
+    sql = read_files_to_sql(config)
+    print(sql)

@@ -169,14 +169,18 @@ refresh-imports: clean-imports build/imports.owl
 GSTSV := "https://docs.google.com/spreadsheets/d/1KlG4KAuuHel8X3G3AGYraOio-8S9k7UkEdDr6avWnTM/export?format=tsv"
 update-tsv: | build
 	curl -L -o src/table.tsv "$(GSTSV)&gid=0"
-	curl -L -o src/column.tsv "$(GSTSV)&gid=704811983"
+	curl -L -o src/column.tsv "$(GSTSV)&gid=1859463123"
 	curl -L -o src/datatype.tsv "$(GSTSV)&gid=1518754913"
 	curl -L -o src/prefix.tsv "$(GSTSV)&gid=1105305212"
 	curl -L -o src/ontology/import.tsv "$(GSTSV)&gid=1380652872"
 
-build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv
-	python3 $^ > $@
+build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv | build
+	python3 $< > $@
 
 build/cmi-pb.db: build/cmi-pb.sql
 	rm -f $@
 	sqlite3 $@ < $<
+
+.PHONY: clean
+clean:
+	rm -rf build
