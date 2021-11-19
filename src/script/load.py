@@ -6,6 +6,9 @@ import re
 
 from sqlalchemy.sql.expression import text as sql_text
 
+# TODO include synonyms?
+sqlite_types = ['text', 'integer', 'real', 'blob']
+
 required_table_columns = {
     "table",
     "path"
@@ -68,17 +71,16 @@ def create_bad_schema(columns, datatypes, table):
         sql_type = get_SQL_type(datatypes, row['datatype'])
         if not sql_type:
             raise Exception(f"Missing SQL type for {row['datatype']}")
-        line = f"  :col :type"
-        params = {"col": row["column"], "type": sql_type.upper()}
+        if not sql_type.lower() in sqlite_types:
+            raise Exception(f"Unrecognized SQL type '{sql_type}' for {row['datatype']}")
+        line = f"  :col {sql_type}"
+        params = {"col": row["column"]}
         if row['schema'].strip().lower() == 'primary':
             line += ' PRIMARY KEY'
         line += ','
-        if row['description']:
-            params["desc"] = row["description"]
-            line += ' -- :desc'
         output.append(safe_sql(line, params))
-        line = f"  :meta TEXT{',' if r < c else ''} -- JSON metadata for :col"
-        output.append(safe_sql(line, {"meta": row["column"] + "_meta", "col": row["column"]}))
+        line = f"  :meta TEXT{',' if r < c else ''}"
+        output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
     output.append(");")
     return '\n'.join(output)
 

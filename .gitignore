@@ -3,3 +3,4 @@ build/
 junk/
 .venv/
 __pycache__/
+.git-credentials
