@@ -1,0 +1,3 @@
+COB|json({"valid": true, "messages": []})|BFO:0000040|json({"valid": true, "messages": []})|material entity|json({"valid": true, "messages": []})|owl:Class|json({"valid": true, "messages": []})|owl:Thing|json({"valid": true, "messages": []})
+COB|json({"valid": true, "messages": []})|VO:0000001|json({"valid": true, "messages": []})|vaccine|json({"valid": true, "messages": []})|owl:Class|json({"valid": true, "messages": []})|material entity|json({"valid": true, "messages": []})
+COB|json({"valid": true, "messages": []})|COB:0000013|json({"valid": true, "messages": []})|molecular entity|json({"valid": true, "messages": []})|owl:Class|json({"valid": true, "messages": []})|material entity|json({"valid": true, "messages": []})
