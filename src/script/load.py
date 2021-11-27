@@ -2,33 +2,33 @@
 
 import csv
 import json
+import itertools
+import sys
 
 from sqlalchemy.sql.expression import text as sql_text
 
 from validate import validate_rows
 
+CHUNK_SIZE = 3
 
 # TODO include synonyms?
 sqlite_types = ["text", "integer", "real", "blob"]
-
-
-def read_tsv(path):
-    """Given a path, read a TSV file and return a list of row dicts."""
-    try:
-        with open(path) as f:
-            rows = csv.DictReader(f, delimiter="\t")
-            rows = list(rows)
-            if len(rows) < 1:
-                raise Exception(f"No rows in {path}")
-            return rows
-    except FileNotFoundError as e:
-        raise Exception(f"There was an error reading '{path}'", e)
 
 
 def read_config_files(table_table_path):
     """Given the path to a table table TSV file,
     load and check the special 'table', 'column', and 'datatype' tables,
     and return a config structure."""
+
+    def read_tsv(path):
+        """Given a path, read a TSV file and return a list of row dicts."""
+        with open(path) as f:
+            rows = csv.DictReader(f, delimiter="\t")
+            rows = list(rows)
+            if len(rows) < 1:
+                raise Exception(f"No rows in {path}")
+            return rows
+
     special_table_types = ["table", "column", "datatype"]
     path = table_table_path
     rows = read_tsv(path)
@@ -109,38 +109,49 @@ def read_config_files(table_table_path):
     return config
 
 
-def read_files_to_sql(config):
-    """Given a config, read TSVs and return a SQL string."""
+def generate_and_write_sql_from_files(config):
+    """Given a config, read TSVs and write out SQL strings."""
     # TODO: determine table load sequence by foreign key relations
     # fail on circularity
     table_list = list(config["table"].keys())
 
-    output = []
     for table_name in table_list:
         path = config["table"][table_name]["path"]
-        rows = read_tsv(path)
+        with open(path) as f:
+            rows = csv.DictReader(f, delimiter="\t")
 
-        # update columns
-        defined_columns = config["table"][table_name]["column"]
-        actual_columns = list(rows[0].keys())
-        all_columns = {}
-        for column_name in actual_columns:
-            column = {
-                "table": table_name,
-                "column": column_name,
-                "nulltype": "empty",
-                "datatype": "text",
-            }
-            if column_name in defined_columns:
-                column = defined_columns[column_name]
-            all_columns[column_name] = column
-        config["table"][table_name]["column"] = all_columns
+            # update columns
+            defined_columns = config["table"][table_name]["column"]
+            actual_columns, rows = itertools.tee(rows)
+            try:
+                actual_columns = list(next(actual_columns).keys())
+            except StopIteration:
+                raise StopIteration(f"No rows in {path}")
 
-        sql = create_schema(config, table_name)
-        output.append(sql)
-        sql = insert_rows(config, table_name, rows)
-        output.append(sql)
-    return "\n\n".join(output)
+            all_columns = {}
+            for column_name in actual_columns:
+                column = {
+                    "table": table_name,
+                    "column": column_name,
+                    "nulltype": "empty",
+                    "datatype": "text",
+                }
+                if column_name in defined_columns:
+                    column = defined_columns[column_name]
+                all_columns[column_name] = column
+            config["table"][table_name]["column"] = all_columns
+
+            sql = create_schema(config, table_name)
+            print("{}\n\n".format(sql))
+
+            # Collect data into fixed-length chunks or blocks
+            # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
+            chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
+            for i, chunk in enumerate(chunks):
+                chunk = filter(None, chunk)
+                sql = insert_rows(config, table_name, chunk)
+                print("{}\n\n".format(sql))
+                print("-- end of chunk {}\n\n".format(i))
 
 
 def get_SQL_type(config, datatype):
@@ -224,6 +235,8 @@ def safe_sql(template, params):
 
 
 if __name__ == "__main__":
-    config = read_config_files("src/table.tsv")
-    sql = read_files_to_sql(config)
-    print(sql)
+    try:
+        config = read_config_files("src/table.tsv")
+        generate_and_write_sql_from_files(config)
+    except (FileNotFoundError, StopIteration) as e:
+        sys.exit(e)
