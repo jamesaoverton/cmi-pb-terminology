@@ -177,9 +177,8 @@ update-tsv: | build
 build/cmi-pb.sql: src/script/load.py src/script/validate.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv | build
 	python3 $< > $@
 
+# The database file we be created as a side-effect of calling src/script/load.py to create the sql file:
 build/cmi-pb.db: build/cmi-pb.sql
-	rm -f $@
-	sqlite3 $@ < $<
 
 .PHONY: test
 test: test/test.sh build/cmi-pb.db | test/expected

@@ -3,6 +3,7 @@
 import csv
 import json
 import itertools
+import sqlite3
 import sys
 
 from sqlalchemy.sql.expression import text as sql_text
@@ -109,8 +110,8 @@ def read_config_files(table_table_path):
     return config
 
 
-def generate_and_write_sql_from_files(config):
-    """Given a config, read TSVs and write out SQL strings."""
+def create_db_and_write_sql(conn, config):
+    """Given a sqlite connection and a config map, read TSVs and write out SQL strings."""
     # TODO: determine table load sequence by foreign key relations
     # fail on circularity
     table_list = list(config["table"].keys())
@@ -141,8 +142,11 @@ def generate_and_write_sql_from_files(config):
                 all_columns[column_name] = column
             config["table"][table_name]["column"] = all_columns
 
+            cur = conn.cursor()
             for table in [table_name, table_name + "_conflict"]:
                 sql = create_schema(config, table)
+                cur.executescript(sql)
+                conn.commit()
                 print("{}\n\n".format(sql))
 
             # Collect data into fixed-length chunks or blocks
@@ -151,8 +155,11 @@ def generate_and_write_sql_from_files(config):
             for i, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
                 sql = insert_rows(config, table_name, chunk)
+                cur.executescript(sql)
+                conn.commit()
                 print("{}\n\n".format(sql))
                 print("-- end of chunk {}\n\n".format(i))
+            cur.close()
 
 
 def get_SQL_type(config, datatype):
@@ -242,6 +249,7 @@ def safe_sql(template, params):
 if __name__ == "__main__":
     try:
         config = read_config_files("src/table.tsv")
-        generate_and_write_sql_from_files(config)
+        with sqlite3.connect("build/cmi-pb.db") as conn:
+            create_db_and_write_sql(conn, config)
     except (FileNotFoundError, StopIteration) as e:
         sys.exit(e)
