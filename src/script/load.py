@@ -141,8 +141,9 @@ def generate_and_write_sql_from_files(config):
                 all_columns[column_name] = column
             config["table"][table_name]["column"] = all_columns
 
-            sql = create_schema(config, table_name)
-            print("{}\n\n".format(sql))
+            for table in [table_name, table_name + "_conflict"]:
+                sql = create_schema(config, table)
+                print("{}\n\n".format(sql))
 
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
@@ -175,7 +176,7 @@ def create_schema(config, table_name):
         safe_sql("DROP TABLE IF EXISTS :table;", {"table": table_name}),
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
     ]
-    columns = config["table"][table_name]["column"]
+    columns = config["table"][table_name.replace("_conflict", "")]["column"]
     c = len(columns.values())
     r = 0
     for row in columns.values():
@@ -188,7 +189,7 @@ def create_schema(config, table_name):
         line = f"  :col {sql_type}"
         params = {"col": row["column"]}
         structure = row.get("structure")
-        if structure:
+        if structure and not table_name.endswith("_conflict"):
             if structure.strip().lower() == "primary":
                 line += " PRIMARY KEY"
             elif structure.strip().lower() == "unique":
