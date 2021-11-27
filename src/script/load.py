@@ -187,8 +187,12 @@ def create_schema(config, table_name):
             raise Exception(f"Unrecognized SQL type '{sql_type}' for {row['datatype']}")
         line = f"  :col {sql_type}"
         params = {"col": row["column"]}
-        # if row['structure'].strip().lower() == 'primary':
-        #    line += ' PRIMARY KEY'
+        structure = row.get("structure")
+        if structure:
+            if structure.strip().lower() == "primary":
+                line += " PRIMARY KEY"
+            elif structure.strip().lower() == "unique":
+                line += " UNIQUE"
         line += ","
         output.append(safe_sql(line, params))
         line = f"  :meta TEXT{',' if r < c else ''}"
