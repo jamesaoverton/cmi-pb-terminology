@@ -15,7 +15,7 @@ for exp in $(ls -1 $expected/*)
 do
     exp=$(realpath $exp)
     tmp=/tmp/$(basename $0)_$(basename $exp).$$
-    echo "select * from \`$(basename $exp)\`" | sqlite3 $dbfile > $tmp
+    sqlite3 $dbfile "select * from \`$(basename $exp)\`" > $tmp
     diff -q $exp $tmp >/dev/null
     if [ $? -ne 0 ]
     then

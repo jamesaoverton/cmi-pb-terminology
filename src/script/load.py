@@ -10,7 +10,7 @@ from sqlalchemy.sql.expression import text as sql_text
 
 from validate import validate_rows
 
-CHUNK_SIZE = 3
+CHUNK_SIZE = 2
 
 # TODO include synonyms?
 sqlite_types = ["text", "integer", "real", "blob"]
@@ -154,7 +154,7 @@ def create_db_and_write_sql(conn, config):
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
             for i, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
-                sql = insert_rows(config, table_name, chunk)
+                sql = insert_rows(conn, config, table_name, chunk)
                 cur.executescript(sql)
                 conn.commit()
                 print("{}\n\n".format(sql))
@@ -209,34 +209,55 @@ def create_schema(config, table_name):
     return "\n".join(output)
 
 
-def insert_rows(config, table_name, rows):
-    """Given the config structure, table name, and list of row dicts,
+def insert_rows(conn, config, table_name, rows):
+    """Given a connection to a sqlite db, the config structure, table name, and list of row dicts,
     return a SQL string for an INSERT statement with VALUES for all the rows."""
-    result_rows = validate_rows(config, table_name, rows)
-    lines = []
-    for row in result_rows:
-        values = []
-        params = {}
-        for column, cell in row.items():
-            column = column.replace(" ", "_")
-            value = None
-            if "nulltype" in cell and cell["nulltype"]:
+
+    def generate_sql(table_name, rows):
+        lines = []
+        for row in rows:
+            # The 'duplicate' flag has already served its purpose (see below). Here we delete it
+            # from the row record to prevent it from being interpreted as a cell:
+            del row["duplicate"]
+            values = []
+            params = {}
+            for column, cell in row.items():
+                column = column.replace(" ", "_")
                 value = None
-            elif cell["valid"]:
-                value = cell["value"]
-                cell.pop("value")
-            values.append(f":{column}")
-            values.append(f":{column}_meta")
-            params[column] = value
-            params[column + "_meta"] = f"json({json.dumps(cell)})"
-        line = ", ".join(values)
-        line = f"({line})"
-        lines.append(safe_sql(line, params))
-    output = safe_sql("INSERT INTO :table VALUES", {"table": table_name})
-    output += "\n"
-    output += ",\n".join(lines)
-    output += ";"
-    return output
+                if "nulltype" in cell and cell["nulltype"]:
+                    value = None
+                elif cell["valid"]:
+                    value = cell["value"]
+                    cell.pop("value")
+                values.append(f":{column}")
+                values.append(f":{column}_meta")
+                params[column] = value
+                params[column + "_meta"] = f"json({json.dumps(cell)})"
+            line = ", ".join(values)
+            line = f"({line})"
+            lines.append(safe_sql(line, params))
+
+        output = ""
+        if lines:
+            output += safe_sql("INSERT INTO :table VALUES", {"table": table_name})
+            output += "\n"
+            output += ",\n".join(lines)
+            output += ";"
+        return output
+
+    result_rows = validate_rows(conn, config, table_name, rows)
+    main_rows = []
+    conflict_rows = []
+    for row in result_rows:
+        if row["duplicate"]:
+            conflict_rows.append(row)
+        else:
+            main_rows.append(row)
+    return (
+        generate_sql(table_name, main_rows)
+        + "\n"
+        + generate_sql(table_name + "_conflict", conflict_rows)
+    )
 
 
 def safe_sql(template, params):
