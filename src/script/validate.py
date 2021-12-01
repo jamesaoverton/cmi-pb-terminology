@@ -54,7 +54,6 @@ def validate_cell(conn, config, table_name, column_name, cell, prev_results):
             )
             return cell
 
-        # TODO: Can we do this more in bulk?
         cur = conn.cursor()
         rows = cur.execute(
             "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
