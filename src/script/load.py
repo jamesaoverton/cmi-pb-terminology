@@ -146,8 +146,23 @@ def create_db_and_write_sql(conn, config):
             for table in [table_name, table_name + "_conflict"]:
                 sql = create_schema(config, table)
                 cur.executescript(sql)
-                conn.commit()
-                print("{}\n\n".format(sql))
+                print("{}\n".format(sql))
+
+            # Create a view as the union of the regular and conflict versions of the table:
+            sql = safe_sql("DROP VIEW IF EXISTS :view;", {"view": table_name + "_view"})
+            cur.execute(sql)
+            print("{}".format(sql))
+            sql = safe_sql(
+                "CREATE VIEW :view AS SELECT * FROM :table UNION SELECT * FROM :conflict;",
+                {
+                    "view": table_name + "_view",
+                    "table": table_name,
+                    "conflict": table_name + "_conflict",
+                },
+            )
+            cur.execute(sql)
+            print("{}\n".format(sql))
+            conn.commit()
 
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
