@@ -142,17 +142,14 @@ def create_db_and_write_sql(conn, config):
                 all_columns[column_name] = column
             config["table"][table_name]["column"] = all_columns
 
-            cur = conn.cursor()
             for table in [table_name, table_name + "_conflict"]:
                 sql = create_schema(config, table)
-                cur.executescript(sql)
+                conn.executescript(sql)
                 print("{}\n".format(sql))
 
             # Create a view as the union of the regular and conflict versions of the table:
-            sql = safe_sql("DROP VIEW IF EXISTS :view;", {"view": table_name + "_view"})
-            cur.execute(sql)
-            print("{}".format(sql))
-            sql = safe_sql(
+            sql = safe_sql("DROP VIEW IF EXISTS :view;\n", {"view": table_name + "_view"})
+            sql += safe_sql(
                 "CREATE VIEW :view AS SELECT * FROM :table UNION SELECT * FROM :conflict;",
                 {
                     "view": table_name + "_view",
@@ -160,7 +157,7 @@ def create_db_and_write_sql(conn, config):
                     "conflict": table_name + "_conflict",
                 },
             )
-            cur.execute(sql)
+            conn.executescript(sql)
             print("{}\n".format(sql))
             conn.commit()
 
@@ -170,11 +167,10 @@ def create_db_and_write_sql(conn, config):
             for i, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
                 sql = insert_rows(conn, config, table_name, chunk)
-                cur.executescript(sql)
+                conn.executescript(sql)
                 conn.commit()
                 print("{}\n\n".format(sql))
                 print("-- end of chunk {}\n\n".format(i))
-            cur.close()
 
 
 def get_SQL_type(config, datatype):

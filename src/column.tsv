@@ -16,7 +16,7 @@ prefix	prefix		prefix	primary
 prefix	base		IRI	unique	
 prefix	ontology IRI	empty	IRI		
 prefix	version IRI	empty	IRI		
-import	source		prefix	from(prefix,prefix)	
+import	source		prefix	from(prefix.prefix)	
 import	ID		CURIE	unique	
 import	label		label	primary	
 import	parent	empty	label	tree(import.label)	

@@ -54,14 +54,12 @@ def validate_cell(conn, config, table_name, column_name, cell, prev_results):
             )
             return cell
 
-        cur = conn.cursor()
-        rows = cur.execute(
+        rows = conn.execute(
             "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
                 table_name, column["column"], cell["value"]
             )
         )
         if rows.fetchall():
-            cur.close()
             cell["valid"] = False
             cell["messages"].append(
                 {
