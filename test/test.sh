@@ -11,6 +11,7 @@ expected=$2
 
 trap '/bin/rm -f /tmp/$(basename $0)_*.$$; exit 1' 1 2 15
 
+status=0
 for exp in $(ls -1 $expected/*)
 do
     exp=$(realpath $exp)
@@ -22,7 +23,10 @@ do
         actual=$(realpath $(basename $exp)_actual)
         /bin/mv -f $tmp $actual
         echo "The actual contents of $(basename $exp) are not as expected. Saving them in ${actual}"
-        exit 1
+        status=1
+    else
+        rm -f $tmp
     fi
-    rm -f $tmp
 done
+
+exit $status

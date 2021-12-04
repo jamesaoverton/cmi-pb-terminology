@@ -147,7 +147,7 @@ def sort_tables(table_list, foreign_keys):
 def create_db_and_write_sql(conn, config):
     """Given a sqlite connection and a config map, read TSVs and write out SQL strings."""
     table_list = list(config["table"].keys())
-    foreign_keys = {}
+    constraints = {"foreign": {}, "unique": {}, "primary": {}}
     for table_name in table_list:
         path = config["table"][table_name]["path"]
         with open(path) as f:
@@ -178,11 +178,13 @@ def create_db_and_write_sql(conn, config):
 
             # Create the table and its corresponding conflict table:
             for table in [table_name, table_name + "_conflict"]:
-                sql, fkeys = create_schema(config, table)
-                if fkeys:
-                    foreign_keys[table_name] = fkeys
-                conn.executescript(sql)
-                print("{}\n".format(sql))
+                table_sql, table_constraints = create_schema(config, table)
+                if not table.endswith("_conflict"):
+                    constraints["foreign"][table_name] = table_constraints["foreign"]
+                    constraints["unique"][table_name] = table_constraints["unique"]
+                    constraints["primary"][table_name] = table_constraints["primary"]
+                conn.executescript(table_sql)
+                print("{}\n".format(table_sql))
 
             # Create a view as the union of the regular and conflict versions of the table:
             sql = safe_sql("DROP VIEW IF EXISTS :view;\n", {"view": table_name + "_view"})
@@ -200,7 +202,7 @@ def create_db_and_write_sql(conn, config):
 
     # Sort tables according to their foreign key dependencies so that tables are always loaded
     # after the tables they depend on:
-    table_list = sort_tables(table_list, foreign_keys)
+    table_list = sort_tables(table_list, constraints["foreign"])
 
     # Now load the rows:
     for table_name in table_list:
@@ -212,7 +214,7 @@ def create_db_and_write_sql(conn, config):
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
             for i, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
-                sql = insert_rows(conn, config, table_name, chunk)
+                sql = insert_rows(conn, config, table_name, constraints, chunk)
                 conn.executescript(sql)
                 conn.commit()
                 print("{}\n\n".format(sql))
@@ -235,13 +237,13 @@ def get_SQL_type(config, datatype):
 def create_schema(config, table_name):
     """Given the config structure and a table name, generate a SQL schema string, including each
     column C and its matching C_meta column, then return the schema string as well as a list of the
-    table's foreign key constraints."""
+    table's constraints."""
     output = [
         safe_sql("DROP TABLE IF EXISTS :table;", {"table": table_name}),
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
-    foreign_keys = []
+    constraints = {"foreign": [], "unique": [], "primary": []}
     c = len(columns.values())
     r = 0
     for row in columns.values():
@@ -255,32 +257,37 @@ def create_schema(config, table_name):
         params = {"col": row["column"]}
         structure = row.get("structure")
         if structure and not table_name.endswith("_conflict"):
-            if structure.strip().lower() == "primary":
-                line += " PRIMARY KEY"
-            elif structure.strip().lower() == "unique":
-                line += " UNIQUE"
-            else:
-                match = re.fullmatch(r"^from\((.+)\)$", structure.strip().lower())
-                if match:
-                    foreign = match.group(1).split(".", 1)
-                    if len(foreign) != 2:
-                        raise ValueError(
-                            "Invalid foreign key: {} for table: {}".format(structure, table_name)
+            keys = re.split(r"\s+", structure)
+            for key in keys:
+                key = key.strip().lower()
+                if key == "primary":
+                    line += " PRIMARY KEY"
+                    constraints["primary"].append(row["column"])
+                elif key == "unique":
+                    line += " UNIQUE"
+                    constraints["unique"].append(row["column"])
+                else:
+                    match = re.fullmatch(r"^from\((.+)\)$", key)
+                    if match:
+                        foreign = match.group(1).split(".", 1)
+                        if len(foreign) != 2:
+                            raise ValueError(
+                                "Invalid foreign key: {} for: {}".format(structure, table_name)
+                            )
+                        constraints["foreign"].append(
+                            {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
                         )
-                    foreign_keys.append(
-                        {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
-                    )
         line += ","
         output.append(safe_sql(line, params))
         line = "  :meta TEXT"
-        if r >= c and not foreign_keys:
+        if r >= c and not constraints["foreign"]:
             line += ""
         else:
             line += ","
         output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
 
-    num_keys = len(foreign_keys)
-    for i, fkey in enumerate(foreign_keys):
+    num_keys = len(constraints["foreign"])
+    for i, fkey in enumerate(constraints["foreign"]):
         output.append(
             safe_sql(
                 "  FOREIGN KEY (:column) REFERENCES :ftable(:fcolumn){}".format(
@@ -290,11 +297,12 @@ def create_schema(config, table_name):
             )
         )
     output.append(");")
-    return "\n".join(output), foreign_keys
+    return "\n".join(output), constraints
 
 
-def insert_rows(conn, config, table_name, rows):
-    """Given a connection to a sqlite db, the config structure, table name, and list of row dicts,
+def insert_rows(conn, config, table_name, constraints, rows):
+    """Given a connection to a sqlite db, the config structure, a table name, a dict containing
+    the database constraints, and a list of rows (dicts from column names to column values),
     return a SQL string for an INSERT statement with VALUES for all the rows."""
 
     def generate_sql(table_name, rows):
@@ -329,7 +337,7 @@ def insert_rows(conn, config, table_name, rows):
             output += ";"
         return output
 
-    result_rows = validate_rows(conn, config, table_name, rows)
+    result_rows = validate_rows(conn, config, table_name, constraints, rows)
     main_rows = []
     conflict_rows = []
     for row in result_rows:

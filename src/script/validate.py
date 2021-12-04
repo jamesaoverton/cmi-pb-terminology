@@ -3,10 +3,10 @@
 import re
 
 
-def validate_rows(conn, config, table_name, rows):
-    """Given a connection to a sqlite db, a validation config, a table name,
-    and a list of row dicts (from column names to value strings),
-    return a list row dicts (from column names to cell dicts)."""
+def validate_rows(conn, config, table_name, constraints, rows):
+    """Given a connection to a sqlite db, a validation config, a table name, a dict containing
+    the database constraints, and a list of rows (dicts from column names to column values), and a
+    list of previously validated rows, return a list of validated rows."""
     result_rows = []
     for row in rows:
         result_row = {}
@@ -15,39 +15,42 @@ def validate_rows(conn, config, table_name, rows):
                 "value": value,
                 "valid": True,
             }
-        result_rows.append(validate_row(conn, config, table_name, result_row, result_rows))
+        result_rows.append(
+            validate_row(conn, config, table_name, constraints, result_row, result_rows)
+        )
     return result_rows
 
 
-def validate_row(conn, config, table_name, row, prev_results):
-    """Given a connection to a sqlite db, a validation config, a table name,
-    and a row dict (from column names to value strings),
-    return a row dict (from column names to cell dicts)."""
+def validate_row(conn, config, table_name, constraints, row, prev_results):
+    """Given a connection to a sqlite db, a validation config, a table name, a dict containing
+    the database constraints, a row to validate (a dict from column names to column values), and a
+    list of previously validated rows, return the validated row."""
     duplicate = False
     for column_name, cell in row.items():
-        cell = validate_cell(conn, config, table_name, column_name, cell, prev_results)
+        cell = validate_cell(conn, config, table_name, column_name, constraints, cell, prev_results)
         # If a cell violates either the unique or primary constraints, mark the row as a duplicate:
-        if bool([msg for msg in cell["messages"] if msg["rule"] in ["unique", "primary"]]):
+        if bool([msg for msg in cell["messages"] if msg["rule"] == "unique or primary key"]):
             duplicate = True
         row[column_name] = cell
     row["duplicate"] = duplicate
     return row
 
 
-def validate_cell(conn, config, table_name, column_name, cell, prev_results):
-    """Given a connection to a sqlite db, a validation config, a table name, a column name, and a "
-    cell dict, return an updated cell dict."""
+def validate_cell(conn, config, table_name, column_name, constraints, cell, prev_results):
+    """Given a connection to a sqlite db, a validation config, a table name, a column name, a dict
+    containing the database constraints, a cell to validate, and a list of previously validated
+    rows (dicts mapping column names to column values), return the validated cell."""
     column = config["table"][table_name]["column"][column_name]
     cell["messages"] = []
 
     # If the column has a primary or unique key constraint and the value of the cell is a duplicate,
     # mark it as such:
-    if column.get("structure", "").lower() in ["unique", "primary"]:
+    if column_name in constraints["unique"][table_name] + constraints["primary"][table_name]:
         if bool([p[column_name] for p in prev_results if p[column_name]["value"] == cell["value"]]):
             cell["valid"] = False
             cell["messages"].append(
                 {
-                    "rule": column["structure"],
+                    "rule": "unique or primary key",
                     "level": "error",
                     "message": "Values of {} must be unique".format(column_name),
                 }
@@ -63,7 +66,7 @@ def validate_cell(conn, config, table_name, column_name, cell, prev_results):
             cell["valid"] = False
             cell["messages"].append(
                 {
-                    "rule": column["structure"],
+                    "rule": "unique or primary key",
                     "level": "error",
                     "message": "Values of {} must be unique".format(column_name),
                 }
