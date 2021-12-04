@@ -2,3 +2,4 @@ source	id	label	type	parent
 COB	BFO:0000040	material entity	owl:Class	owl:Thing
 COB	VO:0000001	vaccine	owl:Class	material entity
 COB	COB:0000013	molecular entity	owl:Class	material entity
+MOB	MOB:0000013	mobecular entity	owl:Class	material entity
