@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
 import csv
-import json
 import itertools
+import json
 import re
 import sqlite3
 import sys
 
+from graphlib import CycleError, TopologicalSorter
 from sqlalchemy.sql.expression import text as sql_text
 
 from validate import validate_rows
@@ -111,22 +112,54 @@ def read_config_files(table_table_path):
     return config
 
 
+def sort_tables(table_list, foreign_keys):
+    """Takes as arguments a list of tables and a dictionary describing all of the foreign key
+    constraints between tables, where the latter is of the form:
+    {'my_table': [{'column': 'my_column',
+                   'fcolumn': 'foreign_column',
+                   'ftable': 'foreign_table'},
+                  ...]
+     ...}.
+    Returns the list of tables sorted according to their dependencies, such that if table_a
+    depends on table_b, then table_b comes before table_a in the list."""
+    ts = TopologicalSorter()
+    for table_name in table_list:
+        deps = set(dep["ftable"] for dep in foreign_keys.get(table_name, []))
+        ts.add(table_name, *deps)
+    try:
+        return list(ts.static_order())
+    except CycleError as e:
+        cycle = e.args[1]
+        message = "Cyclic dependency between tables {}: ".format(", ".join(cycle))
+        end_index = len(cycle) - 1
+        for i, table in enumerate(cycle):
+            if i < end_index:
+                dep_name = cycle[i + 1]
+                dep = [d for d in foreign_keys[table] if d["ftable"] == dep_name].pop()
+                message += "{}.{} depends on {}.{}".format(
+                    table, dep["column"], dep["ftable"], dep["fcolumn"]
+                )
+            if i < (end_index - 1):
+                message += " and "
+        raise (CycleError(message))
+
+
 def create_db_and_write_sql(conn, config):
     """Given a sqlite connection and a config map, read TSVs and write out SQL strings."""
-    # TODO: determine table load sequence by foreign key relations
-    # fail on circularity
     table_list = list(config["table"].keys())
-
+    foreign_keys = {}
     for table_name in table_list:
         path = config["table"][table_name]["path"]
         with open(path) as f:
+            # Open a DictReader to get the first row from which we will read the column names of the
+            # table. Note that although we discard the rest this should not be inefficient. Since
+            # DictReader is implemented as an Iterator it does not read the whole file.
             rows = csv.DictReader(f, delimiter="\t")
 
-            # update columns
+            # Update columns
             defined_columns = config["table"][table_name]["column"]
-            actual_columns, rows = itertools.tee(rows)
             try:
-                actual_columns = list(next(actual_columns).keys())
+                actual_columns = list(next(rows).keys())
             except StopIteration:
                 raise StopIteration(f"No rows in {path}")
 
@@ -143,8 +176,11 @@ def create_db_and_write_sql(conn, config):
                 all_columns[column_name] = column
             config["table"][table_name]["column"] = all_columns
 
+            # Create the table and its corresponding conflict table:
             for table in [table_name, table_name + "_conflict"]:
-                sql = create_schema(config, table)
+                sql, fkeys = create_schema(config, table)
+                if fkeys:
+                    foreign_keys[table_name] = fkeys
                 conn.executescript(sql)
                 print("{}\n".format(sql))
 
@@ -162,6 +198,15 @@ def create_db_and_write_sql(conn, config):
             print("{}\n".format(sql))
             conn.commit()
 
+    # Sort tables according to their foreign key dependencies so that tables are always loaded
+    # after the tables they depend on:
+    table_list = sort_tables(table_list, foreign_keys)
+
+    # Now load the rows:
+    for table_name in table_list:
+        path = config["table"][table_name]["path"]
+        with open(path) as f:
+            rows = csv.DictReader(f, delimiter="\t")
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
@@ -188,9 +233,9 @@ def get_SQL_type(config, datatype):
 
 
 def create_schema(config, table_name):
-    """Given the config structure and a table name,
-    generate a SQL schema string,
-    including each column C and its matching C_meta column."""
+    """Given the config structure and a table name, generate a SQL schema string, including each
+    column C and its matching C_meta column, then return the schema string as well as a list of the
+    table's foreign key constraints."""
     output = [
         safe_sql("DROP TABLE IF EXISTS :table;", {"table": table_name}),
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
@@ -245,7 +290,7 @@ def create_schema(config, table_name):
             )
         )
     output.append(");")
-    return "\n".join(output)
+    return "\n".join(output), foreign_keys
 
 
 def insert_rows(conn, config, table_name, rows):
@@ -311,5 +356,5 @@ if __name__ == "__main__":
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
             create_db_and_write_sql(conn, config)
-    except (FileNotFoundError, StopIteration, ValueError) as e:
+    except (CycleError, FileNotFoundError, StopIteration, ValueError) as e:
         sys.exit(e)
