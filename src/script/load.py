@@ -3,6 +3,7 @@
 import csv
 import json
 import itertools
+import re
 import sqlite3
 import sys
 
@@ -195,6 +196,7 @@ def create_schema(config, table_name):
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
+    foreign_keys = []
     c = len(columns.values())
     r = 0
     for row in columns.values():
@@ -212,10 +214,36 @@ def create_schema(config, table_name):
                 line += " PRIMARY KEY"
             elif structure.strip().lower() == "unique":
                 line += " UNIQUE"
+            else:
+                match = re.fullmatch(r"^from\((.+)\)$", structure.strip().lower())
+                if match:
+                    foreign = match.group(1).split(".", 1)
+                    if len(foreign) != 2:
+                        raise ValueError(
+                            "Invalid foreign key: {} for table: {}".format(structure, table_name)
+                        )
+                    foreign_keys.append(
+                        {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
+                    )
         line += ","
         output.append(safe_sql(line, params))
-        line = f"  :meta TEXT{',' if r < c else ''}"
+        line = "  :meta TEXT"
+        if r >= c and not foreign_keys:
+            line += ""
+        else:
+            line += ","
         output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
+
+    num_keys = len(foreign_keys)
+    for i, fkey in enumerate(foreign_keys):
+        output.append(
+            safe_sql(
+                "  FOREIGN KEY (:column) REFERENCES :ftable(:fcolumn){}".format(
+                    "," if i < (num_keys - 1) else ""
+                ),
+                {"column": fkey["column"], "ftable": fkey["ftable"], "fcolumn": fkey["fcolumn"]},
+            )
+        )
     output.append(");")
     return "\n".join(output)
 
@@ -283,5 +311,5 @@ if __name__ == "__main__":
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
             create_db_and_write_sql(conn, config)
-    except (FileNotFoundError, StopIteration) as e:
+    except (FileNotFoundError, StopIteration, ValueError) as e:
         sys.exit(e)
