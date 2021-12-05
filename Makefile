@@ -186,4 +186,4 @@ test: test/test.sh build/cmi-pb.db | test/expected
 
 .PHONY: clean
 clean:
-	rm -rf build
+	rm -rf build *_actual

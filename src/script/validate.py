@@ -29,7 +29,7 @@ def validate_row(conn, config, table_name, constraints, row, prev_results):
     for column_name, cell in row.items():
         cell = validate_cell(conn, config, table_name, column_name, constraints, cell, prev_results)
         # If a cell violates either the unique or primary constraints, mark the row as a duplicate:
-        if bool([msg for msg in cell["messages"] if msg["rule"] == "unique or primary key"]):
+        if [msg for msg in cell["messages"] if msg["rule"] == "unique or primary key"]:
             duplicate = True
         row[column_name] = cell
     row["duplicate"] = duplicate
@@ -43,26 +43,33 @@ def validate_cell(conn, config, table_name, column_name, constraints, cell, prev
     column = config["table"][table_name]["column"][column_name]
     cell["messages"] = []
 
-    # If the column has a primary or unique key constraint and the value of the cell is a duplicate,
-    # mark it as such:
+    # If the value of the cell is one of the allowable null-type values for this column, then
+    # mark it as such and return immediately:
+    if column["nulltype"]:
+        nt_name = column["nulltype"]
+        nulltype = config["datatype"][nt_name]
+        result = validate_condition(nulltype["condition"], cell["value"])
+        if result:
+            cell["nulltype"] = nt_name
+            return cell
+
+    # If the column has a primary or unique key constraint and the value of the cell is a duplicate
+    # either of one of the previously validated rows in the batch, or of a validated row that has
+    # already been inserted into the table, mark it as such:
     if column_name in constraints["unique"][table_name] + constraints["primary"][table_name]:
-        if bool(
-            [
-                p[column_name]
-                for p in prev_results
-                if p[column_name]["value"] == cell["value"] and p[column_name]["valid"]
-            ]
-        ):
+        error_message = {
+            "rule": "unique or primary key",
+            "level": "error",
+            "message": "Values of {} must be unique".format(column_name),
+        }
+        if [
+            p[column_name]
+            for p in prev_results
+            if p[column_name]["value"] == cell["value"] and p[column_name]["valid"]
+        ]:
             cell["valid"] = False
-            cell["messages"].append(
-                {
-                    "rule": "unique or primary key",
-                    "level": "error",
-                    "message": "Values of {} must be unique".format(column_name),
-                }
-            )
+            cell["messages"].append(error_message)
         else:
-            # TODO: use the safe_sql function that is defined in load.py
             rows = conn.execute(
                 "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
                     table_name, column["column"], cell["value"]
@@ -70,71 +77,55 @@ def validate_cell(conn, config, table_name, column_name, constraints, cell, prev
             )
             if rows.fetchall():
                 cell["valid"] = False
-                cell["messages"].append(
-                    {
-                        "rule": "unique or primary key",
-                        "level": "error",
-                        "message": "Values of {} must be unique".format(column_name),
-                    }
-                )
-    elif column["nulltype"]:
-        # If the value of the cell is one of the allowable null-type values for this column, then
-        # mark it as such:
-        nt_name = column["nulltype"]
-        nulltype = config["datatype"][nt_name]
-        result = validate_condition(nulltype["condition"], cell["value"])
-        if result:
-            cell["nulltype"] = nt_name
-    else:
-        # Check the cell value against any foreign keys:
-        fkeys = [
-            fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name
-        ]
-        for fkey in fkeys:
-            # TODO: use the safe_sql function that is defined in load.py
-            rows = conn.execute(
-                "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
-                    fkey["ftable"], fkey["fcolumn"], cell["value"]
-                )
+                cell["messages"].append(error_message)
+
+    # Check the cell value against any foreign keys:
+    fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
+    for fkey in fkeys:
+        rows = conn.execute(
+            "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
+                fkey["ftable"], fkey["fcolumn"], cell["value"]
             )
-            if not rows.fetchall():
-                cell["valid"] = False
-                cell["messages"].append(
-                    {
-                        "rule": "foreign key",
-                        "level": "error",
-                        "message": "Value {} of column {} is not in {}.{}".format(
-                            cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
-                        ),
-                    }
-                )
+        )
+        if not rows.fetchall():
+            cell["valid"] = False
+            cell["messages"].append(
+                {
+                    "rule": "foreign key",
+                    "level": "error",
+                    "message": "Value {} of column {} is not in {}.{}".format(
+                        cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
+                    ),
+                }
+            )
 
-        # Validate that the value of the cell conforms to the datatypes associated with the column:
-        def get_datatypes_to_check(dt_name):
-            datatypes = []
-            if dt_name is not None:
-                datatype = config["datatype"][dt_name]
-                if datatype["condition"] is not None:
-                    datatypes.append(datatype)
-                datatypes += get_datatypes_to_check(datatype["parent"])
-            return datatypes
+    # Validate that the value of the cell conforms to the datatypes associated with the column:
+    def get_datatypes_to_check(dt_name):
+        datatypes = []
+        if dt_name is not None:
+            datatype = config["datatype"][dt_name]
+            if datatype["condition"] is not None:
+                datatypes.append(datatype)
+            datatypes += get_datatypes_to_check(datatype["parent"])
+        return datatypes
 
-        dt_name = column["datatype"]
-        datatypes_to_check = get_datatypes_to_check(dt_name)
-        # We use while and pop() instead of a for loop so as to check conditions in LIFO order:
-        while datatypes_to_check:
-            datatype = datatypes_to_check.pop()
-            if datatype["condition"].startswith("exclude") == validate_condition(
-                datatype["condition"], cell["value"]
-            ):
-                cell["messages"].append(
-                    {
-                        "rule": "datatype:{}".format(datatype["datatype"]),
-                        "level": "error",
-                        "message": "{} should be {}".format(column_name, datatype["description"]),
-                    }
-                )
-                cell["valid"] = False
+    dt_name = column["datatype"]
+    datatypes_to_check = get_datatypes_to_check(dt_name)
+    # We use while and pop() instead of a for loop so as to check conditions in LIFO order:
+    while datatypes_to_check:
+        datatype = datatypes_to_check.pop()
+        if datatype["condition"].startswith("exclude") == validate_condition(
+            datatype["condition"], cell["value"]
+        ):
+            cell["messages"].append(
+                {
+                    "rule": "datatype:{}".format(datatype["datatype"]),
+                    "level": "error",
+                    "message": "{} should be {}".format(column_name, datatype["description"]),
+                }
+            )
+            cell["valid"] = False
+
     return cell
 
 
