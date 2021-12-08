@@ -3,10 +3,9 @@
 import re
 
 
-def validate_rows(conn, config, table_name, constraints, rows):
-    """Given a connection to a sqlite db, a validation config, a table name, a dict containing
-    the database constraints, and a list of rows (dicts from column names to column values), and a
-    list of previously validated rows, return a list of validated rows."""
+def validate_rows(config, table_name, rows):
+    """Given a config map, a table name, and a list of rows (dicts from column names to column
+    values), and a list of previously validated rows, return a list of validated rows."""
     result_rows = []
     for row in rows:
         result_row = {}
@@ -15,19 +14,16 @@ def validate_rows(conn, config, table_name, constraints, rows):
                 "value": value,
                 "valid": True,
             }
-        result_rows.append(
-            validate_row(conn, config, table_name, constraints, result_row, result_rows)
-        )
+        result_rows.append(validate_row(config, table_name, result_row, result_rows))
     return result_rows
 
 
-def validate_row(conn, config, table_name, constraints, row, prev_results):
-    """Given a connection to a sqlite db, a validation config, a table name, a dict containing
-    the database constraints, a row to validate (a dict from column names to column values), and a
-    list of previously validated rows, return the validated row."""
+def validate_row(config, table_name, row, prev_results):
+    """Given a config map, a table name, a row to validate (a dict from column names to column
+    values), and a list of previously validated rows, return the validated row."""
     duplicate = False
     for column_name, cell in row.items():
-        cell = validate_cell(conn, config, table_name, column_name, constraints, cell, prev_results)
+        cell = validate_cell(config, table_name, column_name, cell, prev_results)
         # If a cell violates either the unique or primary constraints, mark the row as a duplicate:
         if [msg for msg in cell["messages"] if msg["rule"] == "unique or primary key"]:
             duplicate = True
@@ -36,10 +32,9 @@ def validate_row(conn, config, table_name, constraints, row, prev_results):
     return row
 
 
-def validate_cell(conn, config, table_name, column_name, constraints, cell, prev_results):
-    """Given a connection to a sqlite db, a validation config, a table name, a column name, a dict
-    containing the database constraints, a cell to validate, and a list of previously validated
-    rows (dicts mapping column names to column values), return the validated cell."""
+def validate_cell(config, table_name, column_name, cell, prev_results):
+    """Given a config map, a table name, a column name, a cell to validate, and a list of previously
+    validated rows (dicts mapping column names to column values), return the validated cell."""
     column = config["table"][table_name]["column"][column_name]
     cell["messages"] = []
 
@@ -56,6 +51,7 @@ def validate_cell(conn, config, table_name, column_name, constraints, cell, prev
     # If the column has a primary or unique key constraint and the value of the cell is a duplicate
     # either of one of the previously validated rows in the batch, or of a validated row that has
     # already been inserted into the table, mark it as such:
+    constraints = config["constraints"]
     if column_name in constraints["unique"][table_name] + constraints["primary"][table_name]:
         error_message = {
             "rule": "unique or primary key",
@@ -70,7 +66,7 @@ def validate_cell(conn, config, table_name, column_name, constraints, cell, prev
             cell["valid"] = False
             cell["messages"].append(error_message)
         else:
-            rows = conn.execute(
+            rows = config["db"].execute(
                 "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
                     table_name, column["column"], cell["value"]
                 )
@@ -82,7 +78,7 @@ def validate_cell(conn, config, table_name, column_name, constraints, cell, prev
     # Check the cell value against any foreign keys:
     fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
     for fkey in fkeys:
-        rows = conn.execute(
+        rows = config["db"].execute(
             "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
                 fkey["ftable"], fkey["fcolumn"], cell["value"]
             )

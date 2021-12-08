@@ -19,9 +19,8 @@ sqlite_types = ["text", "integer", "real", "blob"]
 
 
 def read_config_files(table_table_path):
-    """Given the path to a table table TSV file,
-    load and check the special 'table', 'column', and 'datatype' tables,
-    and return a config structure."""
+    """Given the path to a table TSV file, load and check the special 'table', 'column', and
+    'datatype' tables, and return a config structure."""
 
     def read_tsv(path):
         """Given a path, read a TSV file and return a list of row dicts."""
@@ -144,10 +143,9 @@ def sort_tables(table_list, foreign_keys):
         raise (CycleError(message))
 
 
-def create_db_and_write_sql(conn, config):
-    """Given a sqlite connection and a config map, read TSVs and write out SQL strings."""
+def create_db_and_write_sql(config):
+    """Given a config map, read TSVs and write out SQL strings."""
     table_list = list(config["table"].keys())
-    constraints = {"foreign": {}, "unique": {}, "primary": {}}
     for table_name in table_list:
         path = config["table"][table_name]["path"]
         with open(path) as f:
@@ -180,10 +178,10 @@ def create_db_and_write_sql(conn, config):
             for table in [table_name, table_name + "_conflict"]:
                 table_sql, table_constraints = create_schema(config, table)
                 if not table.endswith("_conflict"):
-                    constraints["foreign"][table_name] = table_constraints["foreign"]
-                    constraints["unique"][table_name] = table_constraints["unique"]
-                    constraints["primary"][table_name] = table_constraints["primary"]
-                conn.executescript(table_sql)
+                    config["constraints"]["foreign"][table_name] = table_constraints["foreign"]
+                    config["constraints"]["unique"][table_name] = table_constraints["unique"]
+                    config["constraints"]["primary"][table_name] = table_constraints["primary"]
+                config["db"].executescript(table_sql)
                 print("{}\n".format(table_sql))
 
             # Create a view as the union of the regular and conflict versions of the table:
@@ -196,13 +194,13 @@ def create_db_and_write_sql(conn, config):
                     "conflict": table_name + "_conflict",
                 },
             )
-            conn.executescript(sql)
+            config["db"].executescript(sql)
             print("{}\n".format(sql))
-            conn.commit()
+            config["db"].commit()
 
     # Sort tables according to their foreign key dependencies so that tables are always loaded
     # after the tables they depend on:
-    table_list = sort_tables(table_list, constraints["foreign"])
+    table_list = sort_tables(table_list, config["constraints"]["foreign"])
 
     # Now load the rows:
     for table_name in table_list:
@@ -214,16 +212,15 @@ def create_db_and_write_sql(conn, config):
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
             for i, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
-                sql = insert_rows(conn, config, table_name, constraints, chunk)
-                conn.executescript(sql)
-                conn.commit()
+                sql = insert_rows(config, table_name, chunk)
+                config["db"].executescript(sql)
+                config["db"].commit()
                 print("{}\n\n".format(sql))
                 print("-- end of chunk {}\n\n".format(i))
 
 
 def get_SQL_type(config, datatype):
-    """Given the config structure and the name of a datatype,
-    climb the datatype tree (as required),
+    """Given the config structure and the name of a datatype, climb the datatype tree (as required),
     and return the first 'SQL type' found."""
     if "datatype" not in config:
         raise Exception("Missing datatypes in config")
@@ -243,7 +240,7 @@ def create_schema(config, table_name):
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
-    constraints = {"foreign": [], "unique": [], "primary": []}
+    table_constraints = {"foreign": [], "unique": [], "primary": []}
     c = len(columns.values())
     r = 0
     for row in columns.values():
@@ -262,10 +259,10 @@ def create_schema(config, table_name):
                 key = key.strip().lower()
                 if key == "primary":
                     line += " PRIMARY KEY"
-                    constraints["primary"].append(row["column"])
+                    table_constraints["primary"].append(row["column"])
                 elif key == "unique":
                     line += " UNIQUE"
-                    constraints["unique"].append(row["column"])
+                    table_constraints["unique"].append(row["column"])
                 else:
                     match = re.fullmatch(r"^from\((.+)\)$", key)
                     if match:
@@ -274,20 +271,20 @@ def create_schema(config, table_name):
                             raise ValueError(
                                 "Invalid foreign key: {} for: {}".format(structure, table_name)
                             )
-                        constraints["foreign"].append(
+                        table_constraints["foreign"].append(
                             {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
                         )
         line += ","
         output.append(safe_sql(line, params))
         line = "  :meta TEXT"
-        if r >= c and not constraints["foreign"]:
+        if r >= c and not table_constraints["foreign"]:
             line += ""
         else:
             line += ","
         output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
 
-    num_keys = len(constraints["foreign"])
-    for i, fkey in enumerate(constraints["foreign"]):
+    num_keys = len(table_constraints["foreign"])
+    for i, fkey in enumerate(table_constraints["foreign"]):
         output.append(
             safe_sql(
                 "  FOREIGN KEY (:column) REFERENCES :ftable(:fcolumn){}".format(
@@ -297,13 +294,12 @@ def create_schema(config, table_name):
             )
         )
     output.append(");")
-    return "\n".join(output), constraints
+    return "\n".join(output), table_constraints
 
 
-def insert_rows(conn, config, table_name, constraints, rows):
-    """Given a connection to a sqlite db, the config structure, a table name, a dict containing
-    the database constraints, and a list of rows (dicts from column names to column values),
-    return a SQL string for an INSERT statement with VALUES for all the rows."""
+def insert_rows(config, table_name, rows):
+    """Given a config map, a table name, and a list of rows (dicts from column names to column
+    values), return a SQL string for an INSERT statement with VALUES for all the rows."""
 
     def generate_sql(table_name, rows):
         lines = []
@@ -337,7 +333,7 @@ def insert_rows(conn, config, table_name, constraints, rows):
             output += ";"
         return output
 
-    result_rows = validate_rows(conn, config, table_name, constraints, rows)
+    result_rows = validate_rows(config, table_name, rows)
     main_rows = []
     conflict_rows = []
     for row in result_rows:
@@ -363,6 +359,8 @@ if __name__ == "__main__":
     try:
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
-            create_db_and_write_sql(conn, config)
+            config["db"] = conn
+            config["constraints"] = {"foreign": {}, "unique": {}, "primary": {}}
+            create_db_and_write_sql(config)
     except (CycleError, FileNotFoundError, StopIteration, ValueError) as e:
         sys.exit(e)
