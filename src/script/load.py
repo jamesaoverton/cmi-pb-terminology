@@ -311,11 +311,11 @@ def create_schema(config, table_name):
                     elif match and match.group(1) == "tree":
                         child = match.group(2)
                         child_datatype = columns.get(child, {}).get("datatype")
-                        parent = row["column"]
                         if not child_datatype:
                             raise ValueError(
                                 f"Could not determine SQL datatype for {child} of tree({child})"
                             )
+                        parent = row["column"]
                         child_sql_type = get_SQL_type(config, child_datatype)
                         if sql_type != child_sql_type:
                             raise ValueError(

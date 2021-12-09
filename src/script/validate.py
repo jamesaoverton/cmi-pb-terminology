@@ -25,7 +25,11 @@ def validate_row(config, table_name, row, prev_results):
     for column_name, cell in row.items():
         cell = validate_cell(config, table_name, column_name, cell, prev_results)
         # If a cell violates either the unique or primary constraints, mark the row as a duplicate:
-        if [msg for msg in cell["messages"] if msg["rule"] == "unique or primary key"]:
+        if [
+            msg
+            for msg in cell["messages"]
+            if msg["rule"] in ("key:primary", "key:unique", "tree:child-unique")
+        ]:
             duplicate = True
         row[column_name] = cell
     row["duplicate"] = duplicate
@@ -48,32 +52,37 @@ def validate_cell(config, table_name, column_name, cell, prev_results):
             cell["nulltype"] = nt_name
             return cell
 
-    # If the column has a primary or unique key constraint and the value of the cell is a duplicate
-    # either of one of the previously validated rows in the batch, or of a validated row that has
-    # already been inserted into the table, mark it as such:
+    # If the column has a primary or unique key constraint, or if it is the child associated with
+    # a tree, then if the value of the cell is a duplicate either of one of the previously validated
+    # rows in the batch, or a duplicate of a validated row that has already been inserted into the
+    # table, mark it with the corresponding error:
     constraints = config["constraints"]
-    if column_name in constraints["unique"][table_name] + constraints["primary"][table_name]:
-        error_message = {
-            "rule": "unique or primary key",
-            "level": "error",
-            "message": "Values of {} must be unique".format(column_name),
-        }
+    is_primary = column_name in constraints["primary"][table_name]
+    is_unique = False if is_primary else column_name in constraints["unique"][table_name]
+    is_tree_child = column_name in [c["child"] for c in constraints["tree"][table_name]]
+    if any([is_primary, is_unique, is_tree_child]):
+
+        def make_error(rule):
+            return {
+                "rule": rule,
+                "level": "error",
+                "message": "Values of {} must be unique".format(column_name),
+            }
+
         if [
             p[column_name]
             for p in prev_results
             if p[column_name]["value"] == cell["value"] and p[column_name]["valid"]
-        ]:
-            cell["valid"] = False
-            cell["messages"].append(error_message)
-        else:
-            rows = config["db"].execute(
-                "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
-                    table_name, column["column"], cell["value"]
-                )
+        ] or config["db"].execute(
+            "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
+                table_name, column["column"], cell["value"]
             )
-            if rows.fetchall():
-                cell["valid"] = False
-                cell["messages"].append(error_message)
+        ).fetchall():
+            cell["valid"] = False
+            if is_primary or is_unique:
+                cell["messages"].append(make_error("key:primary" if is_primary else "key:unique"))
+            if is_tree_child:
+                cell["messages"].append(make_error("tree:child-unique"))
 
     # Check the cell value against any foreign keys:
     fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
@@ -87,7 +96,7 @@ def validate_cell(config, table_name, column_name, cell, prev_results):
             cell["valid"] = False
             cell["messages"].append(
                 {
-                    "rule": "foreign key",
+                    "rule": "key:foreign",
                     "level": "error",
                     "message": "Value {} of column {} is not in {}.{}".format(
                         cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
