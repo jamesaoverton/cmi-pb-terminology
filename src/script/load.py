@@ -305,9 +305,21 @@ def create_schema(config, table_name):
                             {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
                         )
                     elif match and match.group(1) == "tree":
-                        table_constraints["tree"].append(
-                            {"parent": row["column"], "child": match.group(2)}
-                        )
+                        child = match.group(2)
+                        child_datatype = columns.get(child, {}).get("datatype")
+                        parent = row["column"]
+                        if not child_datatype:
+                            raise ValueError(
+                                f"Could not determine SQL datatype for {child} of tree({child})"
+                            )
+                        child_sql_type = get_SQL_type(config, child_datatype)
+                        if sql_type != child_sql_type:
+                            raise ValueError(
+                                f"SQL type '{child_sql_type}' of '{child}' in 'tree({child})' for "
+                                f"table '{table_name}' does not match SQL type: '{sql_type}' of "
+                                f"parent: '{parent}'."
+                            )
+                        table_constraints["tree"].append({"parent": row["column"], "child": child})
 
         line += ","
         output.append(safe_sql(line, params))
