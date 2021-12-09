@@ -10,7 +10,7 @@ column	nulltype	empty	datatype_name	from(datatype.datatype)	the datatype for NUL
 column	structure	empty	trimmed_line		schema information for this column
 column	description	empty	description		a description of this column
 datatype	datatype		datatype_name	primary	the name of this datatype
-datatype	parent	empty	datatype_name	tree(datatype.datatype)	the parent datatype
+datatype	parent	empty	datatype_name	tree(datatype)	the parent datatype
 datatype	condition	empty	datatype_condition		
 prefix	prefix		prefix	primary	
 prefix	base		IRI	unique	
@@ -19,5 +19,5 @@ prefix	version IRI	empty	IRI
 import	source		prefix	from(prefix.prefix)	
 import	ID		CURIE	unique	
 import	label		label	primary	
-import	parent	empty	label	tree(import.label)	
+import	parent	empty	label	tree(label)	
 import	related	empty	trimmed_line		

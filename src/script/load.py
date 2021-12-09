@@ -111,16 +111,45 @@ def read_config_files(table_table_path):
     return config
 
 
-def sort_tables(table_list, foreign_keys):
-    """Takes as arguments a list of tables and a dictionary describing all of the foreign key
-    constraints between tables, where the latter is of the form:
+def verify_table_deps_and_sort(table_list, constraints):
+    """Takes as arguments a list of tables and a dictionary describing all of the constraints
+    between tables. The dictionary should include a sub-dictionary of foreign key constraints and
+    a sub-dictionary of tree constraints. The former should be of the form:
     {'my_table': [{'column': 'my_column',
                    'fcolumn': 'foreign_column',
                    'ftable': 'foreign_table'},
                   ...]
      ...}.
-    Returns the list of tables sorted according to their dependencies, such that if table_a
+    The latter should be of the form:
+    {'my_table': [{'child': 'my_child', 'parent': 'my_parent'},
+                  ...],
+     ...}.
+
+    After validating that there are no cycles amongst the foreign and tree dependencies, returns
+    the list of tables sorted according to their foreign key dependencies, such that if table_a
     depends on table_b, then table_b comes before table_a in the list."""
+
+    trees = constraints["tree"]
+    for table_name in table_list:
+        ts = TopologicalSorter()
+        for tree in trees[table_name]:
+            ts.add(tree["child"], tree["parent"])
+        try:
+            list(ts.static_order())
+        except CycleError as e:
+            cycle = e.args[1]
+            message = "Cyclic tree dependency in table '{}': ".format(table_name)
+            end_index = len(cycle) - 1
+            for i, child in enumerate(cycle):
+                if i < end_index:
+                    dep_name = cycle[i + 1]
+                    dep = [d for d in trees[table_name] if d["child"] == child].pop()
+                    message += "tree({}) references {}".format(child, dep["parent"])
+                if i < (end_index - 1):
+                    message += " and "
+            raise CycleError(message)
+
+    foreign_keys = constraints["foreign"]
     ts = TopologicalSorter()
     for table_name in table_list:
         deps = set(dep["ftable"] for dep in foreign_keys.get(table_name, []))
@@ -140,7 +169,7 @@ def sort_tables(table_list, foreign_keys):
                 )
             if i < (end_index - 1):
                 message += " and "
-        raise (CycleError(message))
+        raise CycleError(message)
 
 
 def create_db_and_write_sql(config):
@@ -181,6 +210,7 @@ def create_db_and_write_sql(config):
                     config["constraints"]["foreign"][table_name] = table_constraints["foreign"]
                     config["constraints"]["unique"][table_name] = table_constraints["unique"]
                     config["constraints"]["primary"][table_name] = table_constraints["primary"]
+                    config["constraints"]["tree"][table_name] = table_constraints["tree"]
                 config["db"].executescript(table_sql)
                 print("{}\n".format(table_sql))
 
@@ -200,7 +230,7 @@ def create_db_and_write_sql(config):
 
     # Sort tables according to their foreign key dependencies so that tables are always loaded
     # after the tables they depend on:
-    table_list = sort_tables(table_list, config["constraints"]["foreign"])
+    table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
     # Now load the rows:
     for table_name in table_list:
@@ -240,7 +270,7 @@ def create_schema(config, table_name):
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
-    table_constraints = {"foreign": [], "unique": [], "primary": []}
+    table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": []}
     c = len(columns.values())
     r = 0
     for row in columns.values():
@@ -264,9 +294,9 @@ def create_schema(config, table_name):
                     line += " UNIQUE"
                     table_constraints["unique"].append(row["column"])
                 else:
-                    match = re.fullmatch(r"^from\((.+)\)$", key)
-                    if match:
-                        foreign = match.group(1).split(".", 1)
+                    match = re.fullmatch(r"^(from|tree)\((.+)\)$", key)
+                    if match and match.group(1) == "from":
+                        foreign = match.group(2).split(".", 1)
                         if len(foreign) != 2:
                             raise ValueError(
                                 "Invalid foreign key: {} for: {}".format(structure, table_name)
@@ -274,6 +304,11 @@ def create_schema(config, table_name):
                         table_constraints["foreign"].append(
                             {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
                         )
+                    elif match and match.group(1) == "tree":
+                        table_constraints["tree"].append(
+                            {"parent": row["column"], "child": match.group(2)}
+                        )
+
         line += ","
         output.append(safe_sql(line, params))
         line = "  :meta TEXT"
@@ -283,17 +318,27 @@ def create_schema(config, table_name):
             line += ","
         output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
 
-    num_keys = len(table_constraints["foreign"])
+    num_fkeys = len(table_constraints["foreign"])
     for i, fkey in enumerate(table_constraints["foreign"]):
         output.append(
             safe_sql(
                 "  FOREIGN KEY (:column) REFERENCES :ftable(:fcolumn){}".format(
-                    "," if i < (num_keys - 1) else ""
+                    "," if i < (num_fkeys - 1) else ""
                 ),
                 {"column": fkey["column"], "ftable": fkey["ftable"], "fcolumn": fkey["fcolumn"]},
             )
         )
     output.append(");")
+    # Loop through the tree constraints and if any of their associated child columns do not already
+    # have an associated unique or primary index, create one implicitly here:
+    for i, tree in enumerate(table_constraints["tree"]):
+        if tree["child"] not in (table_constraints["unique"] + table_constraints["primary"]):
+            output.append(
+                "CREATE UNIQUE INDEX {}_{}_idx ON {}({});".format(
+                    table_name, tree["child"], table_name, tree["child"]
+                )
+            )
+
     return "\n".join(output), table_constraints
 
 
@@ -360,7 +405,7 @@ if __name__ == "__main__":
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
             config["db"] = conn
-            config["constraints"] = {"foreign": {}, "unique": {}, "primary": {}}
+            config["constraints"] = {"foreign": {}, "unique": {}, "primary": {}, "tree": {}}
             create_db_and_write_sql(config)
     except (CycleError, FileNotFoundError, StopIteration, ValueError) as e:
         sys.exit(e)
