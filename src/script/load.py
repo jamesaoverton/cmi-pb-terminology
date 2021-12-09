@@ -52,14 +52,18 @@ def read_config_files(table_table_path):
         if row["type"] == "table":
             if row["path"] != path:
                 raise Exception(
-                    f"Special 'table' path '{row['path']}' does not match this path '{path}'"
+                    "Special 'table' path '{}' does not match this path '{}'".format(
+                        row["path"], path
+                    )
                 )
         if row["type"] in special_table_types:
             if config["special"][row["type"]]:
-                raise Exception(f"Multiple tables with type '{row['type']}' declared in '{path}'")
+                raise Exception(
+                    "Multiple tables with type '{}' declared in '{}'".format(row["type"], path)
+                )
             config["special"][row["type"]] = row["table"]
         if row["type"] and row["type"] not in special_table_types:
-            raise Exception(f"Unrecognized table type '{row['type']}' in '{path}'")
+            raise Exception("Unrecognized table type '{}' in '{}'".format(row["type"], path))
         row["column"] = {}
         config["table"][row["table"]] = row
 
@@ -100,11 +104,11 @@ def read_config_files(table_table_path):
             if row[column].strip() == "":
                 row[column] = None
         if row["table"] not in config["table"]:
-            raise Exception(f"Undefined table '{row['table']}' reading '{path}'")
+            raise Exception("Undefined table '{}' reading '{}'".format(row["table"], path))
         if row["nulltype"] and row["nulltype"] not in config["datatype"]:
-            raise Exception(f"Undefined nulltype '{row['nulltype']}' reading '{path}'")
+            raise Exception("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
         if row["datatype"] not in config["datatype"]:
-            raise Exception(f"Undefined datatype '{row['datatype']}' reading '{path}'")
+            raise Exception("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
         row["configured"] = True
         config["table"][row["table"]]["column"][row["column"]] = row
 
@@ -277,9 +281,9 @@ def create_schema(config, table_name):
         r += 1
         sql_type = get_SQL_type(config, row["datatype"])
         if not sql_type:
-            raise Exception(f"Missing SQL type for {row['datatype']}")
+            raise Exception("Missing SQL type for {}".format(row["datatype"]))
         if not sql_type.lower() in sqlite_types:
-            raise Exception(f"Unrecognized SQL type '{sql_type}' for {row['datatype']}")
+            raise Exception("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
         line = f"  :col {sql_type}"
         params = {"col": row["column"]}
         structure = row.get("structure")
@@ -377,7 +381,7 @@ def insert_rows(config, table_name, rows):
                 values.append(f":{column}")
                 values.append(f":{column}_meta")
                 params[column] = value
-                params[column + "_meta"] = f"json({json.dumps(cell)})"
+                params[column + "_meta"] = "json({})".format(json.dumps(cell))
             line = ", ".join(values)
             line = f"({line})"
             lines.append(safe_sql(line, params))
