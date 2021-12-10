@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import re
 
 
@@ -23,18 +24,23 @@ def validate_row(config, table_name, row, prev_results):
     values), and a list of previously validated rows, return the validated row."""
     duplicate = False
     for column_name, cell in row.items():
-        cell = validate_cell(config, table_name, column_name, cell, prev_results)
+        cell = validate_cell(config, table_name, column_name, cell, row, prev_results)
         # If a cell violates either the unique or primary constraints, mark the row as a duplicate:
-        if [msg for msg in cell["messages"] if msg["rule"] == "unique or primary key"]:
+        if [
+            msg
+            for msg in cell["messages"]
+            if msg["rule"] in ("key:primary", "key:unique", "tree:child-unique")
+        ]:
             duplicate = True
         row[column_name] = cell
     row["duplicate"] = duplicate
     return row
 
 
-def validate_cell(config, table_name, column_name, cell, prev_results):
-    """Given a config map, a table name, a column name, a cell to validate, and a list of previously
-    validated rows (dicts mapping column names to column values), return the validated cell."""
+def validate_cell(config, table_name, column_name, cell, context, prev_results):
+    """Given a config map, a table name, a column name, a cell to validate, the row, `context`,
+    to which the cell belongs, and a list of previously validated rows (dicts mapping column names
+    to column values), return the validated cell."""
     column = config["table"][table_name]["column"][column_name]
     cell["messages"] = []
 
@@ -48,32 +54,37 @@ def validate_cell(config, table_name, column_name, cell, prev_results):
             cell["nulltype"] = nt_name
             return cell
 
-    # If the column has a primary or unique key constraint and the value of the cell is a duplicate
-    # either of one of the previously validated rows in the batch, or of a validated row that has
-    # already been inserted into the table, mark it as such:
+    # If the column has a primary or unique key constraint, or if it is the child associated with
+    # a tree, then if the value of the cell is a duplicate either of one of the previously validated
+    # rows in the batch, or a duplicate of a validated row that has already been inserted into the
+    # table, mark it with the corresponding error:
     constraints = config["constraints"]
-    if column_name in constraints["unique"][table_name] + constraints["primary"][table_name]:
-        error_message = {
-            "rule": "unique or primary key",
-            "level": "error",
-            "message": "Values of {} must be unique".format(column_name),
-        }
+    is_primary = column_name in constraints["primary"][table_name]
+    is_unique = False if is_primary else column_name in constraints["unique"][table_name]
+    is_tree_child = column_name in [c["child"] for c in constraints["tree"][table_name]]
+    if any([is_primary, is_unique, is_tree_child]):
+
+        def make_error(rule):
+            return {
+                "rule": rule,
+                "level": "error",
+                "message": "Values of {} must be unique".format(column_name),
+            }
+
         if [
             p[column_name]
             for p in prev_results
             if p[column_name]["value"] == cell["value"] and p[column_name]["valid"]
-        ]:
-            cell["valid"] = False
-            cell["messages"].append(error_message)
-        else:
-            rows = config["db"].execute(
-                "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
-                    table_name, column["column"], cell["value"]
-                )
+        ] or config["db"].execute(
+            "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
+                table_name, column["column"], cell["value"]
             )
-            if rows.fetchall():
-                cell["valid"] = False
-                cell["messages"].append(error_message)
+        ).fetchall():
+            cell["valid"] = False
+            if is_primary or is_unique:
+                cell["messages"].append(make_error("key:primary" if is_primary else "key:unique"))
+            if is_tree_child:
+                cell["messages"].append(make_error("tree:child-unique"))
 
     # Check the cell value against any foreign keys:
     fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
@@ -87,10 +98,74 @@ def validate_cell(config, table_name, column_name, cell, prev_results):
             cell["valid"] = False
             cell["messages"].append(
                 {
-                    "rule": "foreign key",
+                    "rule": "key:foreign",
                     "level": "error",
                     "message": "Value {} of column {} is not in {}.{}".format(
                         cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
+                    ),
+                }
+            )
+
+    # If the current column is the parent column of a tree, validate that adding the current value
+    # will not result in a cycle between this and the parent column:
+    tkeys = [tkey for tkey in constraints["tree"][table_name] if tkey["parent"] == column_name]
+    for tkey in tkeys:
+        parent_col = column_name
+        child_col = tkey["child"]
+        parent_val = cell["value"]
+        child_val = context[child_col]["value"]
+
+        # In order to check if the current row will cause a dependency cycle, we need to query
+        # against all previously validated rows. Since previously validated rows belonging to the
+        # current batch will not have been inserted to the db yet, we explicitly add them in:
+        prev_selects = " UNION ".join(
+            [
+                "SELECT '{}', '{}'".format(p[parent_col]["value"], p[child_col]["value"])
+                for p in prev_results
+                if all([p[parent_col]["valid"], p[child_col]["valid"]])
+            ]
+        )
+        table_name_ext = table_name if not prev_selects else table_name + "_ext"
+        ext_clause = (
+            (
+                f"    WITH `{table_name_ext}` AS ( "
+                f"        SELECT `{parent_col}`, `{child_col}` "
+                f"            FROM `{table_name}` "
+                f"            UNION "
+                f"        {prev_selects} "
+                f"    )"
+            )
+            if prev_selects
+            else ""
+        )
+
+        sql = (
+            f"WITH RECURSIVE `hierarchy` AS ( "
+            f"{ext_clause} "
+            f"    SELECT `{parent_col}`, `{child_col}` "
+            f"        FROM `{table_name_ext}` "
+            f"        WHERE `{parent_col}` = '{child_val}' "
+            f"        UNION ALL "
+            f"    SELECT `t1`.`{parent_col}`, `t1`.`{child_col}` "
+            f"        FROM `{table_name_ext}` AS `t1` "
+            f"        JOIN `hierarchy` AS `t2` ON `t2`.`{child_col}` = `t1`.`{parent_col}`"
+            f") "
+            f"SELECT * "
+            f"FROM `hierarchy` "
+        )
+        rows = config["db"].execute(sql).fetchall()
+        if rows:
+            rows.append((parent_val, child_val))
+            cycle_msg = ", ".join(
+                ["({}: {}, {}: {})".format(parent_col, row[0], child_col, row[1]) for row in rows]
+            )
+            cell["valid"] = False
+            cell["messages"].append(
+                {
+                    "rule": "tree:cycle",
+                    "level": "error",
+                    "message": (
+                        f"Cyclic dependency: {cycle_msg} for tree({child_col}) of {parent_col}"
                     ),
                 }
             )
@@ -123,6 +198,63 @@ def validate_cell(config, table_name, column_name, cell, prev_results):
             cell["valid"] = False
 
     return cell
+
+
+def validate_tree_foreign_keys(config, table_name):
+    """Given a config map and a table name, validate whether there is a 'foreign key' violation for
+    any of the table's trees; i.e., for a given tree: tree(child) which has a given parent column,
+    validate that all of the values in the parent column are in the child column."""
+    tkeys = [tkey for tkey in config["constraints"]["tree"][table_name]]
+    results = []
+    for tkey in tkeys:
+        child_col = tkey["child"]
+        parent_col = tkey["parent"]
+        rows = (
+            config["db"]
+            .execute(
+                f"SELECT t1.rowid, t1.`{parent_col}`, t1.`{parent_col}_meta` "
+                f"FROM `{table_name}` t1 "
+                f"WHERE NOT EXISTS ( "
+                f"    SELECT 1 "
+                f"    FROM `{table_name}` t2 "
+                f"    WHERE t2.`{child_col}` = t1.`{parent_col}` "
+                f")"
+            )
+            .fetchall()
+        )
+
+        for row in rows:
+            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
+            meta = json.loads(meta)
+            # If the value in the parent column is legitimately empty, then just skip this row:
+            if meta.get("nulltype"):
+                continue
+
+            # If the parent column already contains a different error, its value will be null and it
+            # will be returned by the above query regardless of whether it actually violates the
+            # tree's foreign constraint. So we need to check the value from the meta column instead.
+            parent_val = row[1]
+            if parent_val is None:
+                parent_val = meta["value"]
+                rows = config["db"].execute(
+                    f"SELECT 1 FROM `{table_name}` WHERE `{child_col}` = '{parent_val}' LIMIT 1"
+                )
+                if rows.fetchall():
+                    continue
+
+            meta["valid"] = False
+            meta["value"] = parent_val
+            meta["messages"].append(
+                {
+                    "rule": "tree:foreign",
+                    "level": "error",
+                    "message": (
+                        f"Value {parent_val} of column {parent_col} is not in column {child_col}"
+                    ),
+                }
+            )
+            results.append({"rowid": row[0], "column": parent_col, "meta": meta})
+    return results
 
 
 def validate_condition(condition, value):

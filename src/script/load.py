@@ -10,7 +10,7 @@ import sys
 from graphlib import CycleError, TopologicalSorter
 from sqlalchemy.sql.expression import text as sql_text
 
-from validate import validate_rows
+from validate import validate_rows, validate_tree_foreign_keys
 
 CHUNK_SIZE = 2
 
@@ -52,14 +52,18 @@ def read_config_files(table_table_path):
         if row["type"] == "table":
             if row["path"] != path:
                 raise Exception(
-                    f"Special 'table' path '{row['path']}' does not match this path '{path}'"
+                    "Special 'table' path '{}' does not match this path '{}'".format(
+                        row["path"], path
+                    )
                 )
         if row["type"] in special_table_types:
             if config["special"][row["type"]]:
-                raise Exception(f"Multiple tables with type '{row['type']}' declared in '{path}'")
+                raise Exception(
+                    "Multiple tables with type '{}' declared in '{}'".format(row["type"], path)
+                )
             config["special"][row["type"]] = row["table"]
         if row["type"] and row["type"] not in special_table_types:
-            raise Exception(f"Unrecognized table type '{row['type']}' in '{path}'")
+            raise Exception("Unrecognized table type '{}' in '{}'".format(row["type"], path))
         row["column"] = {}
         config["table"][row["table"]] = row
 
@@ -100,27 +104,56 @@ def read_config_files(table_table_path):
             if row[column].strip() == "":
                 row[column] = None
         if row["table"] not in config["table"]:
-            raise Exception(f"Undefined table '{row['table']}' reading '{path}'")
+            raise Exception("Undefined table '{}' reading '{}'".format(row["table"], path))
         if row["nulltype"] and row["nulltype"] not in config["datatype"]:
-            raise Exception(f"Undefined nulltype '{row['nulltype']}' reading '{path}'")
+            raise Exception("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
         if row["datatype"] not in config["datatype"]:
-            raise Exception(f"Undefined datatype '{row['datatype']}' reading '{path}'")
+            raise Exception("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
         row["configured"] = True
         config["table"][row["table"]]["column"][row["column"]] = row
 
     return config
 
 
-def sort_tables(table_list, foreign_keys):
-    """Takes as arguments a list of tables and a dictionary describing all of the foreign key
-    constraints between tables, where the latter is of the form:
+def verify_table_deps_and_sort(table_list, constraints):
+    """Takes as arguments a list of tables and a dictionary describing all of the constraints
+    between tables. The dictionary should include a sub-dictionary of foreign key constraints and
+    a sub-dictionary of tree constraints. The former should be of the form:
     {'my_table': [{'column': 'my_column',
                    'fcolumn': 'foreign_column',
                    'ftable': 'foreign_table'},
                   ...]
      ...}.
-    Returns the list of tables sorted according to their dependencies, such that if table_a
+    The latter should be of the form:
+    {'my_table': [{'child': 'my_child', 'parent': 'my_parent'},
+                  ...],
+     ...}.
+
+    After validating that there are no cycles amongst the foreign and tree dependencies, returns
+    the list of tables sorted according to their foreign key dependencies, such that if table_a
     depends on table_b, then table_b comes before table_a in the list."""
+
+    trees = constraints["tree"]
+    for table_name in table_list:
+        ts = TopologicalSorter()
+        for tree in trees[table_name]:
+            ts.add(tree["child"], tree["parent"])
+        try:
+            list(ts.static_order())
+        except CycleError as e:
+            cycle = e.args[1]
+            message = "Cyclic tree dependency in table '{}': ".format(table_name)
+            end_index = len(cycle) - 1
+            for i, child in enumerate(cycle):
+                if i < end_index:
+                    dep_name = cycle[i + 1]
+                    dep = [d for d in trees[table_name] if d["child"] == child].pop()
+                    message += "tree({}) references {}".format(child, dep["parent"])
+                if i < (end_index - 1):
+                    message += " and "
+            raise CycleError(message)
+
+    foreign_keys = constraints["foreign"]
     ts = TopologicalSorter()
     for table_name in table_list:
         deps = set(dep["ftable"] for dep in foreign_keys.get(table_name, []))
@@ -140,7 +173,7 @@ def sort_tables(table_list, foreign_keys):
                 )
             if i < (end_index - 1):
                 message += " and "
-        raise (CycleError(message))
+        raise CycleError(message)
 
 
 def create_db_and_write_sql(config):
@@ -181,6 +214,7 @@ def create_db_and_write_sql(config):
                     config["constraints"]["foreign"][table_name] = table_constraints["foreign"]
                     config["constraints"]["unique"][table_name] = table_constraints["unique"]
                     config["constraints"]["primary"][table_name] = table_constraints["primary"]
+                    config["constraints"]["tree"][table_name] = table_constraints["tree"]
                 config["db"].executescript(table_sql)
                 print("{}\n".format(table_sql))
 
@@ -200,7 +234,7 @@ def create_db_and_write_sql(config):
 
     # Sort tables according to their foreign key dependencies so that tables are always loaded
     # after the tables they depend on:
-    table_list = sort_tables(table_list, config["constraints"]["foreign"])
+    table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
     # Now load the rows:
     for table_name in table_list:
@@ -217,6 +251,24 @@ def create_db_and_write_sql(config):
                 config["db"].commit()
                 print("{}\n\n".format(sql))
                 print("-- end of chunk {}\n\n".format(i))
+
+        # We need to wait until all of the rows for a table have been loaded before validating the
+        # "foreign" constraints on a table's trees, since this checks if the values of one column
+        # (the tree's parent) are all contained in another column (the tree's child):
+        records_to_update = validate_tree_foreign_keys(config, table_name)
+        for record in records_to_update:
+            sql = safe_sql(
+                "UPDATE :table SET :parent = NULL, :meta = :metaval WHERE rowid = :rowid;",
+                {
+                    "table": table_name,
+                    "parent": record["column"],
+                    "meta": record["column"] + "_meta",
+                    "metaval": "json({})".format(json.dumps(record["meta"])),
+                    "rowid": record["rowid"],
+                },
+            )
+            config["db"].execute(sql)
+        config["db"].commit()
 
 
 def get_SQL_type(config, datatype):
@@ -240,16 +292,16 @@ def create_schema(config, table_name):
         safe_sql("CREATE TABLE :table (", {"table": table_name}),
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
-    table_constraints = {"foreign": [], "unique": [], "primary": []}
+    table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": []}
     c = len(columns.values())
     r = 0
     for row in columns.values():
         r += 1
         sql_type = get_SQL_type(config, row["datatype"])
         if not sql_type:
-            raise Exception(f"Missing SQL type for {row['datatype']}")
+            raise Exception("Missing SQL type for {}".format(row["datatype"]))
         if not sql_type.lower() in sqlite_types:
-            raise Exception(f"Unrecognized SQL type '{sql_type}' for {row['datatype']}")
+            raise Exception("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
         line = f"  :col {sql_type}"
         params = {"col": row["column"]}
         structure = row.get("structure")
@@ -264,9 +316,9 @@ def create_schema(config, table_name):
                     line += " UNIQUE"
                     table_constraints["unique"].append(row["column"])
                 else:
-                    match = re.fullmatch(r"^from\((.+)\)$", key)
-                    if match:
-                        foreign = match.group(1).split(".", 1)
+                    match = re.fullmatch(r"^(from|tree)\((.+)\)$", key)
+                    if match and match.group(1) == "from":
+                        foreign = match.group(2).split(".", 1)
                         if len(foreign) != 2:
                             raise ValueError(
                                 "Invalid foreign key: {} for: {}".format(structure, table_name)
@@ -274,6 +326,23 @@ def create_schema(config, table_name):
                         table_constraints["foreign"].append(
                             {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
                         )
+                    elif match and match.group(1) == "tree":
+                        child = match.group(2)
+                        child_datatype = columns.get(child, {}).get("datatype")
+                        if not child_datatype:
+                            raise ValueError(
+                                f"Could not determine SQL datatype for {child} of tree({child})"
+                            )
+                        parent = row["column"]
+                        child_sql_type = get_SQL_type(config, child_datatype)
+                        if sql_type != child_sql_type:
+                            raise ValueError(
+                                f"SQL type '{child_sql_type}' of '{child}' in 'tree({child})' for "
+                                f"table '{table_name}' does not match SQL type: '{sql_type}' of "
+                                f"parent: '{parent}'."
+                            )
+                        table_constraints["tree"].append({"parent": row["column"], "child": child})
+
         line += ","
         output.append(safe_sql(line, params))
         line = "  :meta TEXT"
@@ -283,17 +352,27 @@ def create_schema(config, table_name):
             line += ","
         output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
 
-    num_keys = len(table_constraints["foreign"])
+    num_fkeys = len(table_constraints["foreign"])
     for i, fkey in enumerate(table_constraints["foreign"]):
         output.append(
             safe_sql(
                 "  FOREIGN KEY (:column) REFERENCES :ftable(:fcolumn){}".format(
-                    "," if i < (num_keys - 1) else ""
+                    "," if i < (num_fkeys - 1) else ""
                 ),
                 {"column": fkey["column"], "ftable": fkey["ftable"], "fcolumn": fkey["fcolumn"]},
             )
         )
     output.append(");")
+    # Loop through the tree constraints and if any of their associated child columns do not already
+    # have an associated unique or primary index, create one implicitly here:
+    for i, tree in enumerate(table_constraints["tree"]):
+        if tree["child"] not in (table_constraints["unique"] + table_constraints["primary"]):
+            output.append(
+                "CREATE UNIQUE INDEX {}_{}_idx ON {}({});".format(
+                    table_name, tree["child"], table_name, tree["child"]
+                )
+            )
+
     return "\n".join(output), table_constraints
 
 
@@ -320,7 +399,7 @@ def insert_rows(config, table_name, rows):
                 values.append(f":{column}")
                 values.append(f":{column}_meta")
                 params[column] = value
-                params[column + "_meta"] = f"json({json.dumps(cell)})"
+                params[column + "_meta"] = "json({})".format(json.dumps(cell))
             line = ", ".join(values)
             line = f"({line})"
             lines.append(safe_sql(line, params))
@@ -360,7 +439,7 @@ if __name__ == "__main__":
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
             config["db"] = conn
-            config["constraints"] = {"foreign": {}, "unique": {}, "primary": {}}
+            config["constraints"] = {"foreign": {}, "unique": {}, "primary": {}, "tree": {}}
             create_db_and_write_sql(config)
     except (CycleError, FileNotFoundError, StopIteration, ValueError) as e:
         sys.exit(e)
