@@ -252,6 +252,9 @@ def create_db_and_write_sql(config):
                 print("{}\n\n".format(sql))
                 print("-- end of chunk {}\n\n".format(i))
 
+        # TODO: Here we need to call another validation function that will check the "tree foreign"
+        # constraints of each table, implemented as an `update` statement.
+
 
 def get_SQL_type(config, datatype):
     """Given the config structure and the name of a datatype, climb the datatype tree (as required),

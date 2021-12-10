@@ -23,7 +23,7 @@ def validate_row(config, table_name, row, prev_results):
     values), and a list of previously validated rows, return the validated row."""
     duplicate = False
     for column_name, cell in row.items():
-        cell = validate_cell(config, table_name, column_name, cell, prev_results)
+        cell = validate_cell(config, table_name, column_name, cell, row, prev_results)
         # If a cell violates either the unique or primary constraints, mark the row as a duplicate:
         if [
             msg
@@ -36,9 +36,10 @@ def validate_row(config, table_name, row, prev_results):
     return row
 
 
-def validate_cell(config, table_name, column_name, cell, prev_results):
-    """Given a config map, a table name, a column name, a cell to validate, and a list of previously
-    validated rows (dicts mapping column names to column values), return the validated cell."""
+def validate_cell(config, table_name, column_name, cell, context, prev_results):
+    """Given a config map, a table name, a column name, a cell to validate, the row, `context`,
+    to which the cell belongs, and a list of previously validated rows (dicts mapping column names
+    to column values), return the validated cell."""
     column = config["table"][table_name]["column"][column_name]
     cell["messages"] = []
 
@@ -100,6 +101,70 @@ def validate_cell(config, table_name, column_name, cell, prev_results):
                     "level": "error",
                     "message": "Value {} of column {} is not in {}.{}".format(
                         cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
+                    ),
+                }
+            )
+
+    # If the current column is the parent column of a tree, validate that adding the current value
+    # will not result in a cycle between this and the parent column:
+    tkeys = [tkey for tkey in constraints["tree"][table_name] if tkey["parent"] == column_name]
+    for tkey in tkeys:
+        parent_col = column_name
+        child_col = tkey["child"]
+        parent_val = cell["value"]
+        child_val = context[child_col]["value"]
+
+        # In order to check if the current row will cause a dependency cycle, we need to query
+        # against all previously validated rows. Since previously validated rows belonging to the
+        # current batch will not have been validated yet, we explicitly add them into our query:
+        prev_selects = " UNION ".join(
+            [
+                "SELECT '{}', '{}'".format(p[parent_col]["value"], p[child_col]["value"])
+                for p in prev_results
+                if all([p[parent_col]["valid"], p[child_col]["valid"]])
+            ]
+        )
+        table_name_ext = table_name if not prev_selects else table_name + "_ext"
+        ext_clause = (
+            (
+                f"    WITH `{table_name_ext}` AS ( "
+                f"        SELECT `{parent_col}`, `{child_col}` "
+                f"            FROM `{table_name}` "
+                f"            UNION "
+                f"        {prev_selects} "
+                f"    )"
+            )
+            if prev_selects
+            else ""
+        )
+
+        sql = (
+            f"WITH RECURSIVE `hierarchy` AS ( "
+            f"{ext_clause} "
+            f"    SELECT `{parent_col}`, `{child_col}` "
+            f"        FROM `{table_name_ext}` "
+            f"        WHERE `{parent_col}` = '{child_val}' "
+            f"        UNION ALL "
+            f"    SELECT `t1`.`{parent_col}`, `t1`.`{child_col}` "
+            f"        FROM `{table_name_ext}` AS `t1` "
+            f"        JOIN `hierarchy` AS `t2` ON `t2`.`{child_col}` = `t1`.`{parent_col}`"
+            f") "
+            f"SELECT * "
+            f"FROM `hierarchy` "
+        )
+        rows = config["db"].execute(sql).fetchall()
+        if rows:
+            rows.append((parent_val, child_val))
+            cycle_msg = ", ".join(
+                ["({}: {}, {}: {})".format(parent_col, row[0], child_col, row[1]) for row in rows]
+            )
+            cell["valid"] = False
+            cell["messages"].append(
+                {
+                    "rule": "tree:cycle",
+                    "level": "error",
+                    "message": (
+                        f"Cyclic dependency: {cycle_msg} for tree({child_col}) of {parent_col}"
                     ),
                 }
             )
