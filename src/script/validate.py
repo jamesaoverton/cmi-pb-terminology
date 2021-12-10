@@ -117,7 +117,7 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
 
         # In order to check if the current row will cause a dependency cycle, we need to query
         # against all previously validated rows. Since previously validated rows belonging to the
-        # current batch will not have been validated yet, we explicitly add them into our query:
+        # current batch will not have been inserted to the db yet, we explicitly add them in:
         prev_selects = " UNION ".join(
             [
                 "SELECT '{}', '{}'".format(p[parent_col]["value"], p[child_col]["value"])
