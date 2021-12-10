@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import re
 
 
@@ -197,6 +198,63 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
             cell["valid"] = False
 
     return cell
+
+
+def validate_tree_foreign_keys(config, table_name):
+    """Given a config map and a table name, validate whether there is a 'foreign key' violation for
+    any of the table's trees; i.e., for a given tree: tree(child) which has a given parent column,
+    validate that all of the values in the parent column are in the child column."""
+    tkeys = [tkey for tkey in config["constraints"]["tree"][table_name]]
+    results = []
+    for tkey in tkeys:
+        child_col = tkey["child"]
+        parent_col = tkey["parent"]
+        rows = (
+            config["db"]
+            .execute(
+                f"SELECT t1.rowid, t1.`{parent_col}`, t1.`{parent_col}_meta` "
+                f"FROM `{table_name}` t1 "
+                f"WHERE NOT EXISTS ( "
+                f"    SELECT 1 "
+                f"    FROM `{table_name}` t2 "
+                f"    WHERE t2.`{child_col}` = t1.`{parent_col}` "
+                f")"
+            )
+            .fetchall()
+        )
+
+        for row in rows:
+            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
+            meta = json.loads(meta)
+            # If the value in the parent column is legitimately empty, then just skip this row:
+            if meta.get("nulltype"):
+                continue
+
+            # If the parent column already contains a different error, its value will be null and it
+            # will be returned by the above query regardless of whether it actually violates the
+            # tree's foreign constraint. So we need to check the value from the meta column instead.
+            parent_val = row[1]
+            if parent_val is None:
+                parent_val = meta["value"]
+                rows = config["db"].execute(
+                    f"SELECT 1 FROM `{table_name}` WHERE `{child_col}` = '{parent_val}' LIMIT 1"
+                )
+                if rows.fetchall():
+                    continue
+
+            meta["valid"] = False
+            meta["value"] = parent_val
+            meta["messages"].append(
+                {
+                    "rule": "tree:foreign",
+                    "level": "error",
+                    "message": (
+                        f"Value {parent_val} of column {parent_col} is not in column {child_col}"
+                    ),
+                }
+            )
+            results.append({"rowid": row[0], "column": parent_col, "meta": meta})
+    return results
 
 
 def validate_condition(condition, value):

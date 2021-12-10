@@ -10,7 +10,7 @@ import sys
 from graphlib import CycleError, TopologicalSorter
 from sqlalchemy.sql.expression import text as sql_text
 
-from validate import validate_rows
+from validate import validate_rows, validate_tree_foreign_keys
 
 CHUNK_SIZE = 2
 
@@ -252,8 +252,23 @@ def create_db_and_write_sql(config):
                 print("{}\n\n".format(sql))
                 print("-- end of chunk {}\n\n".format(i))
 
-        # TODO: Here we need to call another validation function that will check the "tree foreign"
-        # constraints of each table, implemented as an `update` statement.
+        # We need to wait until all of the rows for a table have been loaded before validating the
+        # "foreign" constraints on a table's trees, since this checks if the values of one column
+        # (the tree's parent) are all contained in another column (the tree's child):
+        records_to_update = validate_tree_foreign_keys(config, table_name)
+        for record in records_to_update:
+            sql = safe_sql(
+                "UPDATE :table SET :parent = NULL, :meta = :metaval WHERE rowid = :rowid;",
+                {
+                    "table": table_name,
+                    "parent": record["column"],
+                    "meta": record["column"] + "_meta",
+                    "metaval": "json({})".format(json.dumps(record["meta"])),
+                    "rowid": record["rowid"],
+                },
+            )
+            config["db"].execute(sql)
+        config["db"].commit()
 
 
 def get_SQL_type(config, datatype):

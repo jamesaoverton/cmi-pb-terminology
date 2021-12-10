@@ -8,3 +8,4 @@ MOB	MOB:0000013	   mobecular entity	owl:Class	material entity
 SOB	SOB:0000013	foo	owl:Class	bar
 JOB	JOB:0000013	car	owl:Class	foo
 ZOB	ZOB:0000013	bar	owl:Class	car
+YOB	YOB:0000013	mar	owl:Class	jafar
