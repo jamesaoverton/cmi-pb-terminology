@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
-
 import json
 import re
+
+from sql_utils import safe_sql
 
 
 def validate_rows(config, table_name, rows):
@@ -76,8 +76,9 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
             for p in prev_results
             if p[column_name]["value"] == cell["value"] and p[column_name]["valid"]
         ] or config["db"].execute(
-            "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
-                table_name, column["column"], cell["value"]
+            safe_sql(
+                f"SELECT 1 FROM `{table_name}` WHERE `{column_name}` = :value LIMIT 1",
+                {"value": cell["value"]},
             )
         ).fetchall():
             cell["valid"] = False
@@ -89,9 +90,11 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
     # Check the cell value against any foreign keys:
     fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
     for fkey in fkeys:
+        ftable, fcolumn = fkey["ftable"], fkey["fcolumn"]
         rows = config["db"].execute(
-            "SELECT 1 FROM `{}` WHERE `{}` = '{}' LIMIT 1".format(
-                fkey["ftable"], fkey["fcolumn"], cell["value"]
+            safe_sql(
+                f"SELECT 1 FROM `{ftable}` WHERE `{fcolumn}` = :value LIMIT 1",
+                {"value": cell["value"]},
             )
         )
         if not rows.fetchall():
@@ -120,7 +123,10 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
         # current batch will not have been inserted to the db yet, we explicitly add them in:
         prev_selects = " UNION ".join(
             [
-                "SELECT '{}', '{}'".format(p[parent_col]["value"], p[child_col]["value"])
+                safe_sql(
+                    "SELECT :p_value, :c_value",
+                    {"p_value": p[parent_col]["value"], "c_value": p[child_col]["value"]},
+                )
                 for p in prev_results
                 if all([p[parent_col]["valid"], p[child_col]["valid"]])
             ]
@@ -139,19 +145,20 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
             else ""
         )
 
-        sql = (
+        sql = safe_sql(
             f"WITH RECURSIVE `hierarchy` AS ( "
             f"{ext_clause} "
             f"    SELECT `{parent_col}`, `{child_col}` "
             f"        FROM `{table_name_ext}` "
-            f"        WHERE `{parent_col}` = '{child_val}' "
+            f"        WHERE `{parent_col}` = :child_val "
             f"        UNION ALL "
             f"    SELECT `t1`.`{parent_col}`, `t1`.`{child_col}` "
             f"        FROM `{table_name_ext}` AS `t1` "
             f"        JOIN `hierarchy` AS `t2` ON `t2`.`{child_col}` = `t1`.`{parent_col}`"
             f") "
             f"SELECT * "
-            f"FROM `hierarchy` "
+            f"FROM `hierarchy` ",
+            {"child_val": child_val},
         )
         rows = config["db"].execute(sql).fetchall()
         if rows:
@@ -237,7 +244,10 @@ def validate_tree_foreign_keys(config, table_name):
             if parent_val is None:
                 parent_val = meta["value"]
                 rows = config["db"].execute(
-                    f"SELECT 1 FROM `{table_name}` WHERE `{child_col}` = '{parent_val}' LIMIT 1"
+                    safe_sql(
+                        f"SELECT 1 FROM `{table_name}` WHERE `{child_col}` = :parent_val LIMIT 1",
+                        {"parent_val": parent_val},
+                    )
                 )
                 if rows.fetchall():
                     continue

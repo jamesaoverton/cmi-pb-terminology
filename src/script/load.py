@@ -8,8 +8,8 @@ import sqlite3
 import sys
 
 from graphlib import CycleError, TopologicalSorter
-from sqlalchemy.sql.expression import text as sql_text
 
+from sql_utils import safe_sql
 from validate import validate_rows, validate_tree_foreign_keys
 
 CHUNK_SIZE = 2
@@ -219,14 +219,9 @@ def create_db_and_write_sql(config):
                 print("{}\n".format(table_sql))
 
             # Create a view as the union of the regular and conflict versions of the table:
-            sql = safe_sql("DROP VIEW IF EXISTS :view;\n", {"view": table_name + "_view"})
-            sql += safe_sql(
-                "CREATE VIEW :view AS SELECT * FROM :table UNION SELECT * FROM :conflict;",
-                {
-                    "view": table_name + "_view",
-                    "table": table_name,
-                    "conflict": table_name + "_conflict",
-                },
+            sql = "DROP VIEW IF EXISTS `{}`;\n".format(table_name + "_view")
+            sql += "CREATE VIEW `{}` AS SELECT * FROM `{}` UNION SELECT * FROM `{}`;".format(
+                table_name + "_view", table_name, table_name + "_conflict"
             )
             config["db"].executescript(sql)
             print("{}\n".format(sql))
@@ -257,13 +252,11 @@ def create_db_and_write_sql(config):
         # (the tree's parent) are all contained in another column (the tree's child):
         records_to_update = validate_tree_foreign_keys(config, table_name)
         for record in records_to_update:
+            table, parent, meta = table_name, record["column"], record["column"] + "_meta"
             sql = safe_sql(
-                "UPDATE :table SET :parent = NULL, :meta = :metaval WHERE rowid = :rowid;",
+                f"UPDATE `{table}` SET `{parent}` = NULL, `{meta}` = :mval WHERE rowid = :rowid;",
                 {
-                    "table": table_name,
-                    "parent": record["column"],
-                    "meta": record["column"] + "_meta",
-                    "metaval": "json({})".format(json.dumps(record["meta"])),
+                    "mval": "json({})".format(json.dumps(record["meta"])),
                     "rowid": record["rowid"],
                 },
             )
@@ -287,10 +280,7 @@ def create_schema(config, table_name):
     """Given the config structure and a table name, generate a SQL schema string, including each
     column C and its matching C_meta column, then return the schema string as well as a list of the
     table's constraints."""
-    output = [
-        safe_sql("DROP TABLE IF EXISTS :table;", {"table": table_name}),
-        safe_sql("CREATE TABLE :table (", {"table": table_name}),
-    ]
+    output = [f"DROP TABLE IF EXISTS `{table_name}`;", f"CREATE TABLE `{table_name}` ("]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
     table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": []}
     c = len(columns.values())
@@ -302,8 +292,8 @@ def create_schema(config, table_name):
             raise Exception("Missing SQL type for {}".format(row["datatype"]))
         if not sql_type.lower() in sqlite_types:
             raise Exception("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
-        line = f"  :col {sql_type}"
-        params = {"col": row["column"]}
+        col = row["column"]
+        line = f"  `{col}` {sql_type}"
         structure = row.get("structure")
         if structure and not table_name.endswith("_conflict"):
             keys = re.split(r"\s+", structure)
@@ -344,22 +334,20 @@ def create_schema(config, table_name):
                         table_constraints["tree"].append({"parent": row["column"], "child": child})
 
         line += ","
-        output.append(safe_sql(line, params))
-        line = "  :meta TEXT"
+        output.append(line)
+        metacol = row["column"] + "_meta"
+        line = f"  `{metacol}` TEXT"
         if r >= c and not table_constraints["foreign"]:
             line += ""
         else:
             line += ","
-        output.append(safe_sql(line, {"meta": row["column"] + "_meta"}))
+        output.append(line)
 
     num_fkeys = len(table_constraints["foreign"])
     for i, fkey in enumerate(table_constraints["foreign"]):
         output.append(
-            safe_sql(
-                "  FOREIGN KEY (:column) REFERENCES :ftable(:fcolumn){}".format(
-                    "," if i < (num_fkeys - 1) else ""
-                ),
-                {"column": fkey["column"], "ftable": fkey["ftable"], "fcolumn": fkey["fcolumn"]},
+            "  FOREIGN KEY (`{}`) REFERENCES `{}`(`{}`){}".format(
+                fkey["column"], fkey["ftable"], fkey["fcolumn"], "," if i < (num_fkeys - 1) else ""
             )
         )
     output.append(");")
@@ -368,7 +356,7 @@ def create_schema(config, table_name):
     for i, tree in enumerate(table_constraints["tree"]):
         if tree["child"] not in (table_constraints["unique"] + table_constraints["primary"]):
             output.append(
-                "CREATE UNIQUE INDEX {}_{}_idx ON {}({});".format(
+                "CREATE UNIQUE INDEX `{}_{}_idx` ON `{}`(`{}`);".format(
                     table_name, tree["child"], table_name, tree["child"]
                 )
             )
@@ -406,7 +394,7 @@ def insert_rows(config, table_name, rows):
 
         output = ""
         if lines:
-            output += safe_sql("INSERT INTO :table VALUES", {"table": table_name})
+            output += f"INSERT INTO `{table_name}` VALUES"
             output += "\n"
             output += ",\n".join(lines)
             output += ";"
@@ -425,13 +413,6 @@ def insert_rows(config, table_name, rows):
         + "\n"
         + generate_sql(table_name + "_conflict", conflict_rows)
     )
-
-
-def safe_sql(template, params):
-    """Given a SQL query template with variables and a dict of parameters,
-    return an escaped SQL string."""
-    stmt = sql_text(template).bindparams(**params)
-    return str(stmt.compile(compile_kwargs={"literal_binds": True}))
 
 
 if __name__ == "__main__":
