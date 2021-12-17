@@ -10,7 +10,7 @@ import sys
 from graphlib import CycleError, TopologicalSorter
 
 from sql_utils import safe_sql
-from validate import validate_rows, validate_tree_foreign_keys
+from validate import validate_rows, validate_tree_foreign_keys, validate_under
 
 CHUNK_SIZE = 2
 
@@ -117,21 +117,25 @@ def read_config_files(table_table_path):
 
 def verify_table_deps_and_sort(table_list, constraints):
     """Takes as arguments a list of tables and a dictionary describing all of the constraints
-    between tables. The dictionary should include a sub-dictionary of foreign key constraints and
-    a sub-dictionary of tree constraints. The former should be of the form:
-    {'my_table': [{'column': 'my_column',
-                   'fcolumn': 'foreign_column',
-                   'ftable': 'foreign_table'},
+    between tables. The dictionary should include a sub-dictionary of foreign key constraints,
+    a sub-dictionary of tree constraints, and a sub-dictionary of under constraints. The first
+    should be of the form:
+    {'my_table': [{'column': 'my_column', 'fcolumn': 'foreign_column', 'ftable': 'foreign_table'},
                   ...]
      ...}.
-    The latter should be of the form:
+    The second should be of the form:
     {'my_table': [{'child': 'my_child', 'parent': 'my_parent'},
                   ...],
      ...}.
+    The third should be of the form:
+    {'my_table': [{'column': 'my_column', 'ttable': 'tree_table', 'tcolumn': 'tree_column',
+                   'value': 'under_value'}
+                  ...],
+     ...}.
 
-    After validating that there are no cycles amongst the foreign and tree dependencies, returns
-    the list of tables sorted according to their foreign key dependencies, such that if table_a
-    depends on table_b, then table_b comes before table_a in the list."""
+    After validating that there are no cycles amongst the foreign, tree, and under dependencies,
+    returns the list of tables sorted according to their foreign key dependencies, such that if
+    table_a depends on table_b, then table_b comes before table_a in the list."""
 
     trees = constraints["tree"]
     for table_name in table_list:
@@ -154,10 +158,25 @@ def verify_table_deps_and_sort(table_list, constraints):
             raise CycleError(message)
 
     foreign_keys = constraints["foreign"]
+    under_keys = constraints["under"]
     ts = TopologicalSorter()
     for table_name in table_list:
         deps = set(dep["ftable"] for dep in foreign_keys.get(table_name, []))
         ts.add(table_name, *deps)
+        for ukey in under_keys.get(table_name, []):
+            if ukey["ttable"] != table_name:
+                if not [
+                    tkey
+                    for tkey in constraints["tree"][ukey["ttable"]]
+                    if tkey["child"] == ukey["tcolumn"]
+                ]:
+                    raise ValueError(
+                        "under({}.{}, {}) refers to a non-existent tree.".format(
+                            ukey["ttable"], ukey["tcolumn"], ukey["value"]
+                        )
+                    )
+                ts.add(table_name, ukey["ttable"])
+
     try:
         return list(ts.static_order())
     except CycleError as e:
@@ -167,9 +186,15 @@ def verify_table_deps_and_sort(table_list, constraints):
         for i, table in enumerate(cycle):
             if i < end_index:
                 dep_name = cycle[i + 1]
-                dep = [d for d in foreign_keys[table] if d["ftable"] == dep_name].pop()
+                dep = (
+                    [d for d in foreign_keys[table] if d["ftable"] == dep_name]
+                    or [d for d in under_keys[table] if d["ttable"] == dep_name]
+                ).pop()
                 message += "{}.{} depends on {}.{}".format(
-                    table, dep["column"], dep["ftable"], dep["fcolumn"]
+                    table,
+                    dep["column"],
+                    dep.get("ftable") or dep.get("ttable"),
+                    dep.get("fcolumn") or dep.get("tcolumn"),
                 )
             if i < (end_index - 1):
                 message += " and "
@@ -215,6 +240,7 @@ def create_db_and_write_sql(config):
                     config["constraints"]["unique"][table_name] = table_constraints["unique"]
                     config["constraints"]["primary"][table_name] = table_constraints["primary"]
                     config["constraints"]["tree"][table_name] = table_constraints["tree"]
+                    config["constraints"]["under"][table_name] = table_constraints["under"]
                 config["db"].executescript(table_sql)
                 print("{}\n".format(table_sql))
 
@@ -250,11 +276,15 @@ def create_db_and_write_sql(config):
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column
         # (the tree's parent) are all contained in another column (the tree's child):
-        records_to_update = validate_tree_foreign_keys(config, table_name)
+        # We also need to wait before validating a table's "under" constraints. Although the teee
+        # associated with such a constraint need not be defined on the same table, it can be.
+        records_to_update = validate_tree_foreign_keys(config, table_name) + validate_under(
+            config, table_name
+        )
         for record in records_to_update:
-            table, parent, meta = table_name, record["column"], record["column"] + "_meta"
+            table, column, meta = table_name, record["column"], record["column"] + "_meta"
             sql = safe_sql(
-                f"UPDATE `{table}` SET `{parent}` = NULL, `{meta}` = :mval WHERE rowid = :rowid;",
+                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = :mval WHERE rowid = :rowid;",
                 {
                     "mval": "json({})".format(json.dumps(record["meta"])),
                     "rowid": record["rowid"],
@@ -282,7 +312,7 @@ def create_schema(config, table_name):
     table's constraints."""
     output = [f"DROP TABLE IF EXISTS `{table_name}`;", f"CREATE TABLE `{table_name}` ("]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
-    table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": []}
+    table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": [], "under": []}
     c = len(columns.values())
     r = 0
     for row in columns.values():
@@ -296,6 +326,11 @@ def create_schema(config, table_name):
         line = f"  `{col}` {sql_type}"
         structure = row.get("structure")
         if structure and not table_name.endswith("_conflict"):
+            # TODO: Now that constraints can have multiple arguments, this split needs to be redone.
+            # For now we have just omitted spaces from the instance of under(table.column,value)
+            # that is in column.tsv, but once we've implemented under, then come back to this point
+            # in the code and write up a little grammar to parse these structure expressions
+            # more robustly.
             keys = re.split(r"\s+", structure)
             for key in keys:
                 key = key.strip().lower()
@@ -306,13 +341,11 @@ def create_schema(config, table_name):
                     line += " UNIQUE"
                     table_constraints["unique"].append(row["column"])
                 else:
-                    match = re.fullmatch(r"^(from|tree)\((.+)\)$", key)
+                    match = re.fullmatch(r"^(from|tree|under)\((.+)\)$", key)
                     if match and match.group(1) == "from":
                         foreign = match.group(2).split(".", 1)
                         if len(foreign) != 2:
-                            raise ValueError(
-                                "Invalid foreign key: {} for: {}".format(structure, table_name)
-                            )
+                            raise ValueError(f"Invalid foreign key: {structure} for: {table_name}")
                         table_constraints["foreign"].append(
                             {"column": row["column"], "ftable": foreign[0], "fcolumn": foreign[1]}
                         )
@@ -332,7 +365,21 @@ def create_schema(config, table_name):
                                 f"parent: '{parent}'."
                             )
                         table_constraints["tree"].append({"parent": row["column"], "child": child})
-
+                    elif match and match.group(1) == "under":
+                        tree_arg, value_arg = re.split(r",\s*", match.group(2), maxsplit=1)
+                        tree_arg = tree_arg.split(".", 1)
+                        if len(tree_arg) != 2:
+                            raise ValueError(
+                                f"Invalid 'under' constraint: {structure} for: {table_name}"
+                            )
+                        table_constraints["under"].append(
+                            {
+                                "column": row["column"],
+                                "ttable": tree_arg[0],
+                                "tcolumn": tree_arg[1],
+                                "value": value_arg,
+                            }
+                        )
         line += ","
         output.append(line)
         metacol = row["column"] + "_meta"
@@ -420,7 +467,13 @@ if __name__ == "__main__":
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
             config["db"] = conn
-            config["constraints"] = {"foreign": {}, "unique": {}, "primary": {}, "tree": {}}
+            config["constraints"] = {
+                "foreign": {},
+                "unique": {},
+                "primary": {},
+                "tree": {},
+                "under": {},
+            }
             create_db_and_write_sql(config)
     except (CycleError, FileNotFoundError, StopIteration, ValueError) as e:
         sys.exit(e)

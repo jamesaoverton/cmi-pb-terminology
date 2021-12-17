@@ -124,18 +124,18 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
         prev_selects = " UNION ".join(
             [
                 safe_sql(
-                    "SELECT :p_value, :c_value",
-                    {"p_value": p[parent_col]["value"], "c_value": p[child_col]["value"]},
+                    "SELECT :c_value, :p_value",
+                    {"c_value": p[child_col]["value"], "p_value": p[parent_col]["value"]},
                 )
                 for p in prev_results
-                if all([p[parent_col]["valid"], p[child_col]["valid"]])
+                if all([p[child_col]["valid"], p[parent_col]["valid"]])
             ]
         )
         table_name_ext = table_name if not prev_selects else table_name + "_ext"
-        ext_clause = (
+        extra_clause = (
             (
                 f"    WITH `{table_name_ext}` AS ( "
-                f"        SELECT `{parent_col}`, `{child_col}` "
+                f"        SELECT `{child_col}`, `{parent_col}` "
                 f"            FROM `{table_name}` "
                 f"            UNION "
                 f"        {prev_selects} "
@@ -145,26 +145,14 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
             else ""
         )
 
-        sql = safe_sql(
-            f"WITH RECURSIVE `hierarchy` AS ( "
-            f"{ext_clause} "
-            f"    SELECT `{parent_col}`, `{child_col}` "
-            f"        FROM `{table_name_ext}` "
-            f"        WHERE `{parent_col}` = :child_val "
-            f"        UNION ALL "
-            f"    SELECT `t1`.`{parent_col}`, `t1`.`{child_col}` "
-            f"        FROM `{table_name_ext}` AS `t1` "
-            f"        JOIN `hierarchy` AS `t2` ON `t2`.`{child_col}` = `t1`.`{parent_col}`"
-            f") "
-            f"SELECT * "
-            f"FROM `hierarchy` ",
-            {"child_val": child_val},
-        )
+        sql = with_tree_sql(tkey, table_name_ext, parent_val, extra_clause) + "SELECT * FROM `tree`"
         rows = config["db"].execute(sql).fetchall()
-        if rows:
-            rows.append((parent_val, child_val))
+        # If there is a row in the tree whose parent is the to-be-inserted child, then
+        # inserting the new row would result in a cycle.
+        if [row for row in rows if row[1] == child_val]:
+            rows.append((child_val, parent_val))
             cycle_msg = ", ".join(
-                ["({}: {}, {}: {})".format(parent_col, row[0], child_col, row[1]) for row in rows]
+                ["({}: {}, {}: {})".format(child_col, row[0], parent_col, row[1]) for row in rows]
             )
             cell["valid"] = False
             cell["messages"].append(
@@ -172,7 +160,7 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
                     "rule": "tree:cycle",
                     "level": "error",
                     "message": (
-                        f"Cyclic dependency: {cycle_msg} for tree({child_col}) of {parent_col}"
+                        f"Cyclic dependency: {cycle_msg} for tree({parent_col}) of {child_col}"
                     ),
                 }
             )
@@ -205,6 +193,117 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
             cell["valid"] = False
 
     return cell
+
+
+def with_tree_sql(tree, table_name, root, extra_clause=""):
+    """Given a dict representing a tree constraint, a table name, a root from which to generate a
+    sub-tree of the tree, and an extra SQL clause, generate the SQL for a WITH clause representing
+    the sub-tree."""
+    child_col = tree["child"]
+    parent_col = tree["parent"]
+    return safe_sql(
+        f"WITH RECURSIVE `tree` AS ( "
+        f"{extra_clause} "
+        f"    SELECT `{child_col}`, `{parent_col}` "
+        f"        FROM `{table_name}` "
+        f"        WHERE `{child_col}` = :parent_val "
+        f"        UNION ALL "
+        f"    SELECT `t1`.`{child_col}`, `t1`.`{parent_col}` "
+        f"        FROM `{table_name}` AS `t1` "
+        f"        JOIN `tree` AS `t2` ON `t2`.`{parent_col}` = `t1`.`{child_col}`"
+        f") ",
+        {"parent_val": root},
+    )
+
+
+def validate_under(config, table_name):
+    """Validate any associated 'under' constraints for the current column."""
+    ukeys = [ukey for ukey in config["constraints"]["under"][table_name]]
+    results = []
+    for ukey in ukeys:
+        tree_table = ukey["ttable"]
+        tree_child = ukey["tcolumn"]
+        column = ukey["column"]
+        tree = [
+            tkey
+            for tkey in config["constraints"]["tree"][ukey["ttable"]]
+            if tkey["child"] == ukey["tcolumn"]
+        ].pop()
+        tree_parent = tree["parent"]
+
+        # For each value of the column to be checked:
+        # (1) Determine whether it is in the tree's child column.
+        # (2) Create a sub-tree of the given tree whose root is the given "under value"
+        #     (i.e., ukey["value"]). Now on the one hand, if the value to be checked is in the
+        #     parent column of that sub-tree, then it follows that that value is _not_ under the
+        #     under value, but above it. On the other hand, if the value to be checked is not in the
+        #     parent column of the sub-tree, then if condition (1) is also satisfied it follows that
+        #     it _is_ under the under_value.
+        #     Note that "under" is interpreted in the inclusive sense; i.e., values are trivially
+        #     understood to be under themselves.
+        sql = (
+            with_tree_sql(tree, ukey["ttable"], ukey["value"]) + f"SELECT "
+            f"  rowid, "
+            f"  `{table_name}`.`{column}`, "
+            f"  `{table_name}`.`{column}_meta`, "
+            f"  CASE "
+            f"    WHEN `{table_name}`.`{column}` IN ( "
+            f"      SELECT `{tree_child}` FROM `{tree_table}` "
+            f"    ) "
+            f"    THEN 1 ELSE 0 "
+            f"  END, "
+            f"  CASE "
+            f"    WHEN `{table_name}`.`{column}` IN ( "
+            f"      SELECT `{tree_parent}` FROM `tree` "
+            f"    ) "
+            f"    THEN 0 ELSE 1 "
+            f"  END "
+            f"FROM `{table_name}`"
+        )
+
+        rows = config["db"].execute(sql).fetchall()
+        for row in rows:
+            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
+            meta = json.loads(meta)
+            # If the value in the parent column is legitimately empty, then just skip this row:
+            if meta.get("nulltype"):
+                continue
+
+            # If the value in the column already contains a different error, its value will be null
+            # and it will be returned by the above query regardless of whether it is valid or
+            # invalid. So we need to check the value from the meta column instead.
+            column_val = meta["value"] if row[1] is None else row[1]
+
+            if row[3] == 0:
+                meta["valid"] = False
+                meta["value"] = column_val
+                meta["messages"].append(
+                    {
+                        "rule": "under:not-in-tree",
+                        "level": "error",
+                        "message": (
+                            f"Value {column_val} of column {column} is not in "
+                            f"{tree_table}.{tree_child}"
+                        ),
+                    }
+                )
+                results.append({"rowid": row[0], "column": column, "meta": meta})
+            elif row[4] == 0:
+                meta["valid"] = False
+                meta["value"] = column_val
+                under_value = ukey["value"]
+                meta["messages"].append(
+                    {
+                        "rule": "under:not-under",
+                        "level": "error",
+                        "message": (
+                            f"Value '{column_val}' of column {column} is not under '{under_value}'"
+                        ),
+                    }
+                )
+                results.append({"rowid": row[0], "column": column, "meta": meta})
+
+    return results
 
 
 def validate_tree_foreign_keys(config, table_name):
