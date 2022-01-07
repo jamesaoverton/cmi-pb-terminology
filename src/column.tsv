@@ -23,4 +23,4 @@ import	parent	empty	label	tree(label)
 import	related	empty	trimmed_line		
 test_tree_under	child		trimmed_line		
 test_tree_under	parent	empty	trimmed_line	tree(child)	
-test_tree_under	xyzzy	empty	trimmed_line	under(test_tree_under.child,d)	
+test_tree_under	xyzzy	empty	trimmed_line	under(test_tree_under.child, d)	
