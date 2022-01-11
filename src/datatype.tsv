@@ -17,4 +17,4 @@ datatype_name	word				a datatype name
 table_type	word	lowercase	in('table', 'column', 'datatype')		a table type			
 prefix	word				a prefix for a CURIE			
 suffix	word				a suffix for a CURIE			
-CURIE	word		search(/:/)	concat(prefix, ":", suffix)	a Compact URI		CURIE	
+CURIE	nonspace		search(/:/)	concat(prefix, ":", suffix)	a Compact URI		CURIE	

@@ -11,7 +11,7 @@ from lark import Lark
 from lark.exceptions import VisitError
 
 from sql_utils import safe_sql
-from cmi_pb_grammar import grammar, ParsedTreeTransformer
+from cmi_pb_grammar import grammar, TreeToDict
 from validate import validate_rows, validate_tree_foreign_keys, validate_under
 
 CHUNK_SIZE = 2
@@ -324,25 +324,24 @@ def create_schema(config, table_name):
             raise Exception("Missing SQL type for {}".format(row["datatype"]))
         if not sql_type.lower() in sqlite_types:
             raise Exception("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
-        col = row["column"]
-        line = f"  `{col}` {sql_type}"
+        column_name = row["column"]
+        line = f"  `{column_name}` {sql_type}"
         structure = row.get("structure")
         if structure and not table_name.endswith("_conflict"):
-            parser = Lark(grammar)
-            tree = parser.parse(structure)
-            for expression in ParsedTreeTransformer().transform(tree):
+            parser = config["parser"]
+            for expression in parser.parse(structure):
                 if expression["type"] == "label" and expression["value"] == "primary":
                     line += " PRIMARY KEY"
-                    table_constraints["primary"].append(row["column"])
+                    table_constraints["primary"].append(column_name)
                 elif expression["type"] == "label" and expression["value"] == "unique":
                     line += " UNIQUE"
-                    table_constraints["unique"].append(row["column"])
+                    table_constraints["unique"].append(column_name)
                 elif expression["type"] == "function" and expression["name"] == "from":
                     if len(expression["args"]) != 1 or expression["args"][0]["type"] != "field":
                         raise ValueError(f"Invalid foreign key: {structure} for: {table_name}")
                     table_constraints["foreign"].append(
                         {
-                            "column": row["column"],
+                            "column": column_name,
                             "ftable": expression["args"][0]["table"],
                             "fcolumn": expression["args"][0]["column"],
                         }
@@ -358,7 +357,7 @@ def create_schema(config, table_name):
                         raise ValueError(
                             f"Could not determine SQL datatype for {child} of tree({child})"
                         )
-                    parent = row["column"]
+                    parent = column_name
                     child_sql_type = get_SQL_type(config, child_datatype)
                     if sql_type != child_sql_type:
                         raise ValueError(
@@ -366,7 +365,7 @@ def create_schema(config, table_name):
                             f"table '{table_name}' does not match SQL type: '{sql_type}' of "
                             f"parent: '{parent}'."
                         )
-                    table_constraints["tree"].append({"parent": row["column"], "child": child})
+                    table_constraints["tree"].append({"parent": column_name, "child": child})
                 elif expression["type"] == "function" and expression["name"] == "under":
                     if (
                         len(expression["args"]) != 2
@@ -378,7 +377,7 @@ def create_schema(config, table_name):
                         )
                     table_constraints["under"].append(
                         {
-                            "column": row["column"],
+                            "column": column_name,
                             "ttable": expression["args"][0]["table"],
                             "tcolumn": expression["args"][0]["column"],
                             "value": expression["args"][1]["value"],
@@ -386,7 +385,7 @@ def create_schema(config, table_name):
                     )
         line += ","
         output.append(line)
-        metacol = row["column"] + "_meta"
+        metacol = column_name + "_meta"
         line = f"  `{metacol}` TEXT"
         if r >= c and not table_constraints["foreign"]:
             line += ""
@@ -471,6 +470,7 @@ if __name__ == "__main__":
         config = read_config_files("src/table.tsv")
         with sqlite3.connect("build/cmi-pb.db") as conn:
             config["db"] = conn
+            config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())
             config["constraints"] = {
                 "foreign": {},
                 "unique": {},

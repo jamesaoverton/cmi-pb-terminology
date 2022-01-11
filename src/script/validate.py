@@ -49,7 +49,7 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
     if column["nulltype"]:
         nt_name = column["nulltype"]
         nulltype = config["datatype"][nt_name]
-        result = validate_condition(nulltype["condition"], cell["value"])
+        result = validate_condition(config, nulltype["condition"], cell["value"])
         if result:
             cell["nulltype"] = nt_name
             return cell
@@ -180,9 +180,7 @@ def validate_cell(config, table_name, column_name, cell, context, prev_results):
     # We use while and pop() instead of a for loop so as to check conditions in LIFO order:
     while datatypes_to_check:
         datatype = datatypes_to_check.pop()
-        if datatype["condition"].startswith("exclude") == validate_condition(
-            datatype["condition"], cell["value"]
-        ):
+        if not validate_condition(config, datatype["condition"], cell["value"]):
             cell["messages"].append(
                 {
                     "rule": "datatype:{}".format(datatype["datatype"]),
@@ -366,23 +364,38 @@ def validate_tree_foreign_keys(config, table_name):
     return results
 
 
-def validate_condition(condition, value):
-    """Given a condition string and a value string,
-    return True of the condition holds, False otherwise."""
-    # TODO: Implement real conditions.
-    if condition == "equals('')":
-        return value == ""
-    elif condition == r"exclude(/\n/)":
-        return "\n" in value
-    elif condition == r"exclude(/\s/)":
-        return bool(re.search(r"\s", value))
-    elif condition == r"exclude(/^\s+|\s+$/)":
-        return bool(re.search(r"^\s+|\s+$", value))
-    elif condition == r"in('table', 'column', 'datatype')":
-        return value in ("table", "column", "datatype")
-    elif condition == r"match(/\w+/)":
-        return bool(re.fullmatch(r"\w+", value))
-    elif condition == r"search(/:/)":
-        return ":" in value
+def validate_condition(config, condition, value):
+    """Given a configuration map, a condition string and a value string, return True if the
+    condition holds, False otherwise."""
+    parsed_condition = config["parser"].parse(condition)
+    if len(parsed_condition) != 1:
+        raise ValueError(
+            f"Condition: '{condition}' is invalid. Only one condition per column is allowed."
+        )
+    parsed_condition = parsed_condition[0]
+
+    if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
+        expected_value = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
+        return value == expected_value
+    elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
+        "exclude",
+        "match",
+        "search",
+    ):
+        pattern = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["pattern"])
+        flags = parsed_condition["args"][0]["flags"]
+        flags = "(?" + "".join(flags) + ")" if flags else ""
+        pattern = flags + pattern
+        if parsed_condition["name"] == "exclude":
+            return not bool(re.search(pattern, value))
+        elif parsed_condition["name"] == "match":
+            return bool(re.fullmatch(pattern, value))
+        else:
+            return bool(re.search(pattern, value))
+    elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
+        alternatives = [
+            re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
+        ]
+        return value in alternatives
     else:
         raise Exception(f"Unhandled condition: {condition}")
