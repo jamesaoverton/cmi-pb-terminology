@@ -20,10 +20,11 @@ def validate_rows(config, table_name, rows):
     return result_rows
 
 
-def validate_row(config, table_name, row, prev_results=[], is_existing_row=False):
+def validate_row(config, table_name, row, prev_results=[], existing_row=False, rowid=None):
     """Given a config map, a table name, a row to validate (a dict from column names to column
-    values), and a list of previously validated rows, and a flag indicating whether the given row
-    is to be assumed to already exist in the database, return the validated row."""
+    values), and a list of previously validated rows, a flag indicating whether the given row
+    is to be assumed to already exist in the database, and the row's rowid in the case where it is
+    assumed to be an existing row, return the validated row."""
 
     def has_unique_violation(cell):
         # Returns true if the cell includes an error message indicating a unique-type key
@@ -43,13 +44,10 @@ def validate_row(config, table_name, row, prev_results=[], is_existing_row=False
             cell = validate_cell_foreign_keys(config, table_name, column_name, cell)
             cell = validate_cell_tree_keys(config, table_name, column_name, cell, row, prev_results)
             cell = validate_cell_datatype(config, table_name, column_name, cell)
-            # If we know that the row being validated already exists in the table, then don't check
-            # the current cell for unique-type constraint violations:
-            if not is_existing_row:
-                cell = validate_unique_constraints(
-                    config, table_name, column_name, cell, row, prev_results
-                )
-                duplicate = duplicate or has_unique_violation(cell)
+            cell = validate_unique_constraints(
+                config, table_name, column_name, cell, row, prev_results, existing_row, rowid
+            )
+            duplicate = duplicate or has_unique_violation(cell)
         row[column_name] = cell
     row["duplicate"] = duplicate
     return row
@@ -194,11 +192,15 @@ def validate_cell_datatype(config, table_name, column_name, cell):
     return cell
 
 
-def validate_unique_constraints(config, table_name, column_name, cell, context, prev_results):
+def validate_unique_constraints(
+    config, table_name, column_name, cell, context, prev_results, existing_row, rowid
+):
     """Given a config map, a table name, a column name, a cell to validate, the row, `context`,
     to which the cell belongs, and a list of previously validated rows (dicts mapping column names
     to column values), check the cell value against any unique-type keys that have been defined for
-    the column. If there is a violation, indicate it with an error message attached to the cell."""
+    the column. If there is a violation, indicate it with an error message attached to the cell. If
+    the `existing_row` flag is set to True, then checks will be made as if the given `rowid` does
+    not exist in the table."""
 
     # If the column has a primary or unique key constraint, or if it is the child associated with
     # a tree, then if the value of the cell is a duplicate either of one of the previously validated
@@ -217,16 +219,28 @@ def validate_unique_constraints(config, table_name, column_name, cell, context, 
         }
 
     if any([is_primary, is_unique, is_tree_child]):
+        with_sql = ""
+        except_table = table_name + "_exc"
+        if existing_row:
+            with_sql = safe_sql(
+                f"WITH `{except_table}` AS ( "
+                f"  SELECT * FROM `{table_name}` "
+                f"  WHERE ROWID <> :value "
+                f") ",
+                {"value": rowid},
+            )
+
+        query_table = except_table if with_sql else table_name
+        query = with_sql + safe_sql(
+            f"SELECT 1 FROM `{query_table}` WHERE `{column_name}` = :value LIMIT 1",
+            {"value": cell["value"]},
+        )
+
         if [
             p[column_name]
             for p in prev_results
             if p[column_name]["value"] == cell["value"] and p[column_name]["valid"]
-        ] or config["db"].execute(
-            safe_sql(
-                f"SELECT 1 FROM `{table_name}` WHERE `{column_name}` = :value LIMIT 1",
-                {"value": cell["value"]},
-            )
-        ).fetchall():
+        ] or config["db"].execute(query).fetchall():
             cell["valid"] = False
             if is_primary or is_unique:
                 cell["messages"].append(make_error("key:primary" if is_primary else "key:unique"))

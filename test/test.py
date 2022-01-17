@@ -80,7 +80,7 @@ def test_validate_and_update_row(config):
         "duplicate": False,
     }
 
-    actual_row = validate_row(config, "import", row, is_existing_row=True)
+    actual_row = validate_row(config, "import", row, existing_row=True, rowid=7)
     if actual_row != expected_row:
         print(
             "Actual result of validate_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
