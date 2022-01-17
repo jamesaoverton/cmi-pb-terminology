@@ -38,7 +38,7 @@ def validate_row(config, table_name, row, prev_results=[], is_existing_row=False
 
     duplicate = False
     for column_name, cell in row.items():
-        validate_cell_nulltype(config, table_name, column_name, cell)
+        cell = validate_cell_nulltype(config, table_name, column_name, cell)
         if cell.get("nulltype") is None:
             cell = validate_cell_foreign_keys(config, table_name, column_name, cell)
             cell = validate_cell_tree_keys(config, table_name, column_name, cell, row, prev_results)
