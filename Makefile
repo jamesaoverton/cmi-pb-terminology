@@ -181,8 +181,8 @@ build/cmi-pb.sql: src/script/load.py src/script/validate.py src/table.tsv src/co
 build/cmi-pb.db: build/cmi-pb.sql
 
 .PHONY: test
-test: test/test.sh build/cmi-pb.db | test/expected
-	$^ $|
+test: | build
+	test/test.py build/cmi-pb.db test/expected
 
 .PHONY: clean
 clean:

@@ -465,6 +465,36 @@ def insert_rows(config, table_name, rows):
     )
 
 
+def update_row(config, table_name, row, rowid):
+    """Given a config map, a table name, a row (a dict from column names to column values), and the
+    rowid to update, update the corresponding row in the database with new values as specified by
+    `row`."""
+
+    # As a result of validation, the row will have a duplicate flag, which is unneeded here and can
+    # simply be removed:
+    del row["duplicate"]
+    assignments = []
+    params = {}
+    for column, cell in row.items():
+        variable = column.replace(" ", "_")
+        value = None
+        if "nulltype" in cell and cell["nulltype"]:
+            value = None
+        elif cell["valid"]:
+            value = cell["value"]
+            cell.pop("value")
+        assignments.append(f"`{column}` = :{variable}")
+        assignments.append(f"`{column}_meta` = :{variable}_meta")
+        params[variable] = value
+        params[variable + "_meta"] = "json({})".format(json.dumps(cell))
+
+    update_stmt = f"UPDATE `{table_name}` SET "
+    update_stmt += safe_sql(", ".join(assignments), params)
+    update_stmt += safe_sql(" WHERE ROWID = :rowid", {"rowid": rowid})
+    config["db"].execute(update_stmt).fetchall()
+    config["db"].commit()
+
+
 if __name__ == "__main__":
     try:
         config = read_config_files("src/table.tsv")
