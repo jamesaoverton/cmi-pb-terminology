@@ -32,11 +32,15 @@ def export(db, output_dir, tables):
                     for row in pragma_rows:
                         if row["pk"] != 0:
                             primary_keys[row["pk"]] = row["name"]
-                        else:
+                        elif not row["name"].endswith("_meta"):
                             other_columns.append(row["name"])
                     primary_keys = OrderedDict(sorted(primary_keys.items()))
                     sorted_columns = [primary_keys[key] for key in primary_keys] + other_columns
-                    order_by = list(map(lambda x: f"`{x}`", sorted_columns))
+                    sorted_columns_with_meta = []
+                    for column in sorted_columns:
+                        sorted_columns_with_meta.append(column)
+                        sorted_columns_with_meta.append(column + "_meta")
+                    order_by = list(map(lambda x: f"`{x}`", sorted_columns_with_meta))
                     order_by = ", ".join(order_by)
 
                 # Fetch the rows from the table and write them to a corresponding TSV file in the
