@@ -1,0 +1,7 @@
+table	table_meta	path	path_meta	description	description_meta	type	type_meta
+column	{"valid": true, "messages": []}	src/column.tsv	{"valid": true, "messages": []}	Columns for all of the tables.	{"valid": true, "messages": []}	column	{"valid": true, "messages": []}
+datatype	{"valid": true, "messages": []}	src/datatype.tsv	{"valid": true, "messages": []}	Datatypes for all of the columns	{"valid": true, "messages": []}	datatype	{"valid": true, "messages": []}
+import	{"valid": true, "messages": []}	src/ontology/import.tsv	{"valid": true, "messages": []}	Terms imported from other ontologies	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
+prefix	{"valid": true, "messages": []}	src/prefix.tsv	{"valid": true, "messages": []}	Prefixes and source ontologies.	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
+table	{"valid": true, "messages": []}	src/table.tsv	{"valid": true, "messages": []}	All of the user-editable tables in this project.	{"valid": true, "messages": []}	table	{"valid": true, "messages": []}
+test_tree_under	{"valid": true, "messages": []}	src/ontology/test_tree_under.tsv	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}

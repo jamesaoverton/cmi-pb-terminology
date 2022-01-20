@@ -6,6 +6,7 @@ import json
 import sqlite3
 import sys
 
+from argparse import ArgumentParser
 from graphlib import CycleError, TopologicalSorter
 from lark import Lark
 from lark.exceptions import VisitError
@@ -497,8 +498,16 @@ def update_row(config, table_name, row, rowid):
 
 if __name__ == "__main__":
     try:
-        config = read_config_files("src/table.tsv")
-        with sqlite3.connect("build/cmi-pb.db") as conn:
+        p = ArgumentParser()
+        p.add_argument(
+            "table",
+            help="A TSV file containing high-level information about the data in the database",
+        )
+        p.add_argument("db_dir", help="The directory in which to save the database file")
+        args = p.parse_args()
+
+        config = read_config_files(args.table)
+        with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
             config["db"] = conn
             config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())
             config["constraints"] = {

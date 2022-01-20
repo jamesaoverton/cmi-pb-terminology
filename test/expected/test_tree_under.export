@@ -1,0 +1,9 @@
+child	child_meta	parent	parent_meta	xyzzy	xyzzy_meta
+a	{"valid": true, "messages": []}	b	{"valid": true, "messages": []}	d	{"valid": true, "messages": []}
+b	{"valid": true, "messages": []}	c	{"valid": true, "messages": []}		{"valid": false, "messages": [{"rule": "under:not-under", "level": "error", "message": "Value 'e' of column xyzzy is not under 'd'"}], "value": "e"}
+c	{"valid": true, "messages": []}	d	{"valid": true, "messages": []}		{"valid": false, "messages": [{"rule": "under:not-under", "level": "error", "message": "Value 'f' of column xyzzy is not under 'd'"}], "value": "f"}
+d	{"valid": true, "messages": []}	e	{"valid": true, "messages": []}		{"valid": false, "messages": [{"rule": "under:not-under", "level": "error", "message": "Value 'g' of column xyzzy is not under 'd'"}], "value": "g"}
+e	{"valid": true, "messages": []}	f	{"valid": true, "messages": []}		{"valid": false, "messages": [{"rule": "under:not-under", "level": "error", "message": "Value 'h' of column xyzzy is not under 'd'"}], "value": "h"}
+f	{"valid": true, "messages": []}	g	{"valid": true, "messages": []}	a	{"valid": true, "messages": []}
+g	{"valid": true, "messages": []}	h	{"valid": true, "messages": []}		{"valid": false, "messages": [{"rule": "under:not-in-tree", "level": "error", "message": "Value z of column xyzzy is not in test_tree_under.child"}], "value": "z"}
+h	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
