@@ -7,6 +7,7 @@ import sqlite3
 import sys
 
 from argparse import ArgumentParser
+from collections import OrderedDict
 
 
 def export(db, output_dir, tables):
@@ -26,13 +27,16 @@ def export(db, output_dir, tables):
                 if not any([row["pk"] == 1 for row in pragma_rows]):
                     order_by = "ROWID"
                 else:
-                    sorted_column_names = []
+                    primary_keys = {}
+                    other_columns = []
                     for row in pragma_rows:
-                        if row["pk"] == 1:
-                            sorted_column_names.insert(0, row["name"])
+                        if row["pk"] != 0:
+                            primary_keys[row["pk"]] = row["name"]
                         else:
-                            sorted_column_names.append(row["name"])
-                    order_by = list(map(lambda x: f"`{x}`", sorted_column_names))
+                            other_columns.append(row["name"])
+                    primary_keys = OrderedDict(sorted(primary_keys.items()))
+                    sorted_columns = [primary_keys[key] for key in primary_keys] + other_columns
+                    order_by = list(map(lambda x: f"`{x}`", sorted_columns))
                     order_by = ", ".join(order_by)
 
                 # Fetch the rows from the table and write them to a corresponding TSV file in the
