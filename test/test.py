@@ -15,7 +15,7 @@ pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
 from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
-from export import export
+from export import export_data
 from validate import validate_row
 
 
@@ -50,7 +50,7 @@ def test_export(db_file):
     return_status = 0
     for table in glob.glob(expected_dir + "/*.export"):
         table = basename(table.removesuffix(".export"))
-        export(db_file, output_dir, [table])
+        export_data(db_file, output_dir, [table])
         expected = f"{expected_dir}/{table}.export"
         actual = f"{output_dir}/{table}.export_actual"
         os.rename(f"{output_dir}/{table}.tsv", actual)

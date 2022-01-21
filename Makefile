@@ -186,6 +186,9 @@ output:
 output/%.tsv: src/script/export.py build/cmi-pb.db | output
 	python3 $^ $| $*
 
+output/messages.tsv: src/script/export.py build/cmi-pb.db | output
+	python3 $^ --messages $| prefix import test_tree_under
+
 .PHONY: test
 test: | build
 	test/test.py build/cmi-pb.db

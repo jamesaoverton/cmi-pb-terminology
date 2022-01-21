@@ -330,6 +330,7 @@ def create_schema(config, table_name):
         structure = row.get("structure")
         if structure and not table_name.endswith("_conflict"):
             parser = config["parser"]
+            # TODO: output user-friendly error messages when the structure syntax is invalid.
             for expression in parser.parse(structure):
                 if expression["type"] == "label" and expression["value"] == "primary":
                     line += " PRIMARY KEY"
