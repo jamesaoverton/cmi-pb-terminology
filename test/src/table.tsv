@@ -1,0 +1,7 @@
+table	path	description	type
+column	test/src/column.tsv	Columns for all of the tables.	column
+datatype	test/src/datatype.tsv	Datatypes for all of the columns	datatype
+import	test/src/ontology/import.tsv	Terms imported from other ontologies	
+prefix	test/src/prefix.tsv	Prefixes and source ontologies.	
+table	test/src/table.tsv	All of the user-editable tables in this project.	table
+test_tree_under	test/src/ontology/test_tree_under.tsv		

@@ -140,7 +140,7 @@ def main():
     if isfile(db_file):
         os.unlink(db_file)
 
-    config = read_config_files("src/table.tsv")
+    config = read_config_files("test/src/table.tsv")
     with sqlite3.connect(db_file) as conn:
         config["db"] = conn
         config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())

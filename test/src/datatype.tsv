@@ -1,0 +1,20 @@
+datatype	parent	transform	condition	structure	description	SQL type	RDF type	HTML type
+CURIE	nonspace		search(/:/)	concat(prefix, ":", suffix)	a Compact URI		CURIE	
+IRI	nonspace				an Internationalized Resource Identifier		IRI	
+column_name	trimmed_line				a column name			
+datatype_condition	line				a datatype condition specification			
+datatype_name	word				a datatype name			
+description	trimmed_text				a brief description			
+empty	text		equals('')		the empty string	NULL	null	
+label	trimmed_line							
+line	text		exclude(/\n/)		a line of text			input
+nonspace	trimmed_line		exclude(/\s/)		text without whitespace			
+path	line				a path to a file			
+prefix	word				a prefix for a CURIE			
+suffix	word				a suffix for a CURIE			
+table_name	word				a table name			
+table_type	word	lowercase	in('table', 'column', 'datatype')		a table type			
+text					any text	TEXT	xsd:string	textarea
+trimmed_line	line		exclude(/^\s+|\s+$/)		a line of text that does not begin or end with whitespace			
+trimmed_text	text		exclude(/^\s+|\s+$/)		text that does not begin or end with whitespace			
+word	nonspace		match(/\w+/)		a single word: letters, numbers, underscore			
