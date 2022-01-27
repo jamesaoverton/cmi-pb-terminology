@@ -15,16 +15,16 @@ def get_columns_info(conn, table):
     """
     Given a database connection and a table name, determine the order of the table's columns. For
     tables with primary keys, sort by primary key first, then by all other columns from left to
-    right. For tables without primary keys, sort by rowid. Returns a tuple consisting of an unsorted
-    and a sorted list of column names in the first and second position of the tuple, respectively,
-    and a list of the table's primary keys sorted by priority in the third position.
+    right. For tables without primary keys, sort by row_number. Returns a tuple consisting of an
+    unsorted and a sorted list of column names in the first and second position of the tuple,
+    respectively, and a list of the table's primary keys sorted by priority in the third position.
     """
     pragma_rows = conn.execute(f"PRAGMA TABLE_INFO(`{table}`)")
     columns_info = [d[0] for d in pragma_rows.description]
     pragma_rows = list(map(lambda r: OrderedDict(zip(columns_info, r)), pragma_rows))
     primary_keys = OrderedDict()
     if not any([row["pk"] == 1 for row in pragma_rows]):
-        sorted_columns = ["ROWID"]
+        sorted_columns = ["row_number"]
     else:
 
         def add_meta(columns):
@@ -38,60 +38,131 @@ def get_columns_info(conn, table):
         for row in pragma_rows:
             if row["pk"] != 0:
                 primary_keys[row["pk"]] = row["name"]
-            elif not row["name"].endswith("_meta"):
+            elif not row["name"].endswith("_meta") and not row["name"] == "row_number":
                 other_columns.append(row["name"])
         primary_keys = OrderedDict(sorted(primary_keys.items()))
         sorted_columns = add_meta([primary_keys[key] for key in primary_keys] + other_columns)
     unsorted_columns = [p["name"] for p in pragma_rows]
-    return unsorted_columns, sorted_columns, [primary_keys[key] for key in primary_keys]
+
+    pragma_rows = conn.execute(f"PRAGMA INDEX_LIST(`{table}`)")
+    columns_info = [d[0] for d in pragma_rows.description]
+    pragma_rows = list(map(lambda r: dict(zip(columns_info, r)), pragma_rows))
+    unique_constraints = [
+        key["name"] for key in pragma_rows if key["unique"] == 1 and key["origin"] == "u"
+    ]
+    unique_keys = []
+    for uni in unique_constraints:
+        pragma_rows = conn.execute(f"PRAGMA INDEX_INFO(`{uni}`)")
+        columns_info = [d[0] for d in pragma_rows.description]
+        pragma_rows = list(map(lambda r: dict(zip(columns_info, r)), pragma_rows))
+        [unique_keys.append(p["name"]) for p in pragma_rows]
+
+    return {
+        "unsorted_columns": unsorted_columns,
+        "sorted_columns": sorted_columns,
+        "primary_keys": [primary_keys[key] for key in primary_keys],
+        "unique_keys": unique_keys,
+    }
 
 
-def export_data(db, output_dir, tables):
+def export_data(args):
     """
-    Given the filename of a database, an output directory, and a list of tables, export all of the
-    given database tables to .tsv files in the output directory.
+    Given a dictionary containing: the filename of a database, an output directory, and a list of
+    tables, export all of the given database tables to .tsv files in the output directory.
     """
+    db = args["db"]
+    output_dir = os.path.normpath(args["output_dir"])
+    tables = args["tables"]
     with sqlite3.connect(db) as conn:
         for table in tables:
             try:
-                _, sorted_columns, _ = get_columns_info(conn, table)
+                columns_info = get_columns_info(conn, table)
+                sorted_columns = columns_info["sorted_columns"]
+                unsorted_columns = columns_info["unsorted_columns"]
+                primary_keys = columns_info["primary_keys"]
+                unique_keys = columns_info["unique_keys"]
+
+                select = list(map(lambda x: f"`{x}`", unsorted_columns))
+                select = ", ".join(select)
+
+                conflict_select = []
+                for s in unsorted_columns:
+                    if s in primary_keys + unique_keys:
+                        conflict_select.append(
+                            f"""
+                            CASE
+                              WHEN `{s}` IS NOT NULL THEN `{s}`
+                              ELSE JSON_EXTRACT(
+                                     RTRIM(
+                                       SUBSTRING(`{s}_meta`, 6),
+                                       ")"),
+                                     '$.value'
+                                   )
+                              END AS `{s}`
+                            """
+                        )
+                    else:
+                        conflict_select.append(f"`{s}`")
+                conflict_select = ", ".join(conflict_select)
+
                 order_by = list(map(lambda x: f"`{x}`", sorted_columns))
                 order_by = ", ".join(order_by)
 
                 # Fetch the rows from the table and write them to a corresponding TSV file in the
                 # output directory:
-                rows = conn.execute(f"SELECT * FROM `{table}` ORDER BY {order_by}")
+                rows = conn.execute(
+                    f"SELECT {select} FROM `{table}` "
+                    f"UNION "
+                    f"SELECT {conflict_select} FROM `{table}_conflict` "
+                    f"ORDER BY {order_by}"
+                )
+                colnames = [d[0] for d in rows.description]
+                rows = map(lambda r: dict(zip(colnames, r)), rows)
+
+                fieldnames = [c for c in colnames if not c.endswith("_meta") and c != "row_number"]
                 with open(f"{output_dir}/{table}.tsv", "w", newline="\n") as csvfile:
-                    writer = csv.writer(
+                    writer = csv.DictWriter(
                         csvfile,
+                        fieldnames=fieldnames,
                         delimiter="\t",
                         doublequote=False,
                         strict=True,
                         lineterminator="\n",
                         quoting=csv.QUOTE_NONE,
-                        escapechar="\\",
+                        escapechar="",
                         quotechar="",
                     )
-                    column_names = [d[0] for d in rows.description]
-                    writer.writerow(column_names)
+                    writer.writeheader()
                     for row in rows:
-                        row = map(
-                            lambda c: (
-                                re.sub(r"^json\((.*)\)$", r"\1", c)
-                                if c and re.match(r"^json\((.*)\)$", c)
-                                else c
-                            ),
-                            row,
-                        )
+                        del row["row_number"]
+                        for meta_col in [c for c in row if c.endswith("_meta")]:
+                            meta_data = json.loads(re.sub(r"^json\((.*)\)$", r"\1", row[meta_col]))
+                            col = meta_col.removesuffix("_meta")
+                            row[col] = row[col] if meta_data["valid"] else meta_data["value"]
+                            del row[meta_col]
                         writer.writerow(row)
             except sqlite3.OperationalError as e:
                 print(f"ERROR: {e}", file=sys.stderr)
 
 
-def export_messages(db, output_dir, tables, a1=False):
+def export_messages(args):
     """
-    TODO: Add a docstring 'ere.
+    Given a dictionary containing: the filename of a database, an output directory, a list of
+    tables, and a flag indicating whether to use A1 format, export all of the error messages
+    contained in the given database tables to a file called messages.tsv in the output directory.
     """
+
+    db = args["db"]
+    output_dir = os.path.normpath(args["output_dir"])
+    tables = args["tables"]
+    a1 = args["a1"]
+
+    def add_conflict_tables(tables):
+        more_tables = []
+        for table in tables:
+            more_tables.append(table)
+            more_tables.append(f"{table}_conflict")
+        return more_tables
 
     def col_to_a1(column, columns):
         col = columns.index(column) + 1
@@ -107,9 +178,9 @@ def export_messages(db, output_dir, tables, a1=False):
 
     def create_message_rows(table, row, row_number, primary_keys):
         if a1 or not primary_keys:
-            rowid = f"{row_number}"
+            row_number = f"{row_number}"
         else:
-            rowid = "###".join([row.get(f"{pk}") or "" for pk in primary_keys])
+            row_number = "###".join([row.get(f"{pk}") or "" for pk in primary_keys])
 
         message_rows = []
         for column_key in [ckey for ckey in row if ckey.endswith("_meta")]:
@@ -128,18 +199,11 @@ def export_messages(db, output_dir, tables, a1=False):
                         "value": meta["value"],
                     }
                     if not a1:
-                        m.update({"row": rowid, "column": columnid})
+                        m.update({"row": row_number, "column": columnid})
                     else:
-                        m.update({"cell": f"{columnid}{rowid}"})
+                        m.update({"cell": f"{columnid}{row_number}"})
                     message_rows.append(m)
         return message_rows
-
-    def add_conflict_tables(tables):
-        more_tables = []
-        for table in tables:
-            more_tables.append(table)
-            more_tables.append(f"{table}_conflict")
-        return more_tables
 
     with sqlite3.connect(db) as conn:
         tables = add_conflict_tables(tables)
@@ -162,7 +226,11 @@ def export_messages(db, output_dir, tables, a1=False):
             writer.writeheader()
             for table in tables:
                 try:
-                    unsorted_columns, sorted_columns, primary_keys = get_columns_info(conn, table)
+                    columns_info = get_columns_info(conn, table)
+                    unsorted_columns = columns_info["unsorted_columns"]
+                    sorted_columns = columns_info["sorted_columns"]
+                    primary_keys = columns_info["primary_keys"]
+
                     select = ", ".join([f"`{c}`" for c in unsorted_columns])
                     order_by = ", ".join([f"`{c}`" for c in sorted_columns])
                     rows = conn.execute(f"SELECT {select} FROM `{table}` ORDER BY {order_by}")
@@ -176,30 +244,41 @@ def export_messages(db, output_dir, tables, a1=False):
 
 
 if __name__ == "__main__":
-    p = ArgumentParser()
-    p.add_argument("db", help="The name of the database file")
-    p.add_argument("output_dir", help="The name of the directory in which to save TSV files")
-    p.add_argument(
-        "tables", metavar="table", nargs="+", help="The name of a table to export to TSV"
-    )
-    p.add_argument(
-        "--messages", "-m", action="store_true", help="Output error messages instead of table data"
-    )
-    p.add_argument("--a1", action="store_true", help="Output error messages in A1 format")
-    args = p.parse_args()
-    db = args.db
-    output_dir = os.path.normpath(args.output_dir)
-    tables = args.tables
+    prog_parser = ArgumentParser(description="Database table export utility")
+    sub_parsers = prog_parser.add_subparsers(help="Possible sub-commands")
 
-    if not os.path.exists(db):
-        print(f"The database '{db}' does not exist.", file=sys.stderr)
+    sub1 = sub_parsers.add_parser(
+        "data",
+        description="Export table data",
+        help="Export table data. For command-line options, run: `%(prog)s data --help`",
+    )
+    sub1.add_argument(
+        "--raw", action="store_true", help="Include _meta columns in table data export"
+    )
+    sub1.set_defaults(func=export_data)
+
+    sub2 = sub_parsers.add_parser(
+        "messages",
+        description="Export error messages",
+        help="Export error messages. For command-line options, run: `%(prog)s messages --help`",
+    )
+    sub2.add_argument("--a1", action="store_true", help="Output error messages in A1 format")
+    sub2.set_defaults(func=export_messages)
+
+    for sub in [sub1, sub2]:
+        sub.add_argument("db", help="The name of the database file")
+        sub.add_argument("output_dir", help="The name of the directory in which to save TSV files")
+        sub.add_argument(
+            "tables", metavar="table", nargs="+", help="The name of a table to export to TSV"
+        )
+
+    args = prog_parser.parse_args()
+    if not os.path.exists(args.db):
+        print(f"The database '{args.db}' does not exist.", file=sys.stderr)
         sys.exit(1)
 
-    if not os.path.isdir(output_dir):
-        print(f"The directory: {output_dir} does not exist", file=sys.stderr)
+    if not os.path.isdir(args.output_dir):
+        print(f"The directory: {args.output_dir} does not exist", file=sys.stderr)
         sys.exit(1)
 
-    if not args.messages:
-        export_data(db, output_dir, tables)
-    else:
-        export_messages(db, output_dir, tables, args.a1)
+    args.func(vars(args))

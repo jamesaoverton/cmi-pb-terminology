@@ -183,11 +183,11 @@ build/cmi-pb.db: build/cmi-pb.sql
 output:
 	mkdir -p $@
 
-output/%.tsv: src/script/export.py build/cmi-pb.db | output
-	python3 $^ $| $*
-
 output/messages.tsv: src/script/export.py build/cmi-pb.db | output
-	python3 $^ --messages $| prefix import test_tree_under
+	python3 $< messages $(word 2,$^) $| prefix import test_tree_under
+
+output/%.tsv: src/script/export.py build/cmi-pb.db | output
+	python3 $< data $(word 2,$^) $| $*
 
 .PHONY: test
 test: | build

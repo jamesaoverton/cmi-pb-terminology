@@ -1,20 +1,20 @@
 datatype	parent	transform	condition	structure	description	SQL type	RDF type	HTML type
-text					any text	TEXT	xsd:string	textarea
-empty	text		equals('')		the empty string	NULL	null	
-trimmed_text	text		exclude(/^\s+|\s+$/)		text that does not begin or end with whitespace			
-description	trimmed_text				a brief description			
-line	text		exclude(/\n/)		a line of text			input
-datatype_condition	line				a datatype condition specification			
-path	line				a path to a file			
-trimmed_line	line		exclude(/^\s+|\s+$/)		a line of text that does not begin or end with whitespace			
-label	trimmed_line							
-column_name	trimmed_line				a column name			
-nonspace	trimmed_line		exclude(/\s/)		text without whitespace			
+CURIE	nonspace		search(/:/)	concat(prefix, ":", suffix)	a Compact URI		CURIE	
 IRI	nonspace				an Internationalized Resource Identifier		IRI	
-word	nonspace		match(/\w+/)		a single word: letters, numbers, underscore			
-table_name	word				a table name			
+column_name	trimmed_line				a column name			
+datatype_condition	line				a datatype condition specification			
 datatype_name	word				a datatype name			
-table_type	word	lowercase	in('table', 'column', 'datatype')		a table type			
+description	trimmed_text				a brief description			
+empty	text		equals('')		the empty string	NULL	null	
+label	trimmed_line							
+line	text		exclude(/\n/)		a line of text			input
+nonspace	trimmed_line		exclude(/\s/)		text without whitespace			
+path	line				a path to a file			
 prefix	word				a prefix for a CURIE			
 suffix	word				a suffix for a CURIE			
-CURIE	nonspace		search(/:/)	concat(prefix, ":", suffix)	a Compact URI		CURIE	
+table_name	word				a table name			
+table_type	word	lowercase	in('table', 'column', 'datatype')		a table type			
+text					any text	TEXT	xsd:string	textarea
+trimmed_line	line		exclude(/^\s+|\s+$/)		a line of text that does not begin or end with whitespace			
+trimmed_text	text		exclude(/^\s+|\s+$/)		text that does not begin or end with whitespace			
+word	nonspace		match(/\w+/)		a single word: letters, numbers, underscore			

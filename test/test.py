@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from lark import Lark
 from os.path import basename, isfile, realpath
 from pprint import pformat
-from subprocess import run
+from subprocess import DEVNULL, run
 
 pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
@@ -28,7 +28,7 @@ def test_load_contents(db_file, this_script):
         with open(tmpname, "w") as tmp:
             select = "select * from `{}`".format(basename(exp.removesuffix(".load")))
             run(["sqlite3", db_file, select], stdout=tmp)
-            status = run(["diff", "-q", exp, tmpname])
+            status = run(["diff", "-q", exp, tmpname], stdout=DEVNULL)
             if status.returncode != 0:
                 actual = realpath("{}/output/{}_actual".format(pwd, basename(exp)))
                 os.rename(tmpname, actual)
@@ -50,11 +50,11 @@ def test_export(db_file):
     return_status = 0
     for table in glob.glob(expected_dir + "/*.export"):
         table = basename(table.removesuffix(".export"))
-        export_data(db_file, output_dir, [table])
+        export_data({"db": db_file, "output_dir": output_dir, "tables": [table]})
         expected = f"{expected_dir}/{table}.export"
         actual = f"{output_dir}/{table}.export_actual"
         os.rename(f"{output_dir}/{table}.tsv", actual)
-        status = run(["diff", "-q", expected, actual])
+        status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
         if status.returncode != 0:
             print(
                 "The exported contents of {} are not as expected. Saving them in {}".format(
@@ -80,17 +80,7 @@ def test_validate_and_update_row(config):
     expected_row = {
         "id": {"messages": [], "valid": True, "value": "ZOB:0000013"},
         "label": {"messages": [], "valid": True, "value": "bar"},
-        "parent": {
-            "messages": [
-                {
-                    "rule": "tree:cycle",
-                    "level": "error",
-                    "message": "Cyclic dependency: (label: car, parent: foo), (label: foo, parent: bar), (label: bar, parent: None), (label: bar, parent: car) for tree(parent) of label",
-                }
-            ],
-            "valid": False,
-            "value": "car",
-        },
+        "parent": {"messages": [], "valid": True, "value": "car"},
         "source": {
             "messages": [
                 {
@@ -106,7 +96,7 @@ def test_validate_and_update_row(config):
         "duplicate": False,
     }
 
-    actual_row = validate_row(config, "import", row, existing_row=True, rowid=7)
+    actual_row = validate_row(config, "import", row, existing_row=True, row_number=2)
     if actual_row != expected_row:
         print(
             "Actual result of validate_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
@@ -115,10 +105,11 @@ def test_validate_and_update_row(config):
         )
         return 1
 
-    # We happen to know that this is the 7th row in the table. If we change the test data this may change.
-    update_row(config, "import", row, 7)
-    actual_row = config["db"].execute("SELECT * FROM import WHERE rowid = 7").fetchall()[0]
+    # We happen to know that this is the 2nd row in the table. If we change the test data this may change.
+    update_row(config, "import", row, 2)
+    actual_row = config["db"].execute("SELECT * FROM import WHERE row_number = 2").fetchall()[0]
     expected_row = (
+        2,
         None,
         'json({"messages": [{"rule": "key:foreign", "level": "error", "message": "Value ZOB of column source is not in prefix.prefix"}], "valid": false, "value": "ZOB"})',
         "ZOB:0000013",
@@ -127,8 +118,8 @@ def test_validate_and_update_row(config):
         'json({"messages": [], "valid": true})',
         "owl:Class",
         'json({"messages": [], "valid": true})',
-        None,
-        'json({"messages": [{"rule": "tree:cycle", "level": "error", "message": "Cyclic dependency: (label: car, parent: foo), (label: foo, parent: bar), (label: bar, parent: None), (label: bar, parent: car) for tree(parent) of label"}], "valid": false, "value": "car"})',
+        "car",
+        'json({"messages": [], "valid": true})',
     )
     if actual_row != expected_row:
         print(

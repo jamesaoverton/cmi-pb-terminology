@@ -1,7 +1,7 @@
 table	path	description	type
-table	src/table.tsv	All of the user-editable tables in this project.	table
 column	src/column.tsv	Columns for all of the tables.	column
 datatype	src/datatype.tsv	Datatypes for all of the columns	datatype
-prefix	src/prefix.tsv	Prefixes and source ontologies.	
 import	src/ontology/import.tsv	Terms imported from other ontologies	
+prefix	src/prefix.tsv	Prefixes and source ontologies.	
+table	src/table.tsv	All of the user-editable tables in this project.	table
 test_tree_under	src/ontology/test_tree_under.tsv		

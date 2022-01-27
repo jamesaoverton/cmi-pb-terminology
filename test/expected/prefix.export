@@ -1,10 +1,1 @@
-prefix	prefix_meta	base	base_meta	ontology IRI	ontology IRI_meta	version IRI	version IRI_meta
-BFO	{"valid": true, "messages": []}	http://purl.obolibrary.org/obo/BFO_	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-COB	{"valid": true, "messages": []}	http://purl.obolibrary.org/obo/COB_	{"valid": true, "messages": []}	http://purl.obolibrary.org/obo/cob.owl	{"valid": true, "messages": []}	http://purl.obolibrary.org/obo/cob/releases/2021-09-13/cob-native.owl	{"valid": true, "messages": []}
-VO	{"valid": true, "messages": []}	http://purl.obolibrary.org/obo/VO_	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-dc	{"valid": true, "messages": []}	http://purl.org/dc/terms/	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-oio	{"valid": true, "messages": []}	http://www.geneontology.org/formats/oboInOwl#	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-owl	{"valid": true, "messages": []}	http://www.w3.org/2002/07/owl#	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-rdf	{"valid": true, "messages": []}	http://www.w3.org/1999/02/22-rdf-syntax-ns#	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-rdfs	{"valid": true, "messages": []}	http://www.w3.org/2000/01/rdf-schema#	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
-xsd	{"valid": true, "messages": []}	http://www.w3.org/2001/XMLSchema#	{"valid": true, "messages": []}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}		{"value": "", "valid": true, "messages": [], "nulltype": "empty"}
+../../src/prefix.tsv

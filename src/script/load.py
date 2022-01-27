@@ -270,7 +270,7 @@ def create_db_and_write_sql(config):
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
             for i, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
-                sql = insert_rows(config, table_name, chunk)
+                sql = insert_rows(config, table_name, chunk, i)
                 config["db"].executescript(sql)
                 config["db"].commit()
                 print("{}\n\n".format(sql))
@@ -287,10 +287,11 @@ def create_db_and_write_sql(config):
         for record in records_to_update:
             table, column, meta = table_name, record["column"], record["column"] + "_meta"
             sql = safe_sql(
-                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = :mval WHERE rowid = :rowid;",
+                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = :mval "
+                f"WHERE `row_number` = :row_number;",
                 {
                     "mval": "json({})".format(json.dumps(record["meta"])),
-                    "rowid": record["rowid"],
+                    "row_number": record["row_number"],
                 },
             )
             config["db"].execute(sql)
@@ -313,7 +314,11 @@ def create_schema(config, table_name):
     """Given the config structure and a table name, generate a SQL schema string, including each
     column C and its matching C_meta column, then return the schema string as well as a list of the
     table's constraints."""
-    output = [f"DROP TABLE IF EXISTS `{table_name}`;", f"CREATE TABLE `{table_name}` ("]
+    output = [
+        f"DROP TABLE IF EXISTS `{table_name}`;",
+        f"CREATE TABLE `{table_name}` (",
+        "   `row_number` INTEGER,",
+    ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
     table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": [], "under": []}
     c = len(columns.values())
@@ -416,7 +421,7 @@ def create_schema(config, table_name):
     return "\n".join(output), table_constraints
 
 
-def insert_rows(config, table_name, rows):
+def insert_rows(config, table_name, rows, chunk_number):
     """Given a config map, a table name, and a list of rows (dicts from column names to column
     values), return a SQL string for an INSERT statement with VALUES for all the rows."""
 
@@ -426,8 +431,10 @@ def insert_rows(config, table_name, rows):
             # The 'duplicate' flag has already served its purpose (see below). Here we delete it
             # from the row record to prevent it from being interpreted as a cell:
             del row["duplicate"]
-            values = []
-            params = {}
+            values = [":row_number"]
+            params = {"row_number": row["row_number"]}
+            # Delete the row number from the record as well since we no longer need it:
+            del row["row_number"]
             for column, cell in row.items():
                 column = column.replace(" ", "_")
                 value = None
@@ -455,7 +462,8 @@ def insert_rows(config, table_name, rows):
     result_rows = validate_rows(config, table_name, rows)
     main_rows = []
     conflict_rows = []
-    for row in result_rows:
+    for i, row in enumerate(result_rows):
+        row["row_number"] = i + 1 + chunk_number * CHUNK_SIZE
         if row["duplicate"]:
             conflict_rows.append(row)
         else:
@@ -467,10 +475,10 @@ def insert_rows(config, table_name, rows):
     )
 
 
-def update_row(config, table_name, row, rowid):
+def update_row(config, table_name, row, row_number):
     """Given a config map, a table name, a row (a dict from column names to column values), and the
-    rowid to update, update the corresponding row in the database with new values as specified by
-    `row`."""
+    row_number to update, update the corresponding row in the database with new values as specified
+    by `row`."""
 
     # As a result of validation, the row will have a duplicate flag, which is unneeded here and can
     # simply be removed:
@@ -492,7 +500,7 @@ def update_row(config, table_name, row, rowid):
 
     update_stmt = f"UPDATE `{table_name}` SET "
     update_stmt += safe_sql(", ".join(assignments), params)
-    update_stmt += safe_sql(" WHERE ROWID = :rowid", {"rowid": rowid})
+    update_stmt += safe_sql(" WHERE `row_number` = :row_number", {"row_number": row_number})
     config["db"].execute(update_stmt).fetchall()
     config["db"].commit()
 

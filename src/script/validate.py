@@ -20,11 +20,11 @@ def validate_rows(config, table_name, rows):
     return result_rows
 
 
-def validate_row(config, table_name, row, prev_results=[], existing_row=False, rowid=None):
+def validate_row(config, table_name, row, prev_results=[], existing_row=False, row_number=None):
     """Given a config map, a table name, a row to validate (a dict from column names to column
     values), and a list of previously validated rows, a flag indicating whether the given row
-    is to be assumed to already exist in the database, and the row's rowid in the case where it is
-    assumed to be an existing row, return the validated row."""
+    is to be assumed to already exist in the database, and the row's row_number in the case where
+    it is assumed to be an existing row, return the validated row."""
 
     def has_unique_violation(cell):
         # Returns true if the cell includes an error message indicating a unique-type key
@@ -45,7 +45,7 @@ def validate_row(config, table_name, row, prev_results=[], existing_row=False, r
             cell = validate_cell_tree_keys(config, table_name, column_name, cell, row, prev_results)
             cell = validate_cell_datatype(config, table_name, column_name, cell)
             cell = validate_unique_constraints(
-                config, table_name, column_name, cell, row, prev_results, existing_row, rowid
+                config, table_name, column_name, cell, row, prev_results, existing_row, row_number
             )
             duplicate = duplicate or has_unique_violation(cell)
         row[column_name] = cell
@@ -193,14 +193,14 @@ def validate_cell_datatype(config, table_name, column_name, cell):
 
 
 def validate_unique_constraints(
-    config, table_name, column_name, cell, context, prev_results, existing_row, rowid
+    config, table_name, column_name, cell, context, prev_results, existing_row, row_number
 ):
     """Given a config map, a table name, a column name, a cell to validate, the row, `context`,
     to which the cell belongs, and a list of previously validated rows (dicts mapping column names
     to column values), check the cell value against any unique-type keys that have been defined for
     the column. If there is a violation, indicate it with an error message attached to the cell. If
-    the `existing_row` flag is set to True, then checks will be made as if the given `rowid` does
-    not exist in the table."""
+    the `existing_row` flag is set to True, then checks will be made as if the given `row_number`
+    does not exist in the table."""
 
     # If the column has a primary or unique key constraint, or if it is the child associated with
     # a tree, then if the value of the cell is a duplicate either of one of the previously validated
@@ -225,9 +225,9 @@ def validate_unique_constraints(
             with_sql = safe_sql(
                 f"WITH `{except_table}` AS ( "
                 f"  SELECT * FROM `{table_name}` "
-                f"  WHERE ROWID <> :value "
+                f"  WHERE `row_number` <> :value "
                 f") ",
-                {"value": rowid},
+                {"value": row_number},
             )
 
         query_table = except_table if with_sql else table_name
@@ -297,7 +297,7 @@ def validate_under(config, table_name):
         #     understood to be under themselves.
         sql = (
             with_tree_sql(tree, ukey["ttable"], ukey["value"]) + f"SELECT "
-            f"  rowid, "
+            f"  `row_number`, "
             f"  `{table_name}`.`{column}`, "
             f"  `{table_name}`.`{column}_meta`, "
             f"  CASE "
@@ -341,7 +341,7 @@ def validate_under(config, table_name):
                         ),
                     }
                 )
-                results.append({"rowid": row[0], "column": column, "meta": meta})
+                results.append({"row_number": row[0], "column": column, "meta": meta})
             elif row[4] == 0:
                 meta["valid"] = False
                 meta["value"] = column_val
@@ -355,7 +355,7 @@ def validate_under(config, table_name):
                         ),
                     }
                 )
-                results.append({"rowid": row[0], "column": column, "meta": meta})
+                results.append({"row_number": row[0], "column": column, "meta": meta})
 
     return results
 
@@ -372,7 +372,7 @@ def validate_tree_foreign_keys(config, table_name):
         rows = (
             config["db"]
             .execute(
-                f"SELECT t1.rowid, t1.`{parent_col}`, t1.`{parent_col}_meta` "
+                f"SELECT t1.row_number, t1.`{parent_col}`, t1.`{parent_col}_meta` "
                 f"FROM `{table_name}` t1 "
                 f"WHERE NOT EXISTS ( "
                 f"    SELECT 1 "
@@ -416,7 +416,7 @@ def validate_tree_foreign_keys(config, table_name):
                     ),
                 }
             )
-            results.append({"rowid": row[0], "column": parent_col, "meta": meta})
+            results.append({"row_number": row[0], "column": parent_col, "meta": meta})
     return results
 
 
