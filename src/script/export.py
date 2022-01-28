@@ -102,7 +102,6 @@ def export_data(args):
                             """
                         )
                 select = ", ".join(select)
-                select = re.sub(r"\s+", " ", select)
 
                 order_by = list(map(lambda x: f"`{x}`", sorted_columns))
                 order_by = ", ".join(order_by)
@@ -131,7 +130,7 @@ def export_data(args):
                         del row["row_number"]
                         writer.writerow(row)
             except sqlite3.OperationalError as e:
-                print(f"ERROR: {e}", file=sys.stderr)
+                print(f"ERROR while exporting {table}: {e}", file=sys.stderr)
 
 
 def export_messages(args):
@@ -229,7 +228,7 @@ def export_messages(args):
                         message_rows = create_message_rows(table, row, primary_keys)
                         writer.writerows(message_rows)
                 except sqlite3.OperationalError as e:
-                    print(f"ERROR: {e}", file=sys.stderr)
+                    print(f"ERROR while exporting messages for {table}: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
