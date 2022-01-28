@@ -70,12 +70,16 @@ def get_columns_info(conn, table):
 def export_data(args):
     """
     Given a dictionary containing: the filename, "db", of a database, an output directory, "output",
-    and a list of tables, "tables", export all of the given database tables to .tsv files in the
-    output directory.
+    a list of tables, "tables", and optionally a flag, "raw" (which defaults to False), which if
+    True indicates that the data should be exported as is (i.e., including meta columns and simply
+    sorted by row number), export all of the given database tables to .tsv files in the output
+    directory.
     """
     db = args["db"]
     output_dir = os.path.normpath(args["output_dir"])
     tables = args["tables"]
+    raw = bool(args.get("raw"))
+
     with sqlite3.connect(db) as conn:
         for table in tables:
             try:
@@ -85,7 +89,7 @@ def export_data(args):
 
                 select = []
                 for column in unsorted_columns:
-                    if column == "row_number":
+                    if raw or column == "row_number":
                         select.append(f"`{column}`")
                     elif not column.endswith("_meta"):
                         select.append(
@@ -103,7 +107,7 @@ def export_data(args):
                         )
                 select = ", ".join(select)
 
-                order_by = list(map(lambda x: f"`{x}`", sorted_columns))
+                order_by = ["row_number"] if raw else list(map(lambda x: f"`{x}`", sorted_columns))
                 order_by = ", ".join(order_by)
 
                 # Fetch the rows from the table and write them to a corresponding TSV file in the
@@ -112,7 +116,12 @@ def export_data(args):
                 colnames = [d[0] for d in rows.description]
                 rows = map(lambda r: dict(zip(colnames, r)), rows)
 
-                fieldnames = [c for c in colnames if not c.endswith("_meta") and c != "row_number"]
+                if raw:
+                    fieldnames = [c for c in colnames if c != "row_number"]
+                else:
+                    fieldnames = [
+                        c for c in colnames if not c.endswith("_meta") and c != "row_number"
+                    ]
                 with open(f"{output_dir}/{table}.tsv", "w", newline="\n") as csvfile:
                     writer = csv.DictWriter(
                         csvfile,
@@ -240,7 +249,7 @@ if __name__ == "__main__":
         description="Export table data",
         help="Export table data. For command-line options, run: `%(prog)s data --help`",
     )
-    # TODO: We aren't actually handling this case:
+
     sub1.add_argument(
         "--raw", action="store_true", help="Include _meta columns in table data export"
     )
