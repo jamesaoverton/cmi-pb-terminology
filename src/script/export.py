@@ -69,8 +69,9 @@ def get_columns_info(conn, table):
 
 def export_data(args):
     """
-    Given a dictionary containing: the filename of a database, an output directory, and a list of
-    tables, export all of the given database tables to .tsv files in the output directory.
+    Given a dictionary containing: the filename, "db", of a database, an output directory, "output",
+    and a list of tables, "tables", export all of the given database tables to .tsv files in the
+    output directory.
     """
     db = args["db"]
     output_dir = os.path.normpath(args["output_dir"])
@@ -81,44 +82,34 @@ def export_data(args):
                 columns_info = get_columns_info(conn, table)
                 sorted_columns = columns_info["sorted_columns"]
                 unsorted_columns = columns_info["unsorted_columns"]
-                primary_keys = columns_info["primary_keys"]
-                unique_keys = columns_info["unique_keys"]
 
-                select = list(map(lambda x: f"`{x}`", unsorted_columns))
-                select = ", ".join(select)
-
-                conflict_select = []
-                for s in unsorted_columns:
-                    if s in primary_keys + unique_keys:
-                        conflict_select.append(
+                select = []
+                for column in unsorted_columns:
+                    if column == "row_number":
+                        select.append(f"`{column}`")
+                    elif not column.endswith("_meta"):
+                        select.append(
                             f"""
                             CASE
-                              WHEN `{s}` IS NOT NULL THEN `{s}`
+                              WHEN `{column}` IS NOT NULL THEN `{column}`
                               ELSE JSON_EXTRACT(
                                      RTRIM(
-                                       SUBSTRING(`{s}_meta`, 6),
+                                       SUBSTRING(`{column}_meta`, 6),
                                        ")"),
                                      '$.value'
                                    )
-                              END AS `{s}`
+                              END AS `{column}`
                             """
                         )
-                    else:
-                        conflict_select.append(f"`{s}`")
-                conflict_select = ", ".join(conflict_select)
+                select = ", ".join(select)
+                select = re.sub(r"\s+", " ", select)
 
                 order_by = list(map(lambda x: f"`{x}`", sorted_columns))
                 order_by = ", ".join(order_by)
 
                 # Fetch the rows from the table and write them to a corresponding TSV file in the
                 # output directory:
-                # TODO: WE CAN SIMPLIFY. JUST USE `{table}_view`.
-                rows = conn.execute(
-                    f"SELECT {select} FROM `{table}` "
-                    f"UNION "
-                    f"SELECT {conflict_select} FROM `{table}_conflict` "
-                    f"ORDER BY {order_by}"
-                )
+                rows = conn.execute(f"SELECT {select} FROM `{table}_view` " f"ORDER BY {order_by}")
                 colnames = [d[0] for d in rows.description]
                 rows = map(lambda r: dict(zip(colnames, r)), rows)
 
@@ -138,13 +129,6 @@ def export_data(args):
                     writer.writeheader()
                     for row in rows:
                         del row["row_number"]
-                        # TODO: WE DON'T NEED TO DO THIS HERE. DO IT DIRECTLY IN THE SQL FOR ALL
-                        # COLUMNS, NOT JUST PRIMARY KEYS:
-                        for meta_col in [c for c in row if c.endswith("_meta")]:
-                            meta_data = json.loads(re.sub(r"^json\((.*)\)$", r"\1", row[meta_col]))
-                            col = meta_col.removesuffix("_meta")
-                            row[col] = row[col] if meta_data["valid"] else meta_data["value"]
-                            del row[meta_col]
                         writer.writerow(row)
             except sqlite3.OperationalError as e:
                 print(f"ERROR: {e}", file=sys.stderr)
