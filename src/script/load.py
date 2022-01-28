@@ -456,23 +456,23 @@ def insert_rows(config, table_name, rows, chunk_number):
             output += ";"
         return output
 
-    def has_conflict(row):
-        conflict_columns = set(
-            config["constraints"]["primary"][table_name]
-            + config["constraints"]["unique"][table_name]
-            + [tree["child"] for tree in config["constraints"]["tree"][table_name]]
-        )
+    def has_conflict(row, conflict_columns):
         for col in row:
             if col in conflict_columns and not row[col]["valid"]:
                 return True
         return False
 
+    conflict_columns = set(
+        config["constraints"]["primary"][table_name]
+        + config["constraints"]["unique"][table_name]
+        + [tree["child"] for tree in config["constraints"]["tree"][table_name]]
+    )
     result_rows = validate_rows(config, table_name, rows)
     main_rows = []
     conflict_rows = []
     for i, row in enumerate(result_rows):
         row["row_number"] = i + 1 + chunk_number * CHUNK_SIZE
-        if has_conflict(row):
+        if has_conflict(row, conflict_columns):
             conflict_rows.append(row)
         else:
             main_rows.append(row)
