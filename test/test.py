@@ -81,12 +81,13 @@ def test_messages(db_file):
             "a1": False,
         }
     )
-    expected = f"{expected_dir}/messages.tsv"
-    actual = f"{output_dir}/messages.tsv"
+    expected = f"{expected_dir}/messages_non_a1.tsv"
+    actual = f"{output_dir}/messages_non_a1.tsv"
+    os.rename(f"{output_dir}/messages.tsv", actual)
     status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
     if status.returncode != 0:
         print(
-            f"Exported contents of messages.tsv are not as expected. Saving them in {actual}",
+            f"Exported contents of messages_non_a1.tsv not as expected. Saving them in {actual}",
             file=sys.stderr,
         )
         return_status = 1
