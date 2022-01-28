@@ -37,7 +37,6 @@ def validate_row(config, table_name, row, prev_results=[], existing_row=False, r
             ]
         )
 
-    duplicate = False
     for column_name, cell in row.items():
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
         if cell.get("nulltype") is None:
@@ -47,9 +46,7 @@ def validate_row(config, table_name, row, prev_results=[], existing_row=False, r
             cell = validate_unique_constraints(
                 config, table_name, column_name, cell, row, prev_results, existing_row, row_number
             )
-            duplicate = duplicate or has_unique_violation(cell)
         row[column_name] = cell
-    row["duplicate"] = duplicate
     return row
 
 

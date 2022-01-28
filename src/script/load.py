@@ -428,9 +428,6 @@ def insert_rows(config, table_name, rows, chunk_number):
     def generate_sql(table_name, rows):
         lines = []
         for row in rows:
-            # The 'duplicate' flag has already served its purpose (see below). Here we delete it
-            # from the row record to prevent it from being interpreted as a cell:
-            del row["duplicate"]
             values = [":row_number"]
             params = {"row_number": row["row_number"]}
             # Delete the row number from the record as well since we no longer need it:
@@ -459,12 +456,23 @@ def insert_rows(config, table_name, rows, chunk_number):
             output += ";"
         return output
 
+    def has_conflict(row):
+        conflict_columns = set(
+            config["constraints"]["primary"][table_name]
+            + config["constraints"]["unique"][table_name]
+            + [tree["child"] for tree in config["constraints"]["tree"][table_name]]
+        )
+        for col in row:
+            if col in conflict_columns and not row[col]["valid"]:
+                return True
+        return False
+
     result_rows = validate_rows(config, table_name, rows)
     main_rows = []
     conflict_rows = []
     for i, row in enumerate(result_rows):
         row["row_number"] = i + 1 + chunk_number * CHUNK_SIZE
-        if row["duplicate"]:
+        if has_conflict(row):
             conflict_rows.append(row)
         else:
             main_rows.append(row)
@@ -480,9 +488,6 @@ def update_row(config, table_name, row, row_number):
     row_number to update, update the corresponding row in the database with new values as specified
     by `row`."""
 
-    # As a result of validation, the row will have a duplicate flag, which is unneeded here and can
-    # simply be removed:
-    del row["duplicate"]
     assignments = []
     params = {}
     for column, cell in row.items():

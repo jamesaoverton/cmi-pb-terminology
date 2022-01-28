@@ -142,7 +142,6 @@ def test_validate_and_update_row(config):
             "value": "ZOB",
         },
         "type": {"messages": [], "valid": True, "value": "owl:Class"},
-        "duplicate": False,
     }
 
     actual_row = validate_row(config, "import", row, existing_row=True, row_number=2)
