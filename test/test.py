@@ -15,7 +15,7 @@ pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
 from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
-from export import export_data
+from export import export_data, export_messages
 from validate import validate_row
 
 
@@ -65,6 +65,55 @@ def test_export(db_file):
             return_status = 1
         else:
             os.unlink(actual)
+    return return_status
+
+
+def test_messages(db_file):
+    output_dir = f"{pwd}/output"
+    expected_dir = f"{pwd}/expected"
+    return_status = 0
+
+    export_messages(
+        {
+            "db": db_file,
+            "output_dir": output_dir,
+            "tables": ["prefix", "import", "test_tree_under"],
+            "a1": False,
+        }
+    )
+    expected = f"{expected_dir}/messages.tsv"
+    actual = f"{output_dir}/messages.tsv"
+    status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
+    if status.returncode != 0:
+        print(
+            f"Exported contents of messages.tsv are not as expected. Saving them in {actual}",
+            file=sys.stderr,
+        )
+        return_status = 1
+    else:
+        os.unlink(actual)
+
+    export_messages(
+        {
+            "db": db_file,
+            "output_dir": output_dir,
+            "tables": ["prefix", "import", "test_tree_under"],
+            "a1": True,
+        }
+    )
+    expected = f"{expected_dir}/messages_a1.tsv"
+    actual = f"{output_dir}/messages_a1.tsv"
+    os.rename(f"{output_dir}/messages.tsv", actual)
+    status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
+    if status.returncode != 0:
+        print(
+            f"Exported contents of messages_a1.tsv are not as expected. Saving them in {actual}",
+            file=sys.stderr,
+        )
+        return_status = 1
+    else:
+        os.unlink(actual)
+
     return return_status
 
 
@@ -159,6 +208,7 @@ def main():
 
     ret = test_load_contents(db_file, this_script)
     ret += test_export(db_file)
+    ret += test_messages(db_file)
     ret += test_validate_and_update_row(config)
     sys.exit(ret)
 
