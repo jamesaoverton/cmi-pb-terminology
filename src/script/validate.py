@@ -25,18 +25,6 @@ def validate_row(config, table_name, row, prev_results=[], existing_row=False, r
     values), and a list of previously validated rows, a flag indicating whether the given row
     is to be assumed to already exist in the database, and the row's row_number in the case where
     it is assumed to be an existing row, return the validated row."""
-
-    def has_unique_violation(cell):
-        # Returns true if the cell includes an error message indicating a unique-type key
-        # violation (i.e., unique constraint, primary key, or 'tree child' constraint).
-        return bool(
-            [
-                msg
-                for msg in cell["messages"]
-                if msg["rule"] in ("key:primary", "key:unique", "tree:child-unique")
-            ]
-        )
-
     for column_name, cell in row.items():
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
         if cell.get("nulltype") is None:
