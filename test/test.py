@@ -16,7 +16,7 @@ sys.path.append("{}/../src/script".format(pwd))
 
 from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
 from export import export_data, export_messages
-from validate import validate_row
+from validate import validate_existing_row
 
 
 def test_load_contents(db_file, this_script):
@@ -145,10 +145,10 @@ def test_validate_and_update_row(config):
         "type": {"messages": [], "valid": True, "value": "owl:Class"},
     }
 
-    actual_row = validate_row(config, "import", row, existing_row=True, row_number=2)
+    actual_row = validate_existing_row(config, "import", row, row_number=2)
     if actual_row != expected_row:
         print(
-            "Actual result of validate_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
+            "Actual result of validate_existing_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
                 pformat(actual_row), pformat(expected_row)
             )
         )

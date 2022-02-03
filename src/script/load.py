@@ -8,14 +8,22 @@ import sys
 
 from argparse import ArgumentParser
 from graphlib import CycleError, TopologicalSorter
+from collections import OrderedDict
 from lark import Lark
 from lark.exceptions import VisitError
+from multiprocessing import cpu_count, Manager, Process
 
 from sql_utils import safe_sql
 from cmi_pb_grammar import grammar, TreeToDict
-from validate import validate_rows, validate_tree_foreign_keys, validate_under
+from validate import (
+    validate_rows_intra,
+    validate_rows_inter,
+    validate_tree_foreign_keys,
+    validate_under,
+)
 
-CHUNK_SIZE = 2
+CHUNK_SIZE = 100
+DEFAULT_CPU_COUNT = 4
 
 # TODO include synonyms?
 sqlite_types = ["text", "integer", "real", "blob"]
@@ -205,8 +213,14 @@ def verify_table_deps_and_sort(table_list, constraints):
 
 
 def create_db_and_write_sql(config):
-    """Given a config map, read TSVs and write out SQL strings."""
+    """Given a config map, read the TSVs corresponding to the various defined tables, then create
+    a database containing those tables and write the data from the TSVs to them, all the while
+    writing the SQL strings used to generate the database to STDOUT."""
+
     table_list = list(config["table"].keys())
+    # Begin by reading in the TSV files corresponding to the tables defined in config, and use
+    # that information to create the associated database tables, while saving constraint information
+    # to the config map.
     for table_name in table_list:
         path = config["table"][table_name]["path"]
         with open(path) as f:
@@ -260,6 +274,13 @@ def create_db_and_write_sql(config):
     # after the tables they depend on:
     table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
+    # Determine the number of CPUs on this system, which we will use below to determine the number
+    # of worker processes to fork at a time:
+    try:
+        num_cpus = cpu_count()
+    except NotImplementedError:
+        num_cpus = DEFAULT_CPU_COUNT
+
     # Now load the rows:
     for table_name in table_list:
         path = config["table"][table_name]["path"]
@@ -268,13 +289,44 @@ def create_db_and_write_sql(config):
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
-            for i, chunk in enumerate(chunks):
+
+            # Initialize a manager with an associated dictionary which we will use to accumulate
+            # the intra-row validation results from each worker process. Each process is assigned
+            # one chunk of data to work on.
+            manager = Manager()
+            results = manager.dict()
+            procs = []
+            for chunk_number, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
-                sql = insert_rows(config, table_name, chunk, i)
-                config["db"].executescript(sql)
-                config["db"].commit()
-                print("{}\n\n".format(sql))
-                print("-- end of chunk {}\n\n".format(i))
+                proc = Process(
+                    target=validate_rows_intra,
+                    args=(config, table_name, chunk, chunk_number, results),
+                )
+                procs.append(proc)
+
+            # Run only as many worker processes at a time as there are CPUs, progressively working
+            # through the data chunks:
+            proc_blocks = itertools.zip_longest(*([iter(procs)] * num_cpus))
+            for i, proc_block in enumerate(proc_blocks):
+                proc_block = list(filter(None, proc_block))
+                for proc in proc_block:
+                    proc.start()
+
+                for proc in proc_block:
+                    proc.join()
+                    proc.close()
+
+                # Once the intra-row validation is done, do inter-row validation on all of
+                # the chunks assigned to this process block, one at a time:
+                proc_block_results = OrderedDict(sorted(results.items()))
+                results.clear()
+                for chunk_number, validated_rows in proc_block_results.items():
+                    validated_rows = validate_rows_inter(config, table_name, validated_rows)
+                    sql = insert_rows(config, table_name, validated_rows, chunk_number)
+                    config["db"].executescript(sql)
+                    config["db"].commit()
+                    print("{}\n\n".format(sql))
+                    print("-- end of chunk {}\n\n".format(chunk_number))
 
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column
@@ -467,10 +519,10 @@ def insert_rows(config, table_name, rows, chunk_number):
         + config["constraints"]["unique"][table_name]
         + [tree["child"] for tree in config["constraints"]["tree"][table_name]]
     )
-    result_rows = validate_rows(config, table_name, rows)
+
     main_rows = []
     conflict_rows = []
-    for i, row in enumerate(result_rows):
+    for i, row in enumerate(rows):
         row["row_number"] = i + 1 + chunk_number * CHUNK_SIZE
         if has_conflict(row, conflict_columns):
             conflict_rows.append(row)
