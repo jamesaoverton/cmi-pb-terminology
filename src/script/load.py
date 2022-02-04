@@ -29,6 +29,14 @@ DEFAULT_CPU_COUNT = 4
 sqlite_types = ["text", "integer", "real", "blob"]
 
 
+class ConfigError(Exception):
+    pass
+
+
+class TSVReadError(Exception):
+    pass
+
+
 def read_config_files(table_table_path):
     """Given the path to a table TSV file, load and check the special 'table', 'column', and
     'datatype' tables, and return a config structure."""
@@ -39,7 +47,7 @@ def read_config_files(table_table_path):
             rows = csv.DictReader(f, delimiter="\t")
             rows = list(rows)
             if len(rows) < 1:
-                raise Exception(f"No rows in {path}")
+                raise TSVReadError(f"No rows in {path}")
             return rows
 
     special_table_types = ["table", "column", "datatype"]
@@ -53,34 +61,34 @@ def read_config_files(table_table_path):
     for row in rows:
         for column in ["table", "path", "type"]:
             if column not in row or row[column] is None:
-                raise Exception(f"Missing required column '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required column '{column}' reading '{path}'")
         for column in ["table", "path"]:
             if row[column].strip() == "":
-                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
         for column in ["type"]:
             if row[column].strip() == "":
                 row[column] = None
         if row["type"] == "table":
             if row["path"] != path:
-                raise Exception(
+                raise ConfigError(
                     "Special 'table' path '{}' does not match this path '{}'".format(
                         row["path"], path
                     )
                 )
         if row["type"] in special_table_types:
             if config["special"][row["type"]]:
-                raise Exception(
+                raise ConfigError(
                     "Multiple tables with type '{}' declared in '{}'".format(row["type"], path)
                 )
             config["special"][row["type"]] = row["table"]
         if row["type"] and row["type"] not in special_table_types:
-            raise Exception("Unrecognized table type '{}' in '{}'".format(row["type"], path))
+            raise ConfigError("Unrecognized table type '{}' in '{}'".format(row["type"], path))
         row["column"] = {}
         config["table"][row["table"]] = row
 
     for table_type in special_table_types:
         if config["special"][table_type] is None:
-            raise Exception(f"Missing required '{table_type}' table in '{path}'")
+            raise ConfigError(f"Missing required '{table_type}' table in '{path}'")
 
     # Load datatype table
     table_name = config["special"]["datatype"]
@@ -89,16 +97,19 @@ def read_config_files(table_table_path):
     for row in rows:
         for column in ["datatype", "parent", "condition", "SQL type"]:
             if column not in row or row[column] is None:
-                raise Exception(f"Missing required column '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required column '{column}' reading '{path}'")
         for column in ["datatype"]:
             if row[column].strip() == "":
-                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
         for column in ["parent", "condition", "SQL type"]:
             if row[column].strip() == "":
                 row[column] = None
-        # TODO: validate conditions
         config["datatype"][row["datatype"]] = row
-    # TODO: Check for required datatypes: text, empty, line, word
+        # TODO: compile conditions into a function (see issue #44)
+
+    for dt in ["text", "empty", "line", "word"]:
+        if dt not in config["datatype"]:
+            raise ConfigError(f"Missing required datatype: '{dt}'")
 
     # Load column table
     table_name = config["special"]["column"]
@@ -107,19 +118,19 @@ def read_config_files(table_table_path):
     for row in rows:
         for column in ["table", "column", "nulltype", "datatype"]:
             if column not in row or row[column] is None:
-                raise Exception(f"Missing required column '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required column '{column}' reading '{path}'")
         for column in ["table", "column", "datatype"]:
             if row[column].strip() == "":
-                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
         for column in ["nulltype"]:
             if row[column].strip() == "":
                 row[column] = None
         if row["table"] not in config["table"]:
-            raise Exception("Undefined table '{}' reading '{}'".format(row["table"], path))
+            raise ConfigError("Undefined table '{}' reading '{}'".format(row["table"], path))
         if row["nulltype"] and row["nulltype"] not in config["datatype"]:
-            raise Exception("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
+            raise ConfigError("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
         if row["datatype"] not in config["datatype"]:
-            raise Exception("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
+            raise ConfigError("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
         row["configured"] = True
         config["table"][row["table"]]["column"][row["column"]] = row
 
@@ -354,7 +365,7 @@ def get_SQL_type(config, datatype):
     """Given the config structure and the name of a datatype, climb the datatype tree (as required),
     and return the first 'SQL type' found."""
     if "datatype" not in config:
-        raise Exception("Missing datatypes in config")
+        raise ConfigError("Missing datatypes in config")
     if datatype not in config["datatype"]:
         return None
     if config["datatype"][datatype]["SQL type"]:
@@ -369,7 +380,7 @@ def create_schema(config, table_name):
     output = [
         f"DROP TABLE IF EXISTS `{table_name}`;",
         f"CREATE TABLE `{table_name}` (",
-        "   `row_number` INTEGER,",
+        "  `row_number` INTEGER,",
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
     table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": [], "under": []}
@@ -379,9 +390,9 @@ def create_schema(config, table_name):
         r += 1
         sql_type = get_SQL_type(config, row["datatype"])
         if not sql_type:
-            raise Exception("Missing SQL type for {}".format(row["datatype"]))
+            raise ConfigError("Missing SQL type for {}".format(row["datatype"]))
         if not sql_type.lower() in sqlite_types:
-            raise Exception("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
+            raise ConfigError("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
         column_name = row["column"]
         line = f"  `{column_name}` {sql_type}"
         structure = row.get("structure")
@@ -469,7 +480,10 @@ def create_schema(config, table_name):
                     table_name, tree["child"], table_name, tree["child"]
                 )
             )
-
+    # Finally, create a further unique index on row_number:
+    output.append(
+        f"CREATE UNIQUE INDEX `{table_name}_row_number_idx` ON `{table_name}`(`row_number`);"
+    )
     return "\n".join(output), table_constraints
 
 
@@ -584,5 +598,13 @@ if __name__ == "__main__":
                 "under": {},
             }
             create_db_and_write_sql(config)
-    except (CycleError, FileNotFoundError, StopIteration, ValueError, VisitError) as e:
+    except (
+        CycleError,
+        FileNotFoundError,
+        StopIteration,
+        ValueError,
+        ConfigError,
+        VisitError,
+        TSVReadError,
+    ) as e:
         sys.exit(e)
