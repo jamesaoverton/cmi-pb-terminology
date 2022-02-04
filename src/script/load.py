@@ -3,6 +3,7 @@
 import csv
 import itertools
 import json
+import re
 import sqlite3
 import sys
 
@@ -37,7 +38,7 @@ class TSVReadError(Exception):
     pass
 
 
-def read_config_files(table_table_path):
+def read_config_files(table_table_path, condition_parser):
     """Given the path to a table TSV file, load and check the special 'table', 'column', and
     'datatype' tables, and return a config structure."""
 
@@ -50,10 +51,63 @@ def read_config_files(table_table_path):
                 raise TSVReadError(f"No rows in {path}")
             return rows
 
+    def compile_condition(condition):
+        """Given a datatype condition, parse it using the configured parser and pre-compile the
+        regular expression and function corresponding to it."""
+        if condition is None:
+            return None
+
+        parsed_condition = config["parser"].parse(condition)
+        if len(parsed_condition) != 1:
+            raise ValueError(
+                f"Condition: '{condition}' is invalid. Only one condition per column is allowed."
+            )
+
+        parsed_condition = parsed_condition[0]
+        if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
+            expected = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
+            return lambda x: x == expected
+        elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
+            "exclude",
+            "match",
+            "search",
+        ):
+            pattern = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["pattern"])
+            flags = parsed_condition["args"][0]["flags"]
+            flags = "(?" + "".join(flags) + ")" if flags else ""
+            pattern = re.compile(flags + pattern)
+            if parsed_condition["name"] == "exclude":
+                return lambda x: not bool(pattern.search(x))
+            elif parsed_condition["name"] == "match":
+                return lambda x: bool(pattern.fullmatch(x))
+            else:
+                return lambda x: bool(pattern.search(x))
+        elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
+            alternatives = [
+                re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
+            ]
+            return lambda x: x in alternatives
+        else:
+            raise ConfigError(f"Unrecognized condition: {condition}")
+
+    config = {
+        "table": {},
+        "datatype": {},
+        "special": {},
+        "parser": condition_parser,
+        "constraints": {
+            "foreign": {},
+            "unique": {},
+            "primary": {},
+            "tree": {},
+            "under": {},
+        },
+    }
+
     special_table_types = ["table", "column", "datatype"]
     path = table_table_path
     rows = read_tsv(path)
-    config = {"table": {}, "datatype": {}, "special": {}}
+
     for t in special_table_types:
         config["special"][t] = None
 
@@ -105,7 +159,8 @@ def read_config_files(table_table_path):
             if row[column].strip() == "":
                 row[column] = None
         config["datatype"][row["datatype"]] = row
-        # TODO: compile conditions into a function (see issue #44)
+        condition = config["datatype"][row["datatype"]]["condition"]
+        config["datatype"][row["datatype"]]["condition"] = compile_condition(condition)
 
     for dt in ["text", "empty", "line", "word"]:
         if dt not in config["datatype"]:
@@ -585,18 +640,11 @@ if __name__ == "__main__":
         )
         p.add_argument("db_dir", help="The directory in which to save the database file")
         args = p.parse_args()
-
-        config = read_config_files(args.table)
+        config = read_config_files(
+            args.table, Lark(grammar, parser="lalr", transformer=TreeToDict())
+        )
         with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
             config["db"] = conn
-            config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())
-            config["constraints"] = {
-                "foreign": {},
-                "unique": {},
-                "primary": {},
-                "tree": {},
-                "under": {},
-            }
             create_db_and_write_sql(config)
     except (
         CycleError,

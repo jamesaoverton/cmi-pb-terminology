@@ -90,8 +90,7 @@ def validate_cell_nulltype(config, table_name, column_name, cell):
     if column["nulltype"]:
         nt_name = column["nulltype"]
         nulltype = config["datatype"][nt_name]
-        result = validate_condition(config, nulltype["condition"], cell["value"])
-        if result:
+        if nulltype["condition"](cell["value"]):
             cell["nulltype"] = nt_name
     return cell
 
@@ -214,7 +213,7 @@ def validate_cell_datatype(config, table_name, column_name, cell):
     # We use while and pop() instead of a for loop so as to check conditions in LIFO order:
     while datatypes_to_check:
         datatype = datatypes_to_check.pop()
-        if not validate_condition(config, datatype["condition"], cell["value"]):
+        if not datatype["condition"](cell["value"]):
             cell["messages"].append(
                 {
                     "rule": "datatype:{}".format(datatype["datatype"]),
@@ -460,42 +459,3 @@ def validate_tree_foreign_keys(config, table_name):
             )
             results.append({"row_number": row[0], "column": parent_col, "meta": meta})
     return results
-
-
-def validate_condition(config, condition, value):
-    """
-    Given a configuration map, a condition string and a value string, return True if the
-    condition holds, False otherwise.
-    """
-    parsed_condition = config["parser"].parse(condition)
-    if len(parsed_condition) != 1:
-        raise ValueError(
-            f"Condition: '{condition}' is invalid. Only one condition per column is allowed."
-        )
-    parsed_condition = parsed_condition[0]
-
-    if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
-        expected_value = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
-        return value == expected_value
-    elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
-        "exclude",
-        "match",
-        "search",
-    ):
-        pattern = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["pattern"])
-        flags = parsed_condition["args"][0]["flags"]
-        flags = "(?" + "".join(flags) + ")" if flags else ""
-        pattern = flags + pattern
-        if parsed_condition["name"] == "exclude":
-            return not bool(re.search(pattern, value))
-        elif parsed_condition["name"] == "match":
-            return bool(re.fullmatch(pattern, value))
-        else:
-            return bool(re.search(pattern, value))
-    elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
-        alternatives = [
-            re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
-        ]
-        return value in alternatives
-    else:
-        raise Exception(f"Unhandled condition: {condition}")

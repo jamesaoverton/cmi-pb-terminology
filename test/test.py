@@ -189,17 +189,11 @@ def main():
     if isfile(db_file):
         os.unlink(db_file)
 
-    config = read_config_files("test/src/table.tsv")
+    config = read_config_files(
+        "test/src/table.tsv", Lark(grammar, parser="lalr", transformer=TreeToDict())
+    )
     with sqlite3.connect(db_file) as conn:
         config["db"] = conn
-        config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())
-        config["constraints"] = {
-            "foreign": {},
-            "unique": {},
-            "primary": {},
-            "tree": {},
-            "under": {},
-        }
         old_stdout = sys.stdout
         with open(os.devnull, "w") as black_hole:
             sys.stdout = black_hole
