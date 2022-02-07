@@ -196,32 +196,46 @@ def validate_cell_datatype(config, table_name, column_name, cell):
     Given a config map, a table name, a column name, and a cell to validate, validate the cell's
     datatype and return the validated cell.
     """
+    column = config["table"][table_name]["column"][column_name]
+    primary_dt_name = column["datatype"]
+    primary_datatype = config["datatype"][primary_dt_name]
+    primary_dt_description = primary_datatype["description"]
+    primary_dt_condition_func = primary_datatype.get("condition")
 
-    # Validate that the value of the cell conforms to the datatypes associated with the column:
     def get_datatypes_to_check(dt_name):
         datatypes = []
         if dt_name is not None:
             datatype = config["datatype"][dt_name]
-            if datatype["condition"] is not None:
+            if datatype["datatype"] != primary_dt_name and datatype["condition"] is not None:
                 datatypes.append(datatype)
             datatypes += get_datatypes_to_check(datatype["parent"])
         return datatypes
 
-    column = config["table"][table_name]["column"][column_name]
-    dt_name = column["datatype"]
-    datatypes_to_check = get_datatypes_to_check(dt_name)
-    # We use while and pop() instead of a for loop so as to check conditions in LIFO order:
-    while datatypes_to_check:
-        datatype = datatypes_to_check.pop()
-        if not datatype["condition"](cell["value"]):
+    if primary_dt_condition_func and not primary_dt_condition_func(cell["value"]):
+        cell["valid"] = False
+        parent_datatypes = get_datatypes_to_check(primary_dt_name)
+        # If this datatype has any parents, check them beginning from the most general to the most
+        # specific. We use while and pop() instead of a for loop so as to check conditions in LIFO
+        # order:
+        while parent_datatypes:
+            datatype = parent_datatypes.pop()
+            if not datatype["condition"](cell["value"]):
+                cell["messages"].append(
+                    {
+                        "rule": "datatype:{}".format(datatype["datatype"]),
+                        "level": "error",
+                        "message": "{} should be {}".format(column_name, datatype["description"]),
+                    }
+                )
+                cell["valid"] = False
+        if primary_dt_description:
             cell["messages"].append(
                 {
-                    "rule": "datatype:{}".format(datatype["datatype"]),
+                    "rule": f"datatype:{primary_dt_name}",
                     "level": "error",
-                    "message": "{} should be {}".format(column_name, datatype["description"]),
+                    "message": f"{column_name} should be {primary_dt_description}",
                 }
             )
-            cell["valid"] = False
     return cell
 
 
