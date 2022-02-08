@@ -227,7 +227,6 @@ def validate_cell_datatype(config, table_name, column_name, cell):
                         "message": "{} should be {}".format(column_name, datatype["description"]),
                     }
                 )
-                cell["valid"] = False
         if primary_dt_description:
             cell["messages"].append(
                 {
