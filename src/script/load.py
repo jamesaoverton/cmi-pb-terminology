@@ -10,7 +10,6 @@ import sys
 from argparse import ArgumentParser
 from graphlib import CycleError, TopologicalSorter
 from collections import OrderedDict
-from copy import deepcopy
 from lark import Lark
 from lark.exceptions import VisitError
 from multiprocessing import cpu_count, Manager, Process
@@ -391,6 +390,10 @@ def create_db_and_write_sql(config):
                 for chunk_num, intra_validated_rows in proc_block_results.items():
                     validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
                     main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                    # Try to insert the rows to the db without first validating unique and foreign
+                    # constraints. If there are constraint violations this will cause the db to
+                    # raise an IntegrityError, in which case we then explicitly do the constraint
+                    # validation and insert the resulting rows:
                     try:
                         config["db"].execute(main)
                     except sqlite3.IntegrityError:
@@ -559,12 +562,12 @@ def make_inserts(config, table_name, rows, chunk_number):
     def generate_sql(table_name, rows):
         lines = []
         for row in rows:
-            row = deepcopy(row)
             values = [":row_number"]
             params = {"row_number": row["row_number"]}
-            # Delete the row number from the record as well since we no longer need it:
-            del row["row_number"]
             for column, cell in row.items():
+                if column == "row_number":
+                    continue
+                cell = cell.copy()
                 column = column.replace(" ", "_")
                 value = None
                 if "nulltype" in cell and cell["nulltype"]:
