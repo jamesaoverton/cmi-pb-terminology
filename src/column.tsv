@@ -21,6 +21,7 @@ import	id		CURIE	unique
 import	label		label	primary	
 import	parent	empty	label	tree(label)	
 import	related	empty	trimmed_line		
-test_tree_under	child		trimmed_line		
+test_tree_under	child		trimmed_line	from(foreign_table.foreign_column)	
 test_tree_under	parent	empty	trimmed_line	tree(child)	
 test_tree_under	xyzzy	empty	trimmed_line	under(test_tree_under.child, d)	
+foreign_table	foreign_column		text	primary	

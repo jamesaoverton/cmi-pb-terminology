@@ -194,6 +194,7 @@ def main():
     )
     with sqlite3.connect(db_file) as conn:
         config["db"] = conn
+        config["db"].execute("PRAGMA foreign_keys = ON")
         old_stdout = sys.stdout
         with open(os.devnull, "w") as black_hole:
             sys.stdout = black_hole

@@ -26,3 +26,4 @@ test_tree_under	C3	error	under:not-under	Value 'f' of column xyzzy is not under 
 test_tree_under	C4	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
 test_tree_under	C5	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
 test_tree_under	C7	error	under:not-in-tree	Value z of column xyzzy is not in test_tree_under.child	z
+test_tree_under	A9	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i

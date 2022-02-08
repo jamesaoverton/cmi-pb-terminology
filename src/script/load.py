@@ -10,6 +10,7 @@ import sys
 from argparse import ArgumentParser
 from graphlib import CycleError, TopologicalSorter
 from collections import OrderedDict
+from copy import deepcopy
 from lark import Lark
 from lark.exceptions import VisitError
 from multiprocessing import cpu_count, Manager, Process
@@ -18,7 +19,8 @@ from sql_utils import safe_sql
 from cmi_pb_grammar import grammar, TreeToDict
 from validate import (
     validate_rows_intra,
-    validate_rows_inter,
+    validate_rows_trees,
+    validate_rows_constraints,
     validate_tree_foreign_keys,
     validate_under,
 )
@@ -386,13 +388,21 @@ def create_db_and_write_sql(config):
                 # the chunks assigned to this process block, one at a time:
                 proc_block_results = OrderedDict(sorted(results.items()))
                 results.clear()
-                for chunk_number, validated_rows in proc_block_results.items():
-                    validated_rows = validate_rows_inter(config, table_name, validated_rows)
-                    sql = insert_rows(config, table_name, validated_rows, chunk_number)
-                    config["db"].executescript(sql)
+                for chunk_num, intra_validated_rows in proc_block_results.items():
+                    validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
+                    main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                    try:
+                        config["db"].execute(main)
+                    except sqlite3.IntegrityError:
+                        validated_rows = validate_rows_constraints(
+                            config, table_name, intra_validated_rows
+                        )
+                        main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                        config["db"].execute(main)
+                    config["db"].execute(conflict)
                     config["db"].commit()
-                    print("{}\n\n".format(sql))
-                    print("-- end of chunk {}\n\n".format(chunk_number))
+                    print("{}\n".format(main))
+                    print("{}\n".format(conflict))
 
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column
@@ -542,13 +552,14 @@ def create_schema(config, table_name):
     return "\n".join(output), table_constraints
 
 
-def insert_rows(config, table_name, rows, chunk_number):
+def make_inserts(config, table_name, rows, chunk_number):
     """Given a config map, a table name, and a list of rows (dicts from column names to column
     values), return a SQL string for an INSERT statement with VALUES for all the rows."""
 
     def generate_sql(table_name, rows):
         lines = []
         for row in rows:
+            row = deepcopy(row)
             values = [":row_number"]
             params = {"row_number": row["row_number"]}
             # Delete the row number from the record as well since we no longer need it:
@@ -598,9 +609,8 @@ def insert_rows(config, table_name, rows, chunk_number):
         else:
             main_rows.append(row)
     return (
-        generate_sql(table_name, main_rows)
-        + "\n"
-        + generate_sql(table_name + "_conflict", conflict_rows)
+        generate_sql(table_name, main_rows),
+        generate_sql(table_name + "_conflict", conflict_rows),
     )
 
 
@@ -645,6 +655,7 @@ if __name__ == "__main__":
         )
         with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
             config["db"] = conn
+            config["db"].execute("PRAGMA foreign_keys = ON")
             create_db_and_write_sql(config)
     except (
         CycleError,

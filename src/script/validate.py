@@ -9,11 +9,24 @@ def validate_existing_row(config, table_name, row, row_number):
     Given a config map, a table name, an existing row to validate, and its associated row number,
     perform both intra- and inter-row validation and return the validated row.
     """
-    result_row = validate_row_intra(config, table_name, row)
-    result_row = validate_row_inter(
-        config, table_name, result_row, prev_results=[], existing_row=True, row_number=row_number
-    )
-    return result_row
+    for column_name, cell in row.items():
+        cell = validate_cell_nulltype(config, table_name, column_name, cell)
+        if cell.get("nulltype") is None:
+            cell = validate_cell_datatype(config, table_name, column_name, cell)
+            cell = validate_cell_trees(config, table_name, column_name, cell, row, prev_results=[])
+            cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
+            cell = validate_unique_constraints(
+                config,
+                table_name,
+                column_name,
+                cell,
+                row,
+                prev_results=[],
+                existing_row=True,
+                row_number=row_number,
+            )
+        row[column_name] = cell
+    return row
 
 
 def validate_rows_intra(config, table_name, rows, chunk_number, results):
@@ -31,52 +44,56 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
                 "valid": True,
                 "messages": [],
             }
-        result_rows.append(validate_row_intra(config, table_name, result_row))
+        for column_name, cell in result_row.items():
+            cell = validate_cell_nulltype(config, table_name, column_name, cell)
+            if cell.get("nulltype") is None:
+                cell = validate_cell_datatype(config, table_name, column_name, cell)
+            result_row[column_name] = cell
+        result_rows.append(result_row)
     results[chunk_number] = result_rows
 
 
-def validate_row_intra(config, table_name, row):
+def validate_rows_trees(config, table_name, rows):
     """
-    Given a config map, a table name, a row to validate (a dict from column names to column
-    values), perform intra-row validation on the row and return the result.
-    """
-    for column_name, cell in row.items():
-        cell = validate_cell_nulltype(config, table_name, column_name, cell)
-        if cell.get("nulltype") is None:
-            cell = validate_cell_datatype(config, table_name, column_name, cell)
-        row[column_name] = cell
-    return row
-
-
-def validate_rows_inter(config, table_name, rows):
-    """
-    Given a config map, a table name, and a chunk of rows to perform inter-row validation on,
-    validate all of the rows in the chunk and return the results.
+    Given a config map, a table name, and a chunk of rows to validate, perform tree-validation
+    on the rows and return the validated results.
     """
     result_rows = []
     for row in rows:
-        result_rows.append(validate_row_inter(config, table_name, row, result_rows))
+        result_row = {}
+        for column_name, cell in row.items():
+            if cell.get("nulltype") is None:
+                cell = validate_cell_trees(config, table_name, column_name, cell, row, result_rows)
+            result_row[column_name] = cell
+        result_rows.append(result_row)
     return result_rows
 
 
-def validate_row_inter(
-    config, table_name, row, prev_results=[], existing_row=False, row_number=None
-):
+def validate_rows_constraints(config, table_name, rows):
     """
-    Given a config map, a table name, a row to validate (a dict from column names to column
-    values), a list of previously validated rows, a flag indicating whether the given row is to be
-    assumed to already exist in the database, and the row's row_number in the case where it is
-    assumed to be an existing row, perform inter-row validation on the row and return the result.
+    Given a config map, a table name, and a chunk of rows to validate, validate foreign and unique
+    constraints, where the latter include primary and "tree child" keys (which imply unique
+    constraints.
     """
-    for column_name, cell in row.items():
-        if cell.get("nulltype") is None:
-            cell = validate_cell_foreign_keys(config, table_name, column_name, cell)
-            cell = validate_cell_tree_keys(config, table_name, column_name, cell, row, prev_results)
-            cell = validate_unique_constraints(
-                config, table_name, column_name, cell, row, prev_results, existing_row, row_number
-            )
-        row[column_name] = cell
-    return row
+    result_rows = []
+    for row in rows:
+        result_row = {}
+        for column_name, cell in row.items():
+            if cell.get("nulltype") is None:
+                cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
+                cell = validate_unique_constraints(
+                    config,
+                    table_name,
+                    column_name,
+                    cell,
+                    row,
+                    result_rows,
+                    existing_row=False,
+                    row_number=None,
+                )
+            result_row[column_name] = cell
+        result_rows.append(result_row)
+    return result_rows
 
 
 def validate_cell_nulltype(config, table_name, column_name, cell):
@@ -95,7 +112,7 @@ def validate_cell_nulltype(config, table_name, column_name, cell):
     return cell
 
 
-def validate_cell_foreign_keys(config, table_name, column_name, cell):
+def validate_cell_foreign_constraints(config, table_name, column_name, cell):
     """
     Given a config map, a table name, a column name, and a cell to validate, check the cell
     value against any foreign keys that have been defined for the column. If there is a violation,
@@ -125,7 +142,7 @@ def validate_cell_foreign_keys(config, table_name, column_name, cell):
     return cell
 
 
-def validate_cell_tree_keys(config, table_name, column_name, cell, context, prev_results):
+def validate_cell_trees(config, table_name, column_name, cell, context, prev_results):
     """
     Given a config map, a table name, a column name, a cell to validate, the row, `context`,
     to which the cell belongs, and a list of previously validated rows (dicts mapping column names
