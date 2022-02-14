@@ -174,16 +174,25 @@ update-tsv: | build
 	curl -L -o src/prefix.tsv "$(GSTSV)&gid=1105305212"
 	curl -L -o src/ontology/import.tsv "$(GSTSV)&gid=1380652872"
 
-build/cmi-pb.sql: src/script/load.py src/script/validate.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv | build
-	python3 $< > $@
+build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv src/script/validate.py | build
+	python3 $< $(word 2,$^) $| > $@
 
 # The database file we be created as a side-effect of calling src/script/load.py to create the sql file:
 build/cmi-pb.db: build/cmi-pb.sql
 
+output:
+	mkdir -p $@
+
+output/messages.tsv: src/script/export.py build/cmi-pb.db | output
+	python3 $< messages $(word 2,$^) $| prefix import test_tree_under
+
+output/%.tsv: src/script/export.py build/cmi-pb.db | output
+	python3 $< data $(word 2,$^) $| $*
+
 .PHONY: test
 test: | build
-	test/test.py build/cmi-pb.db test/expected
+	test/test.py build/cmi-pb.db
 
 .PHONY: clean
 clean:
-	rm -rf build *_actual
+	rm -rf build output test/output/*_actual

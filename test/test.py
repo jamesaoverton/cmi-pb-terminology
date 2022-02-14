@@ -7,31 +7,33 @@ import sys
 
 from argparse import ArgumentParser
 from lark import Lark
-from os.path import basename, isfile, isdir, realpath
+from os.path import basename, isfile, realpath
 from pprint import pformat
-from subprocess import run
+from subprocess import DEVNULL, run
 
 pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
 from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
+from export import export_data, export_messages
 from validate import validate_row
 
 
-def test_load_contents(db_file, expected_dir, this):
+def test_load_contents(db_file, this_script):
+    expected_dir = f"{pwd}/expected"
     return_status = 0
-    for exp in glob.glob(expected_dir + "/*"):
+    for exp in glob.glob(expected_dir + "/*.load"):
         exp = realpath(exp)
-        tmpname = "/tmp/{}_{}.{}".format(basename(this), basename(exp), os.getpid())
+        tmpname = "/tmp/{}_{}.{}".format(basename(this_script), basename(exp), os.getpid())
         with open(tmpname, "w") as tmp:
-            select = "select * from `{}`".format(basename(exp))
+            select = "select * from `{}`".format(basename(exp.removesuffix(".load")))
             run(["sqlite3", db_file, select], stdout=tmp)
-            status = run(["diff", "-q", exp, tmpname])
+            status = run(["diff", "-q", exp, tmpname], stdout=DEVNULL)
             if status.returncode != 0:
-                actual = realpath("{}_actual".format(basename(exp)))
+                actual = realpath("{}/output/{}_actual".format(pwd, basename(exp)))
                 os.rename(tmpname, actual)
                 print(
-                    "The actual contents of {} are not as expected. Saving them in {}".format(
+                    "The loaded contents of {} are not as expected. Saving them in {}".format(
                         basename(exp), actual
                     ),
                     file=sys.stderr,
@@ -39,6 +41,80 @@ def test_load_contents(db_file, expected_dir, this):
                 return_status = 1
             else:
                 os.unlink(tmpname)
+    return return_status
+
+
+def test_export(db_file):
+    output_dir = f"{pwd}/output"
+    expected_dir = f"{pwd}/expected"
+    return_status = 0
+    for table in glob.glob(expected_dir + "/*.export"):
+        table = basename(table.removesuffix(".export"))
+        export_data({"db": db_file, "output_dir": output_dir, "tables": [table]})
+        expected = f"{expected_dir}/{table}.export"
+        actual = f"{output_dir}/{table}.export_actual"
+        os.rename(f"{output_dir}/{table}.tsv", actual)
+        status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
+        if status.returncode != 0:
+            print(
+                "The exported contents of {} are not as expected. Saving them in {}".format(
+                    table, actual
+                ),
+                file=sys.stderr,
+            )
+            return_status = 1
+        else:
+            os.unlink(actual)
+    return return_status
+
+
+def test_messages(db_file):
+    output_dir = f"{pwd}/output"
+    expected_dir = f"{pwd}/expected"
+    return_status = 0
+
+    export_messages(
+        {
+            "db": db_file,
+            "output_dir": output_dir,
+            "tables": ["prefix", "import", "test_tree_under"],
+            "a1": False,
+        }
+    )
+    expected = f"{expected_dir}/messages_non_a1.tsv"
+    actual = f"{output_dir}/messages_non_a1.tsv"
+    os.rename(f"{output_dir}/messages.tsv", actual)
+    status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
+    if status.returncode != 0:
+        print(
+            f"Exported contents of messages_non_a1.tsv not as expected. Saving them in {actual}",
+            file=sys.stderr,
+        )
+        return_status = 1
+    else:
+        os.unlink(actual)
+
+    export_messages(
+        {
+            "db": db_file,
+            "output_dir": output_dir,
+            "tables": ["prefix", "import", "test_tree_under"],
+            "a1": True,
+        }
+    )
+    expected = f"{expected_dir}/messages_a1.tsv"
+    actual = f"{output_dir}/messages_a1.tsv"
+    os.rename(f"{output_dir}/messages.tsv", actual)
+    status = run(["diff", "-q", expected, actual], stdout=DEVNULL)
+    if status.returncode != 0:
+        print(
+            f"Exported contents of messages_a1.tsv are not as expected. Saving them in {actual}",
+            file=sys.stderr,
+        )
+        return_status = 1
+    else:
+        os.unlink(actual)
+
     return return_status
 
 
@@ -54,17 +130,7 @@ def test_validate_and_update_row(config):
     expected_row = {
         "id": {"messages": [], "valid": True, "value": "ZOB:0000013"},
         "label": {"messages": [], "valid": True, "value": "bar"},
-        "parent": {
-            "messages": [
-                {
-                    "rule": "tree:cycle",
-                    "level": "error",
-                    "message": "Cyclic dependency: (label: car, parent: foo), (label: foo, parent: bar), (label: bar, parent: None), (label: bar, parent: car) for tree(parent) of label",
-                }
-            ],
-            "valid": False,
-            "value": "car",
-        },
+        "parent": {"messages": [], "valid": True, "value": "car"},
         "source": {
             "messages": [
                 {
@@ -77,10 +143,9 @@ def test_validate_and_update_row(config):
             "value": "ZOB",
         },
         "type": {"messages": [], "valid": True, "value": "owl:Class"},
-        "duplicate": False,
     }
 
-    actual_row = validate_row(config, "import", row, existing_row=True, rowid=7)
+    actual_row = validate_row(config, "import", row, existing_row=True, row_number=2)
     if actual_row != expected_row:
         print(
             "Actual result of validate_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
@@ -89,10 +154,11 @@ def test_validate_and_update_row(config):
         )
         return 1
 
-    # We happen to know that this is the 7th row in the table. If we change the test data this may change.
-    update_row(config, "import", row, 7)
-    actual_row = config["db"].execute("SELECT * FROM import WHERE rowid = 7").fetchall()[0]
+    # We happen to know that this is the 2nd row in the table. If we change the test data this may change.
+    update_row(config, "import", row, 2)
+    actual_row = config["db"].execute("SELECT * FROM import WHERE row_number = 2").fetchall()[0]
     expected_row = (
+        2,
         None,
         'json({"messages": [{"rule": "key:foreign", "level": "error", "message": "Value ZOB of column source is not in prefix.prefix"}], "valid": false, "value": "ZOB"})',
         "ZOB:0000013",
@@ -101,8 +167,8 @@ def test_validate_and_update_row(config):
         'json({"messages": [], "valid": true})',
         "owl:Class",
         'json({"messages": [], "valid": true})',
-        None,
-        'json({"messages": [{"rule": "tree:cycle", "level": "error", "message": "Cyclic dependency: (label: car, parent: foo), (label: foo, parent: bar), (label: bar, parent: None), (label: bar, parent: car) for tree(parent) of label"}], "valid": false, "value": "car"})',
+        "car",
+        'json({"messages": [], "valid": true})',
     )
     if actual_row != expected_row:
         print(
@@ -117,19 +183,14 @@ def test_validate_and_update_row(config):
 def main():
     p = ArgumentParser()
     p.add_argument("db_file", help="The name of the database file to use for testing")
-    p.add_argument(
-        "expected_dir", help="The directory where the files with expected contents are located"
-    )
     args = p.parse_args()
     db_file = args.db_file
-    expected_dir = args.expected_dir
-    this = __file__
-    assert isdir(expected_dir)
+    this_script = __file__
     if isfile(db_file):
         os.unlink(db_file)
 
-    config = read_config_files("src/table.tsv")
-    with sqlite3.connect("build/cmi-pb.db") as conn:
+    config = read_config_files("test/src/table.tsv")
+    with sqlite3.connect(db_file) as conn:
         config["db"] = conn
         config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())
         config["constraints"] = {
@@ -145,13 +206,11 @@ def main():
             create_db_and_write_sql(config)
             sys.stdout = old_stdout
 
-    ret = test_load_contents(db_file, expected_dir, this)
-    if ret != 0:
-        sys.exit(ret)
-
-    ret = test_validate_and_update_row(config)
-    if ret != 0:
-        sys.exit(ret)
+    ret = test_load_contents(db_file, this_script)
+    ret += test_export(db_file)
+    ret += test_messages(db_file)
+    ret += test_validate_and_update_row(config)
+    sys.exit(ret)
 
 
 if __name__ == "__main__":
