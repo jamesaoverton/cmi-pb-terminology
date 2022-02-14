@@ -4,9 +4,37 @@ import re
 from sql_utils import safe_sql
 
 
-def validate_rows(config, table_name, rows):
-    """Given a config map, a table name, and a list of rows (dicts from column names to column
-    values), and a list of previously validated rows, return a list of validated rows."""
+def validate_existing_row(config, table_name, row, row_number):
+    """
+    Given a config map, a table name, an existing row to validate, and its associated row number,
+    perform both intra- and inter-row validation and return the validated row.
+    """
+    for column_name, cell in row.items():
+        cell = validate_cell_nulltype(config, table_name, column_name, cell)
+        if cell.get("nulltype") is None:
+            cell = validate_cell_datatype(config, table_name, column_name, cell)
+            cell = validate_cell_trees(config, table_name, column_name, cell, row, prev_results=[])
+            cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
+            cell = validate_unique_constraints(
+                config,
+                table_name,
+                column_name,
+                cell,
+                row,
+                prev_results=[],
+                existing_row=True,
+                row_number=row_number,
+            )
+        row[column_name] = cell
+    return row
+
+
+def validate_rows_intra(config, table_name, rows, chunk_number, results):
+    """
+    Given a config map, a table name, a chunk of rows to perform intra-row validation on, the
+    chunk number assigned to the rows, and a results dictionary, validate all of the rows in the
+    chunk and add the validated rows to the results dictionary using the chunk number as its key.
+    """
     result_rows = []
     for row in rows:
         result_row = {}
@@ -16,47 +44,80 @@ def validate_rows(config, table_name, rows):
                 "valid": True,
                 "messages": [],
             }
-        result_rows.append(validate_row(config, table_name, result_row, result_rows))
+        for column_name, cell in result_row.items():
+            cell = validate_cell_nulltype(config, table_name, column_name, cell)
+            if cell.get("nulltype") is None:
+                cell = validate_cell_datatype(config, table_name, column_name, cell)
+            result_row[column_name] = cell
+        result_rows.append(result_row)
+    results[chunk_number] = result_rows
+
+
+def validate_rows_trees(config, table_name, rows):
+    """
+    Given a config map, a table name, and a chunk of rows to validate, perform tree-validation
+    on the rows and return the validated results.
+    """
+    result_rows = []
+    for row in rows:
+        result_row = {}
+        for column_name, cell in row.items():
+            if cell.get("nulltype") is None:
+                cell = validate_cell_trees(config, table_name, column_name, cell, row, result_rows)
+            result_row[column_name] = cell
+        result_rows.append(result_row)
     return result_rows
 
 
-def validate_row(config, table_name, row, prev_results=[], existing_row=False, row_number=None):
-    """Given a config map, a table name, a row to validate (a dict from column names to column
-    values), and a list of previously validated rows, a flag indicating whether the given row
-    is to be assumed to already exist in the database, and the row's row_number in the case where
-    it is assumed to be an existing row, return the validated row."""
-    for column_name, cell in row.items():
-        cell = validate_cell_nulltype(config, table_name, column_name, cell)
-        if cell.get("nulltype") is None:
-            cell = validate_cell_foreign_keys(config, table_name, column_name, cell)
-            cell = validate_cell_tree_keys(config, table_name, column_name, cell, row, prev_results)
-            cell = validate_cell_datatype(config, table_name, column_name, cell)
-            cell = validate_unique_constraints(
-                config, table_name, column_name, cell, row, prev_results, existing_row, row_number
-            )
-        row[column_name] = cell
-    return row
+def validate_rows_constraints(config, table_name, rows):
+    """
+    Given a config map, a table name, and a chunk of rows to validate, validate foreign and unique
+    constraints, where the latter include primary and "tree child" keys (which imply unique
+    constraints.
+    """
+    result_rows = []
+    for row in rows:
+        result_row = {}
+        for column_name, cell in row.items():
+            if cell.get("nulltype") is None:
+                cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
+                cell = validate_unique_constraints(
+                    config,
+                    table_name,
+                    column_name,
+                    cell,
+                    row,
+                    result_rows,
+                    existing_row=False,
+                    row_number=None,
+                )
+            result_row[column_name] = cell
+        result_rows.append(result_row)
+    return result_rows
 
 
 def validate_cell_nulltype(config, table_name, column_name, cell):
-    """Given a config map, a table name, a column name, and a cell, validate the cell's nulltype
+    """
+    Given a config map, a table name, a column name, and a cell, validate the cell's nulltype
     condition. If the cell's value is one of the allowable nulltype values for this column, then
-    fill in the cell's nulltype value before returning the cell."""
+    fill in the cell's nulltype value before returning the cell.
+    """
     # If the value of the cell is one of the:
     column = config["table"][table_name]["column"][column_name]
     if column["nulltype"]:
         nt_name = column["nulltype"]
         nulltype = config["datatype"][nt_name]
-        result = validate_condition(config, nulltype["condition"], cell["value"])
-        if result:
+        if nulltype["condition"](cell["value"]):
             cell["nulltype"] = nt_name
     return cell
 
 
-def validate_cell_foreign_keys(config, table_name, column_name, cell):
-    """Given a config map, a table name, a column name, and a cell to validate, check the cell
+def validate_cell_foreign_constraints(config, table_name, column_name, cell):
+    """
+    Given a config map, a table name, a column name, and a cell to validate, check the cell
     value against any foreign keys that have been defined for the column. If there is a violation,
-    indicate it with an error message attached to the cell."""
+    indicate it with an error message attached to the cell.
+    """
     constraints = config["constraints"]
     fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
     for fkey in fkeys:
@@ -81,11 +142,13 @@ def validate_cell_foreign_keys(config, table_name, column_name, cell):
     return cell
 
 
-def validate_cell_tree_keys(config, table_name, column_name, cell, context, prev_results):
-    """Given a config map, a table name, a column name, a cell to validate, the row, `context`,
+def validate_cell_trees(config, table_name, column_name, cell, context, prev_results):
+    """
+    Given a config map, a table name, a column name, a cell to validate, the row, `context`,
     to which the cell belongs, and a list of previously validated rows (dicts mapping column names
     to column values), validate that none of the "tree" constraints on the column are violated,
-    and indicate any violations by attaching error messages to the cell."""
+    and indicate any violations by attaching error messages to the cell.
+    """
     constraints = config["constraints"]
     # If the current column is the parent column of a tree, validate that adding the current value
     # will not result in a cycle between this and the parent column:
@@ -146,46 +209,63 @@ def validate_cell_tree_keys(config, table_name, column_name, cell, context, prev
 
 
 def validate_cell_datatype(config, table_name, column_name, cell):
-    """Given a config map, a table name, a column name, and a cell to validate, validate the cell's
-    datatype and return the validated cell."""
+    """
+    Given a config map, a table name, a column name, and a cell to validate, validate the cell's
+    datatype and return the validated cell.
+    """
+    column = config["table"][table_name]["column"][column_name]
+    primary_dt_name = column["datatype"]
+    primary_datatype = config["datatype"][primary_dt_name]
+    primary_dt_description = primary_datatype["description"]
+    primary_dt_condition_func = primary_datatype.get("condition")
 
-    # Validate that the value of the cell conforms to the datatypes associated with the column:
     def get_datatypes_to_check(dt_name):
         datatypes = []
         if dt_name is not None:
             datatype = config["datatype"][dt_name]
-            if datatype["condition"] is not None:
+            if datatype["datatype"] != primary_dt_name and datatype["condition"] is not None:
                 datatypes.append(datatype)
             datatypes += get_datatypes_to_check(datatype["parent"])
         return datatypes
 
-    column = config["table"][table_name]["column"][column_name]
-    dt_name = column["datatype"]
-    datatypes_to_check = get_datatypes_to_check(dt_name)
-    # We use while and pop() instead of a for loop so as to check conditions in LIFO order:
-    while datatypes_to_check:
-        datatype = datatypes_to_check.pop()
-        if not validate_condition(config, datatype["condition"], cell["value"]):
+    if primary_dt_condition_func and not primary_dt_condition_func(cell["value"]):
+        cell["valid"] = False
+        parent_datatypes = get_datatypes_to_check(primary_dt_name)
+        # If this datatype has any parents, check them beginning from the most general to the most
+        # specific. We use while and pop() instead of a for loop so as to check conditions in LIFO
+        # order:
+        while parent_datatypes:
+            datatype = parent_datatypes.pop()
+            if not datatype["condition"](cell["value"]):
+                cell["messages"].append(
+                    {
+                        "rule": "datatype:{}".format(datatype["datatype"]),
+                        "level": "error",
+                        "message": "{} should be {}".format(column_name, datatype["description"]),
+                    }
+                )
+        if primary_dt_description:
             cell["messages"].append(
                 {
-                    "rule": "datatype:{}".format(datatype["datatype"]),
+                    "rule": f"datatype:{primary_dt_name}",
                     "level": "error",
-                    "message": "{} should be {}".format(column_name, datatype["description"]),
+                    "message": f"{column_name} should be {primary_dt_description}",
                 }
             )
-            cell["valid"] = False
     return cell
 
 
 def validate_unique_constraints(
     config, table_name, column_name, cell, context, prev_results, existing_row, row_number
 ):
-    """Given a config map, a table name, a column name, a cell to validate, the row, `context`,
+    """
+    Given a config map, a table name, a column name, a cell to validate, the row, `context`,
     to which the cell belongs, and a list of previously validated rows (dicts mapping column names
     to column values), check the cell value against any unique-type keys that have been defined for
     the column. If there is a violation, indicate it with an error message attached to the cell. If
     the `existing_row` flag is set to True, then checks will be made as if the given `row_number`
-    does not exist in the table."""
+    does not exist in the table.
+    """
 
     # If the column has a primary or unique key constraint, or if it is the child associated with
     # a tree, then if the value of the cell is a duplicate either of one of the previously validated
@@ -235,9 +315,11 @@ def validate_unique_constraints(
 
 
 def with_tree_sql(tree, table_name, root, extra_clause=""):
-    """Given a dict representing a tree constraint, a table name, a root from which to generate a
+    """
+    Given a dict representing a tree constraint, a table name, a root from which to generate a
     sub-tree of the tree, and an extra SQL clause, generate the SQL for a WITH clause representing
-    the sub-tree."""
+    the sub-tree.
+    """
     child_col = tree["child"]
     parent_col = tree["parent"]
     return safe_sql(
@@ -256,7 +338,9 @@ def with_tree_sql(tree, table_name, root, extra_clause=""):
 
 
 def validate_under(config, table_name):
-    """Validate any associated 'under' constraints for the current column."""
+    """
+    Validate any associated 'under' constraints for the current column.
+    """
     ukeys = [ukey for ukey in config["constraints"]["under"][table_name]]
     results = []
     for ukey in ukeys:
@@ -346,9 +430,11 @@ def validate_under(config, table_name):
 
 
 def validate_tree_foreign_keys(config, table_name):
-    """Given a config map and a table name, validate whether there is a 'foreign key' violation for
+    """
+    Given a config map and a table name, validate whether there is a 'foreign key' violation for
     any of the table's trees; i.e., for a given tree: tree(child) which has a given parent column,
-    validate that all of the values in the parent column are in the child column."""
+    validate that all of the values in the parent column are in the child column.
+    """
     tkeys = [tkey for tkey in config["constraints"]["tree"][table_name]]
     results = []
     for tkey in tkeys:
@@ -403,40 +489,3 @@ def validate_tree_foreign_keys(config, table_name):
             )
             results.append({"row_number": row[0], "column": parent_col, "meta": meta})
     return results
-
-
-def validate_condition(config, condition, value):
-    """Given a configuration map, a condition string and a value string, return True if the
-    condition holds, False otherwise."""
-    parsed_condition = config["parser"].parse(condition)
-    if len(parsed_condition) != 1:
-        raise ValueError(
-            f"Condition: '{condition}' is invalid. Only one condition per column is allowed."
-        )
-    parsed_condition = parsed_condition[0]
-
-    if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
-        expected_value = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
-        return value == expected_value
-    elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
-        "exclude",
-        "match",
-        "search",
-    ):
-        pattern = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["pattern"])
-        flags = parsed_condition["args"][0]["flags"]
-        flags = "(?" + "".join(flags) + ")" if flags else ""
-        pattern = flags + pattern
-        if parsed_condition["name"] == "exclude":
-            return not bool(re.search(pattern, value))
-        elif parsed_condition["name"] == "match":
-            return bool(re.fullmatch(pattern, value))
-        else:
-            return bool(re.search(pattern, value))
-    elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
-        alternatives = [
-            re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
-        ]
-        return value in alternatives
-    else:
-        raise Exception(f"Unhandled condition: {condition}")

@@ -16,12 +16,14 @@ import	foo	parent	error	tree:cycle	Cyclic dependency: (label: bar, parent: car),
 import	mar	source	error	key:foreign	Value YOB of column source is not in prefix.prefix	YOB
 import	mar	parent	error	tree:foreign	Value jafar of column parent is not in column label	jafar
 import	material entity	parent	error	tree:foreign	Value owl:Thing of column parent is not in column label	owl:Thing
-import	molecular dentity	source	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
 import	molecular dentity	source	error	datatype:nonspace	source should be text without whitespace	CO B
 import	molecular dentity	source	error	datatype:word	source should be a single word: letters, numbers, underscore	CO B
+import	molecular dentity	source	error	datatype:prefix	source should be a prefix for a CURIE	CO B
+import	molecular dentity	source	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
 import	molecular entity	id	error	key:unique	Values of id must be unique	COB:0000013
 test_tree_under	2	xyzzy	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
 test_tree_under	3	xyzzy	error	under:not-under	Value 'f' of column xyzzy is not under 'd'	f
 test_tree_under	4	xyzzy	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
 test_tree_under	5	xyzzy	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
 test_tree_under	7	xyzzy	error	under:not-in-tree	Value z of column xyzzy is not in test_tree_under.child	z
+test_tree_under	9	child	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i

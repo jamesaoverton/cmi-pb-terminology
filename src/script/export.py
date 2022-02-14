@@ -26,6 +26,7 @@ def get_columns_info(conn, table):
     primary_keys = OrderedDict()
     if not any([row["pk"] == 1 for row in pragma_rows]):
         sorted_columns = ["row_number"]
+        unsorted_columns = [p["name"] for p in pragma_rows]
     else:
 
         def add_meta(columns):
@@ -35,15 +36,16 @@ def get_columns_info(conn, table):
                 columns_with_meta.append(column + "_meta")
             return columns_with_meta
 
-        other_columns = []
+        unsorted_columns = []
+        non_pk_columns = []
         for row in pragma_rows:
+            unsorted_columns.append(row["name"])
             if row["pk"] != 0:
                 primary_keys[row["pk"]] = row["name"]
             elif not row["name"].endswith("_meta") and not row["name"] == "row_number":
-                other_columns.append(row["name"])
+                non_pk_columns.append(row["name"])
         primary_keys = OrderedDict(sorted(primary_keys.items()))
-        sorted_columns = add_meta([primary_keys[key] for key in primary_keys] + other_columns)
-    unsorted_columns = [p["name"] for p in pragma_rows]
+        sorted_columns = add_meta([primary_keys[key] for key in primary_keys] + non_pk_columns)
 
     # Two steps are needed (INDEX_LIST and INDEX_INFO) to get the list of unique keys:
     pragma_rows = conn.execute(f"PRAGMA INDEX_LIST(`{table}`)")

@@ -3,25 +3,43 @@
 import csv
 import itertools
 import json
+import re
 import sqlite3
 import sys
 
 from argparse import ArgumentParser
 from graphlib import CycleError, TopologicalSorter
+from collections import OrderedDict
 from lark import Lark
 from lark.exceptions import VisitError
+from multiprocessing import cpu_count, Manager, Process
 
 from sql_utils import safe_sql
 from cmi_pb_grammar import grammar, TreeToDict
-from validate import validate_rows, validate_tree_foreign_keys, validate_under
+from validate import (
+    validate_rows_intra,
+    validate_rows_trees,
+    validate_rows_constraints,
+    validate_tree_foreign_keys,
+    validate_under,
+)
 
-CHUNK_SIZE = 2
+CHUNK_SIZE = 100
+DEFAULT_CPU_COUNT = 4
 
 # TODO include synonyms?
 sqlite_types = ["text", "integer", "real", "blob"]
 
 
-def read_config_files(table_table_path):
+class ConfigError(Exception):
+    pass
+
+
+class TSVReadError(Exception):
+    pass
+
+
+def read_config_files(table_table_path, condition_parser):
     """Given the path to a table TSV file, load and check the special 'table', 'column', and
     'datatype' tables, and return a config structure."""
 
@@ -31,13 +49,66 @@ def read_config_files(table_table_path):
             rows = csv.DictReader(f, delimiter="\t")
             rows = list(rows)
             if len(rows) < 1:
-                raise Exception(f"No rows in {path}")
+                raise TSVReadError(f"No rows in {path}")
             return rows
+
+    def compile_condition(condition):
+        """Given a datatype condition, parse it using the configured parser and pre-compile the
+        regular expression and function corresponding to it."""
+        if condition is None:
+            return None
+
+        parsed_condition = config["parser"].parse(condition)
+        if len(parsed_condition) != 1:
+            raise ValueError(
+                f"Condition: '{condition}' is invalid. Only one condition per column is allowed."
+            )
+
+        parsed_condition = parsed_condition[0]
+        if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
+            expected = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
+            return lambda x: x == expected
+        elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
+            "exclude",
+            "match",
+            "search",
+        ):
+            pattern = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["pattern"])
+            flags = parsed_condition["args"][0]["flags"]
+            flags = "(?" + "".join(flags) + ")" if flags else ""
+            pattern = re.compile(flags + pattern)
+            if parsed_condition["name"] == "exclude":
+                return lambda x: not bool(pattern.search(x))
+            elif parsed_condition["name"] == "match":
+                return lambda x: bool(pattern.fullmatch(x))
+            else:
+                return lambda x: bool(pattern.search(x))
+        elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
+            alternatives = [
+                re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
+            ]
+            return lambda x: x in alternatives
+        else:
+            raise ConfigError(f"Unrecognized condition: {condition}")
+
+    config = {
+        "table": {},
+        "datatype": {},
+        "special": {},
+        "parser": condition_parser,
+        "constraints": {
+            "foreign": {},
+            "unique": {},
+            "primary": {},
+            "tree": {},
+            "under": {},
+        },
+    }
 
     special_table_types = ["table", "column", "datatype"]
     path = table_table_path
     rows = read_tsv(path)
-    config = {"table": {}, "datatype": {}, "special": {}}
+
     for t in special_table_types:
         config["special"][t] = None
 
@@ -45,34 +116,34 @@ def read_config_files(table_table_path):
     for row in rows:
         for column in ["table", "path", "type"]:
             if column not in row or row[column] is None:
-                raise Exception(f"Missing required column '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required column '{column}' reading '{path}'")
         for column in ["table", "path"]:
             if row[column].strip() == "":
-                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
         for column in ["type"]:
             if row[column].strip() == "":
                 row[column] = None
         if row["type"] == "table":
             if row["path"] != path:
-                raise Exception(
+                raise ConfigError(
                     "Special 'table' path '{}' does not match this path '{}'".format(
                         row["path"], path
                     )
                 )
         if row["type"] in special_table_types:
             if config["special"][row["type"]]:
-                raise Exception(
+                raise ConfigError(
                     "Multiple tables with type '{}' declared in '{}'".format(row["type"], path)
                 )
             config["special"][row["type"]] = row["table"]
         if row["type"] and row["type"] not in special_table_types:
-            raise Exception("Unrecognized table type '{}' in '{}'".format(row["type"], path))
+            raise ConfigError("Unrecognized table type '{}' in '{}'".format(row["type"], path))
         row["column"] = {}
         config["table"][row["table"]] = row
 
     for table_type in special_table_types:
         if config["special"][table_type] is None:
-            raise Exception(f"Missing required '{table_type}' table in '{path}'")
+            raise ConfigError(f"Missing required '{table_type}' table in '{path}'")
 
     # Load datatype table
     table_name = config["special"]["datatype"]
@@ -81,16 +152,20 @@ def read_config_files(table_table_path):
     for row in rows:
         for column in ["datatype", "parent", "condition", "SQL type"]:
             if column not in row or row[column] is None:
-                raise Exception(f"Missing required column '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required column '{column}' reading '{path}'")
         for column in ["datatype"]:
             if row[column].strip() == "":
-                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
         for column in ["parent", "condition", "SQL type"]:
             if row[column].strip() == "":
                 row[column] = None
-        # TODO: validate conditions
         config["datatype"][row["datatype"]] = row
-    # TODO: Check for required datatypes: text, empty, line, word
+        condition = config["datatype"][row["datatype"]]["condition"]
+        config["datatype"][row["datatype"]]["condition"] = compile_condition(condition)
+
+    for dt in ["text", "empty", "line", "word"]:
+        if dt not in config["datatype"]:
+            raise ConfigError(f"Missing required datatype: '{dt}'")
 
     # Load column table
     table_name = config["special"]["column"]
@@ -99,19 +174,19 @@ def read_config_files(table_table_path):
     for row in rows:
         for column in ["table", "column", "nulltype", "datatype"]:
             if column not in row or row[column] is None:
-                raise Exception(f"Missing required column '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required column '{column}' reading '{path}'")
         for column in ["table", "column", "datatype"]:
             if row[column].strip() == "":
-                raise Exception(f"Missing required value for '{column}' reading '{path}'")
+                raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
         for column in ["nulltype"]:
             if row[column].strip() == "":
                 row[column] = None
         if row["table"] not in config["table"]:
-            raise Exception("Undefined table '{}' reading '{}'".format(row["table"], path))
+            raise ConfigError("Undefined table '{}' reading '{}'".format(row["table"], path))
         if row["nulltype"] and row["nulltype"] not in config["datatype"]:
-            raise Exception("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
+            raise ConfigError("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
         if row["datatype"] not in config["datatype"]:
-            raise Exception("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
+            raise ConfigError("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
         row["configured"] = True
         config["table"][row["table"]]["column"][row["column"]] = row
 
@@ -205,8 +280,14 @@ def verify_table_deps_and_sort(table_list, constraints):
 
 
 def create_db_and_write_sql(config):
-    """Given a config map, read TSVs and write out SQL strings."""
+    """Given a config map, read the TSVs corresponding to the various defined tables, then create
+    a database containing those tables and write the data from the TSVs to them, all the while
+    writing the SQL strings used to generate the database to STDOUT."""
+
     table_list = list(config["table"].keys())
+    # Begin by reading in the TSV files corresponding to the tables defined in config, and use
+    # that information to create the associated database tables, while saving constraint information
+    # to the config map.
     for table_name in table_list:
         path = config["table"][table_name]["path"]
         with open(path) as f:
@@ -260,6 +341,13 @@ def create_db_and_write_sql(config):
     # after the tables they depend on:
     table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
+    # Determine the number of CPUs on this system, which we will use below to determine the number
+    # of worker processes to fork at a time:
+    try:
+        num_cpus = cpu_count()
+    except NotImplementedError:
+        num_cpus = DEFAULT_CPU_COUNT
+
     # Now load the rows:
     for table_name in table_list:
         path = config["table"][table_name]["path"]
@@ -268,13 +356,56 @@ def create_db_and_write_sql(config):
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
-            for i, chunk in enumerate(chunks):
+
+            # Initialize a manager with an associated dictionary which we will use to accumulate
+            # the intra-row validation results from each worker process. Each process is assigned
+            # one chunk of data to work on.
+            manager = Manager()
+            results = manager.dict()
+            procs = []
+            for chunk_number, chunk in enumerate(chunks):
                 chunk = filter(None, chunk)
-                sql = insert_rows(config, table_name, chunk, i)
-                config["db"].executescript(sql)
-                config["db"].commit()
-                print("{}\n\n".format(sql))
-                print("-- end of chunk {}\n\n".format(i))
+                proc = Process(
+                    target=validate_rows_intra,
+                    args=(config, table_name, chunk, chunk_number, results),
+                )
+                procs.append(proc)
+
+            # Run only as many worker processes at a time as there are CPUs, progressively working
+            # through the data chunks:
+            proc_blocks = itertools.zip_longest(*([iter(procs)] * num_cpus))
+            for i, proc_block in enumerate(proc_blocks):
+                proc_block = list(filter(None, proc_block))
+                for proc in proc_block:
+                    proc.start()
+
+                for proc in proc_block:
+                    proc.join()
+                    proc.close()
+
+                # Once the intra-row validation is done, do inter-row validation on all of
+                # the chunks assigned to this process block, one at a time:
+                proc_block_results = OrderedDict(sorted(results.items()))
+                results.clear()
+                for chunk_num, intra_validated_rows in proc_block_results.items():
+                    validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
+                    main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                    # Try to insert the rows to the db without first validating unique and foreign
+                    # constraints. If there are constraint violations this will cause the db to
+                    # raise an IntegrityError, in which case we then explicitly do the constraint
+                    # validation and insert the resulting rows:
+                    try:
+                        config["db"].execute(main)
+                    except sqlite3.IntegrityError:
+                        validated_rows = validate_rows_constraints(
+                            config, table_name, intra_validated_rows
+                        )
+                        main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                        config["db"].execute(main)
+                    config["db"].execute(conflict)
+                    config["db"].commit()
+                    print("{}\n".format(main))
+                    print("{}\n".format(conflict))
 
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column
@@ -302,7 +433,7 @@ def get_SQL_type(config, datatype):
     """Given the config structure and the name of a datatype, climb the datatype tree (as required),
     and return the first 'SQL type' found."""
     if "datatype" not in config:
-        raise Exception("Missing datatypes in config")
+        raise ConfigError("Missing datatypes in config")
     if datatype not in config["datatype"]:
         return None
     if config["datatype"][datatype]["SQL type"]:
@@ -317,7 +448,7 @@ def create_schema(config, table_name):
     output = [
         f"DROP TABLE IF EXISTS `{table_name}`;",
         f"CREATE TABLE `{table_name}` (",
-        "   `row_number` INTEGER,",
+        "  `row_number` INTEGER,",
     ]
     columns = config["table"][table_name.replace("_conflict", "")]["column"]
     table_constraints = {"foreign": [], "unique": [], "primary": [], "tree": [], "under": []}
@@ -327,9 +458,9 @@ def create_schema(config, table_name):
         r += 1
         sql_type = get_SQL_type(config, row["datatype"])
         if not sql_type:
-            raise Exception("Missing SQL type for {}".format(row["datatype"]))
+            raise ConfigError("Missing SQL type for {}".format(row["datatype"]))
         if not sql_type.lower() in sqlite_types:
-            raise Exception("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
+            raise ConfigError("Unrecognized SQL type '{}' for {}".format(sql_type, row["datatype"]))
         column_name = row["column"]
         line = f"  `{column_name}` {sql_type}"
         structure = row.get("structure")
@@ -417,11 +548,14 @@ def create_schema(config, table_name):
                     table_name, tree["child"], table_name, tree["child"]
                 )
             )
-
+    # Finally, create a further unique index on row_number:
+    output.append(
+        f"CREATE UNIQUE INDEX `{table_name}_row_number_idx` ON `{table_name}`(`row_number`);"
+    )
     return "\n".join(output), table_constraints
 
 
-def insert_rows(config, table_name, rows, chunk_number):
+def make_inserts(config, table_name, rows, chunk_number):
     """Given a config map, a table name, and a list of rows (dicts from column names to column
     values), return a SQL string for an INSERT statement with VALUES for all the rows."""
 
@@ -430,9 +564,10 @@ def insert_rows(config, table_name, rows, chunk_number):
         for row in rows:
             values = [":row_number"]
             params = {"row_number": row["row_number"]}
-            # Delete the row number from the record as well since we no longer need it:
-            del row["row_number"]
             for column, cell in row.items():
+                if column == "row_number":
+                    continue
+                cell = cell.copy()
                 column = column.replace(" ", "_")
                 value = None
                 if "nulltype" in cell and cell["nulltype"]:
@@ -467,19 +602,18 @@ def insert_rows(config, table_name, rows, chunk_number):
         + config["constraints"]["unique"][table_name]
         + [tree["child"] for tree in config["constraints"]["tree"][table_name]]
     )
-    result_rows = validate_rows(config, table_name, rows)
+
     main_rows = []
     conflict_rows = []
-    for i, row in enumerate(result_rows):
+    for i, row in enumerate(rows):
         row["row_number"] = i + 1 + chunk_number * CHUNK_SIZE
         if has_conflict(row, conflict_columns):
             conflict_rows.append(row)
         else:
             main_rows.append(row)
     return (
-        generate_sql(table_name, main_rows)
-        + "\n"
-        + generate_sql(table_name + "_conflict", conflict_rows)
+        generate_sql(table_name, main_rows),
+        generate_sql(table_name + "_conflict", conflict_rows),
     )
 
 
@@ -519,18 +653,20 @@ if __name__ == "__main__":
         )
         p.add_argument("db_dir", help="The directory in which to save the database file")
         args = p.parse_args()
-
-        config = read_config_files(args.table)
+        config = read_config_files(
+            args.table, Lark(grammar, parser="lalr", transformer=TreeToDict())
+        )
         with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
             config["db"] = conn
-            config["parser"] = Lark(grammar, parser="lalr", transformer=TreeToDict())
-            config["constraints"] = {
-                "foreign": {},
-                "unique": {},
-                "primary": {},
-                "tree": {},
-                "under": {},
-            }
+            config["db"].execute("PRAGMA foreign_keys = ON")
             create_db_and_write_sql(config)
-    except (CycleError, FileNotFoundError, StopIteration, ValueError, VisitError) as e:
+    except (
+        CycleError,
+        FileNotFoundError,
+        StopIteration,
+        ValueError,
+        ConfigError,
+        VisitError,
+        TSVReadError,
+    ) as e:
         sys.exit(e)
