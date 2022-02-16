@@ -1,10 +1,10 @@
-child	parent	xyzzy
-a	b	d
-b	c	e
-c	d	f
-d	e	g
-e	f	h
-f	g	a
-g	h	z
-h		
-i		
+child	parent	xyzzy	foo	bar
+a	b	d		
+b	c	e		
+c	d	f		
+d	e	g		
+e	f	h		
+f	g	a		
+g	h	z		
+h				
+i				

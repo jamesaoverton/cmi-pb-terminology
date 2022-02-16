@@ -34,6 +34,7 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
     Given a config map, a table name, a chunk of rows to perform intra-row validation on, the
     chunk number assigned to the rows, and a results dictionary, validate all of the rows in the
     chunk and add the validated rows to the results dictionary using the chunk number as its key.
+    In addition to adding the results to the results dictionary, also return them.
     """
     result_rows = []
     for row in rows:
@@ -51,6 +52,7 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
             result_row[column_name] = cell
         result_rows.append(result_row)
     results[chunk_number] = result_rows
+    return result_rows
 
 
 def validate_rows_trees(config, table_name, rows):

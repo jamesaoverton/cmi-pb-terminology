@@ -24,7 +24,8 @@ from validate import (
     validate_under,
 )
 
-CHUNK_SIZE = 100
+CHUNK_SIZE = 300
+MULTIPROCESSING = True
 DEFAULT_CPU_COUNT = 4
 
 # TODO include synonyms?
@@ -96,6 +97,7 @@ def read_config_files(table_table_path, condition_parser):
         "datatype": {},
         "special": {},
         "parser": condition_parser,
+        "rule": {},
         "constraints": {
             "foreign": {},
             "unique": {},
@@ -105,7 +107,12 @@ def read_config_files(table_table_path, condition_parser):
         },
     }
 
-    special_table_types = ["table", "column", "datatype"]
+    special_table_types = {
+        "table": {"required": True},
+        "column": {"required": True},
+        "datatype": {"required": True},
+        "rule": {"required": False},
+    }
     path = table_table_path
     rows = read_tsv(path)
 
@@ -141,8 +148,8 @@ def read_config_files(table_table_path, condition_parser):
         row["column"] = {}
         config["table"][row["table"]] = row
 
-    for table_type in special_table_types:
-        if config["special"][table_type] is None:
+    for table_type, table_spec in special_table_types.items():
+        if table_spec["required"] and config["special"][table_type] is None:
             raise ConfigError(f"Missing required '{table_type}' table in '{path}'")
 
     # Load datatype table
@@ -189,6 +196,41 @@ def read_config_files(table_table_path, condition_parser):
             raise ConfigError("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
         row["configured"] = True
         config["table"][row["table"]]["column"][row["column"]] = row
+
+    # Load rule table if it exists
+    table_name = config["special"].get("rule")
+    if table_name:
+        path = config["table"][table_name]["path"]
+        rows = read_tsv(path)
+        for row in rows:
+            for column in [
+                "table",
+                "when column",
+                "when condition",
+                "then column",
+                "then condition",
+                "level",
+            ]:
+                if column not in row or row[column] is None:
+                    raise ConfigError(f"Missing required column '{column}' reading '{path}'")
+                if row[column].strip() == "":
+                    raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
+            if row["table"] not in config["table"]:
+                raise ConfigError("Undefined table '{}' reading '{}'".format(row["table"], path))
+            for column in ["when column", "then column"]:
+                if row[column] not in config["table"][row["table"]]["column"]:
+                    raise ConfigError(
+                        "Undefined column '{}.{}' reading '{}'".format(
+                            row["table"], row[column], path
+                        )
+                    )
+            # Add the rule specified in the given row to the list of rules associated with the
+            # value of the when column:
+            if row["table"] not in config["rule"]:
+                config["rule"][row["table"]] = {}
+            if row["when column"] not in config["rule"][row["table"]]:
+                config["rule"][row["table"]][row["when column"]] = []
+            config["rule"][row["table"]][row["when column"]].append(row)
 
     return config
 
@@ -279,6 +321,77 @@ def verify_table_deps_and_sort(table_list, constraints):
         raise CycleError(message)
 
 
+def validate_and_insert_chunks(config, table_name, chunks):
+    """Given a configuration map, a table name, and a number of chunks of rows to insert into the
+    table in the database, validate each chunk and insert the validated rows to the table."""
+
+    def validate_rows_inter_and_insert(intra_validated_rows, chunk_num):
+        # First do the tree validation:
+        validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
+        # Try to insert the rows to the db without first validating unique and foreign
+        # constraints. If there are constraint violations this will cause the db to
+        # raise an IntegrityError, in which case we then explicitly do the constraint
+        # validation and insert the resulting rows:
+        main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+        try:
+            config["db"].execute(main)
+        except sqlite3.IntegrityError:
+            validated_rows = validate_rows_constraints(config, table_name, intra_validated_rows)
+            main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+            config["db"].execute(main)
+            config["db"].execute(conflict)
+            config["db"].commit()
+            print("{}\n".format(main))
+            print("{}\n".format(conflict))
+
+    # Determine the number of CPUs on this system, which we will use below to determine the number
+    # of worker processes to fork at a time:
+    if MULTIPROCESSING:
+        try:
+            num_cpus = cpu_count()
+        except NotImplementedError:
+            num_cpus = DEFAULT_CPU_COUNT
+
+        # Initialize a manager with an associated dictionary which we will use to accumulate
+        # the intra-row validation results from each worker process. Each process is assigned
+        # one chunk of data to work on.
+        manager = Manager()
+        results = manager.dict()
+        procs = []
+        for chunk_number, chunk in enumerate(chunks):
+            chunk = filter(None, chunk)
+            proc = Process(
+                target=validate_rows_intra,
+                args=(config, table_name, chunk, chunk_number, results),
+            )
+            procs.append(proc)
+
+        # Run only as many worker processes at a time as there are CPUs, progressively working
+        # through the data chunks:
+        proc_blocks = itertools.zip_longest(*([iter(procs)] * num_cpus))
+        for i, proc_block in enumerate(proc_blocks):
+            proc_block = list(filter(None, proc_block))
+            for proc in proc_block:
+                proc.start()
+
+            for proc in proc_block:
+                proc.join()
+                proc.close()
+
+            # Once the intra-row validation is done, do inter-row validation on all of
+            # the chunks assigned to this process block, one at a time:
+            proc_block_results = OrderedDict(sorted(results.items()))
+            results.clear()
+            for chunk_number, intra_validated_rows in proc_block_results.items():
+                validate_rows_inter_and_insert(intra_validated_rows, chunk_number)
+    else:
+        results = OrderedDict()
+        for chunk_number, chunk in enumerate(chunks):
+            chunk = filter(None, chunk)
+            intra_results = validate_rows_intra(config, table_name, chunk, chunk_number, results)
+            validate_rows_inter_and_insert(intra_results, chunk_number)
+
+
 def create_db_and_write_sql(config):
     """Given a config map, read the TSVs corresponding to the various defined tables, then create
     a database containing those tables and write the data from the TSVs to them, all the while
@@ -341,13 +454,6 @@ def create_db_and_write_sql(config):
     # after the tables they depend on:
     table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
-    # Determine the number of CPUs on this system, which we will use below to determine the number
-    # of worker processes to fork at a time:
-    try:
-        num_cpus = cpu_count()
-    except NotImplementedError:
-        num_cpus = DEFAULT_CPU_COUNT
-
     # Now load the rows:
     for table_name in table_list:
         path = config["table"][table_name]["path"]
@@ -356,56 +462,7 @@ def create_db_and_write_sql(config):
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
-
-            # Initialize a manager with an associated dictionary which we will use to accumulate
-            # the intra-row validation results from each worker process. Each process is assigned
-            # one chunk of data to work on.
-            manager = Manager()
-            results = manager.dict()
-            procs = []
-            for chunk_number, chunk in enumerate(chunks):
-                chunk = filter(None, chunk)
-                proc = Process(
-                    target=validate_rows_intra,
-                    args=(config, table_name, chunk, chunk_number, results),
-                )
-                procs.append(proc)
-
-            # Run only as many worker processes at a time as there are CPUs, progressively working
-            # through the data chunks:
-            proc_blocks = itertools.zip_longest(*([iter(procs)] * num_cpus))
-            for i, proc_block in enumerate(proc_blocks):
-                proc_block = list(filter(None, proc_block))
-                for proc in proc_block:
-                    proc.start()
-
-                for proc in proc_block:
-                    proc.join()
-                    proc.close()
-
-                # Once the intra-row validation is done, do inter-row validation on all of
-                # the chunks assigned to this process block, one at a time:
-                proc_block_results = OrderedDict(sorted(results.items()))
-                results.clear()
-                for chunk_num, intra_validated_rows in proc_block_results.items():
-                    validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
-                    main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
-                    # Try to insert the rows to the db without first validating unique and foreign
-                    # constraints. If there are constraint violations this will cause the db to
-                    # raise an IntegrityError, in which case we then explicitly do the constraint
-                    # validation and insert the resulting rows:
-                    try:
-                        config["db"].execute(main)
-                    except sqlite3.IntegrityError:
-                        validated_rows = validate_rows_constraints(
-                            config, table_name, intra_validated_rows
-                        )
-                        main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
-                        config["db"].execute(main)
-                    config["db"].execute(conflict)
-                    config["db"].commit()
-                    print("{}\n".format(main))
-                    print("{}\n".format(conflict))
+            validate_and_insert_chunks(config, table_name, chunks)
 
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column

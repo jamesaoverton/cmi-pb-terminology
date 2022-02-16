@@ -12,6 +12,13 @@ column	description	empty	description		a description of this column
 datatype	datatype		datatype_name	primary	the name of this datatype
 datatype	parent	empty	datatype_name	tree(datatype)	the parent datatype
 datatype	condition	empty	datatype_condition		
+rule	table		table_name		
+rule	when column		column_name		
+rule	when condition		datatype_condition		
+rule	then column		column_name		
+rule	then condition		datatype_condition		
+rule	level		word		
+rule	description	empty	description		
 prefix	prefix		prefix	primary	
 prefix	base		IRI	unique	
 prefix	ontology IRI	empty	IRI		
@@ -24,4 +31,6 @@ import	related	empty	trimmed_line
 test_tree_under	child		trimmed_line	from(foreign_table.foreign_column)	
 test_tree_under	parent	empty	trimmed_line	tree(child)	
 test_tree_under	xyzzy	empty	trimmed_line	under(test_tree_under.child, d)	
+test_tree_under	foo	empty	text		
+test_tree_under	bar	empty	text		
 foreign_table	foreign_column		text	primary	
