@@ -78,9 +78,7 @@ def read_config_files(table_table_path, condition_parser):
         parsed_condition = parsed_condition[0]
         if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
             expected = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
-            def func_1(x):
-                return x == expected
-            return func_1
+            return lambda x: x == expected
         elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
             "exclude",
             "match",

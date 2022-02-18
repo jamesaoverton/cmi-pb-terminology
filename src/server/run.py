@@ -142,46 +142,6 @@ def table(table_name):
     return render_template("template.html", html=html, tables=tables)
 
 
-def get_form_row(table_name, row):
-    form_row = {}
-    for header, value in row.items():
-        if header.endswith("_meta"):
-            continue
-        if not value or isinstance(value, str) or isinstance(value, int):
-            # This row is coming from a query result
-            # Check for meta row
-            meta_row = row.get(header + "_meta")
-            if meta_row:
-                meta = json.loads(meta_row[5:-1])
-                if meta.get("value"):
-                    value = meta["value"]
-            if not value:
-                # If value is still None, we couldn't find nulltype or invalid value
-                value = ""
-            details = {"value": value}
-        else:
-            # This row is coming from a validated row
-            details = {
-                "value": value["value"],
-                "valid": value["valid"],
-                "message": "<br>".join({x["message"] for x in value["messages"]}),
-            }
-        if "column" in get_sql_tables(conn):
-            desc = get_description(table_name, header)
-            if desc:
-                details["description"] = desc
-        form_row[header] = details
-    return form_row
-
-
-def get_row_number(table_name, row_id):
-    if "row_number" in get_sql_columns(conn, table_name):
-        res = conn.execute(f"SELECT row_number FROM {table_name} WHERE rowid = {row_id}").fetchone()
-        if res:
-            return int(res["row_number"])
-    return int(row_id)
-
-
 @app.route("/<table_name>/<term_id>", methods=["GET", "POST"])
 def term(table_name, term_id):
     messages = {}
@@ -335,23 +295,42 @@ def term(table_name, term_id):
 
 # ----- DATA TABLE METHODS -----
 
-
-def validate_table_row(table_name, row_number, row):
-    # Transform row into dict expected for validate
-    result_row = {}
-    for column, value in row.items():
-        result_row[column] = {
-            "value": value,
-            "valid": True,
-            "messages": [],
-        }
-    if row_number != "new":
-        # Row number may be different than row ID, if this column is used
-        return validate_row(config, table_name, result_row, row_number=row_number)
-    return validate_row(config, table_name, result_row, existing_row=False)
+def get_form_row(table_name, row):
+    """Transform a row either from query results or validation into a row suitable for the Jinja
+    template. This is a dictionary of header -> details (value, valid, messages)."""
+    form_row = {}
+    for header, value in row.items():
+        if header.endswith("_meta"):
+            continue
+        if not value or isinstance(value, str) or isinstance(value, int):
+            # This row is coming from a query result
+            # Check for meta row
+            meta_row = row.get(header + "_meta")
+            if meta_row:
+                meta = json.loads(meta_row[5:-1])
+                if meta.get("value"):
+                    value = meta["value"]
+            if not value:
+                # If value is still None, we couldn't find nulltype or invalid value
+                value = ""
+            details = {"value": value}
+        else:
+            # This row is coming from a validated row
+            details = {
+                "value": value["value"],
+                "valid": value["valid"],
+                "message": "<br>".join({x["message"] for x in value["messages"]}),
+            }
+        if "column" in get_sql_tables(conn):
+            desc = get_description(table_name, header)
+            if desc:
+                details["description"] = desc
+        form_row[header] = details
+    return form_row
 
 
 def get_messages(row):
+    """Extract messages from a validated row into a dictionary of messages."""
     messages = defaultdict(list)
     for header, details in row.items():
         if header == "row_number":
@@ -371,6 +350,31 @@ def get_messages(row):
                         messages["info"] = list()
                     messages["info"].append(msg["message"])
     return messages
+
+
+def get_row_number(table_name, row_id):
+    """Get the row number for a row. The row number may be different than the row ID."""
+    if "row_number" in get_sql_columns(conn, table_name):
+        res = conn.execute(f"SELECT row_number FROM {table_name} WHERE rowid = {row_id}").fetchone()
+        if res:
+            return int(res["row_number"])
+    return int(row_id)
+
+
+def validate_table_row(table_name, row_number, row):
+    """Perform validation on a row"""
+    # Transform row into dict expected for validate
+    result_row = {}
+    for column, value in row.items():
+        result_row[column] = {
+            "value": value,
+            "valid": True,
+            "messages": [],
+        }
+    if row_number != "new":
+        # Row number may be different than row ID, if this column is used
+        return validate_row(config, table_name, result_row, row_number=row_number)
+    return validate_row(config, table_name, result_row, existing_row=False)
 
 
 # ----- ONTOLOGY TABLE METHODS -----
