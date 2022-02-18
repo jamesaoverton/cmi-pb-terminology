@@ -215,8 +215,10 @@ def read_config_files(table_table_path, condition_parser):
                     raise ConfigError(f"Missing required column '{column}' reading '{path}'")
                 if row[column].strip() == "":
                     raise ConfigError(f"Missing required value for '{column}' reading '{path}'")
+
             if row["table"] not in config["table"]:
                 raise ConfigError("Undefined table '{}' reading '{}'".format(row["table"], path))
+
             for column in ["when column", "then column"]:
                 if row[column] not in config["table"][row["table"]]["column"]:
                     raise ConfigError(
@@ -224,6 +226,15 @@ def read_config_files(table_table_path, condition_parser):
                             row["table"], row[column], path
                         )
                     )
+
+            # Parse the when and then conditions using our grammar, unless they correspond to the
+            # special "null" or "not null" conditions:
+            for column in ["when condition", "then condition"]:
+                if row[column].casefold() in ["null", "not null"]:
+                    row[column] = row[column].casefold()
+                else:
+                    row[column] = config["parser"].parse((row[column]))
+
             # Add the rule specified in the given row to the list of rules associated with the
             # value of the when column:
             if row["table"] not in config["rule"]:

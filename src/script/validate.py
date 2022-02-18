@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 
 from sql_utils import safe_sql
 
@@ -46,6 +47,7 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
                 "messages": [],
             }
         for column_name, cell in result_row.items():
+            cell = validate_cell_rules(config, table_name, column_name, row, cell)
             cell = validate_cell_nulltype(config, table_name, column_name, cell)
             if cell.get("nulltype") is None:
                 cell = validate_cell_datatype(config, table_name, column_name, cell)
@@ -252,6 +254,42 @@ def validate_cell_datatype(config, table_name, column_name, cell):
                     "rule": f"datatype:{primary_dt_name}",
                     "level": "error",
                     "message": f"{column_name} should be {primary_dt_description}",
+                }
+            )
+    return cell
+
+
+def validate_cell_rules(config, table_name, column_name, context, cell):
+    """
+    Given a config map, a table name, a column name, the row context, and the cell to validate,
+    look in the rule table (if it exists) and validate the cell according to any applicable rules.
+    """
+
+    def condition_is_satisfied(condition, value):
+        if condition not in ["null", "not null"]:
+            print(f"CONDITION CHECK FOR '{condition}' NOT IMPLEMENTED YET", file=sys.stderr)
+            return False
+
+        return (condition == "null" and value == "") or (condition == "not null" and value != "")
+
+    if (
+        not config.get("rule")
+        or not config["rule"].get(table_name)
+        or not config["rule"][table_name].get(column_name)
+    ):
+        return cell
+
+    applicable_rules = config["rule"][table_name][column_name]
+    for rule_number, rule in enumerate(applicable_rules, start=1):
+        if condition_is_satisfied(
+            rule["when condition"], cell["value"]
+        ) and not condition_is_satisfied(rule["then condition"], context[rule["then column"]]):
+            cell["valid"] = False
+            cell["messages"].append(
+                {
+                    "rule": f"rule:{column_name}-{rule_number}",
+                    "level": rule["level"],
+                    "message": rule["description"],
                 }
             )
     return cell
