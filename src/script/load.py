@@ -14,15 +14,26 @@ from lark import Lark
 from lark.exceptions import VisitError
 from multiprocessing import cpu_count, Manager, Process
 
-from sql_utils import safe_sql
-from cmi_pb_grammar import grammar, TreeToDict
-from validate import (
-    validate_rows_intra,
-    validate_rows_trees,
-    validate_rows_constraints,
-    validate_tree_foreign_keys,
-    validate_under,
-)
+try:
+    from sql_utils import safe_sql
+    from cmi_pb_grammar import grammar, TreeToDict
+    from validate import (
+        validate_rows_intra,
+        validate_rows_trees,
+        validate_rows_constraints,
+        validate_tree_foreign_keys,
+        validate_under,
+    )
+except ModuleNotFoundError:
+    from src.script.sql_utils import safe_sql
+    from src.script.cmi_pb_grammar import grammar, TreeToDict
+    from src.script.validate import (
+        validate_rows_intra,
+        validate_rows_trees,
+        validate_rows_constraints,
+        validate_tree_foreign_keys,
+        validate_under,
+    )
 
 CHUNK_SIZE = 100
 DEFAULT_CPU_COUNT = 4
@@ -67,7 +78,9 @@ def read_config_files(table_table_path, condition_parser):
         parsed_condition = parsed_condition[0]
         if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
             expected = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
-            return lambda x: x == expected
+            def func_1(x):
+                return x == expected
+            return func_1
         elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
             "exclude",
             "match",
@@ -357,7 +370,7 @@ def create_db_and_write_sql(config):
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
 
-            # Initialize a manager with an associated dictionary which we will use to accumulate
+            """# Initialize a manager with an associated dictionary which we will use to accumulate
             # the intra-row validation results from each worker process. Each process is assigned
             # one chunk of data to work on.
             manager = Manager()
@@ -405,7 +418,32 @@ def create_db_and_write_sql(config):
                     config["db"].execute(conflict)
                     config["db"].commit()
                     print("{}\n".format(main))
-                    print("{}\n".format(conflict))
+                    print("{}\n".format(conflict))"""
+
+            results = OrderedDict()
+            for chunk_number, chunk in enumerate(chunks):
+                chunk = filter(None, chunk)
+                validate_rows_intra(config, table_name, chunk, chunk_number, results)
+
+            for chunk_num, intra_validated_rows in results.items():
+                validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
+                main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                # Try to insert the rows to the db without first validating unique and foreign
+                # constraints. If there are constraint violations this will cause the db to
+                # raise an IntegrityError, in which case we then explicitly do the constraint
+                # validation and insert the resulting rows:
+                try:
+                    config["db"].execute(main)
+                except sqlite3.IntegrityError:
+                    validated_rows = validate_rows_constraints(
+                        config, table_name, intra_validated_rows
+                    )
+                    main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
+                    config["db"].execute(main)
+                config["db"].execute(conflict)
+                config["db"].commit()
+                print("{}\n".format(main))
+                print("{}\n".format(conflict))
 
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column

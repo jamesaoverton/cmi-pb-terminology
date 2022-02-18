@@ -1,5 +1,7 @@
 Flask==2.0.2
 lark==1.0.0
-ontodev-gizmos==0.1.5
+pathos
 SQLAlchemy==1.4.29
 xlsx2csv==0.7.8
+git+https://github.com/ontodev/gizmos.git
+git+https://github.com/ontodev/sprocket.git

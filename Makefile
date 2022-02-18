@@ -86,6 +86,17 @@ build/prefixes.sql: src/ontology/prefixes.tsv | build
 #	rm -f $@
 #	sqlite3 $@ < $<
 #	build/rdftab $@ < cmi-pb.owl
+build/ontology.db: build/prefixes.sql cmi-pb.owl | build/rdftab
+	rm -f $@
+	sqlite3 $@ < $<
+	build/rdftab $@ < cmi-pb.owl
+
+build/ontology.sql: build/ontology.db
+	sqlite3 $< '.dump "statements"' | sed 's/statements/ontology/g' > $@
+
+.PHONY: load_ontology
+load_ontology: build/cmi-pb.db build/ontology.sql
+	sqlite3 $< < $(word 2,$^)
 
 
 ### Uniprot Proteins
@@ -122,9 +133,9 @@ build/proteins.tsv: src/build_proteins.py build/proteins.db build/olink_prot_inf
 
 IMPORTS := bfo chebi cl cob go obi pr vo
 OWL_IMPORTS := $(foreach I,$(IMPORTS),build/$(I).owl.gz)
-DBS := build/cmi-pb.db $(foreach I,$(IMPORTS),build/$(I).db)
 MODULES := $(foreach I,$(IMPORTS),build/$(I)-import.ttl)
 
+DBS := $(foreach I,$(IMPORTS),build/$(I).db) build/cmi-pb.db build/ontology.db
 dbs: $(DBS)
 
 $(OWL_IMPORTS): | build

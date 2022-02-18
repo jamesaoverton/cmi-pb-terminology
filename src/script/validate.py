@@ -1,10 +1,13 @@
 import json
 import re
 
-from sql_utils import safe_sql
+try:
+    from sql_utils import safe_sql
+except ModuleNotFoundError:
+    from src.script.sql_utils import safe_sql
 
 
-def validate_existing_row(config, table_name, row, row_number):
+def validate_row(config, table_name, row, existing_row=True, row_number=None):
     """
     Given a config map, a table name, an existing row to validate, and its associated row number,
     perform both intra- and inter-row validation and return the validated row.
@@ -22,7 +25,7 @@ def validate_existing_row(config, table_name, row, row_number):
                 cell,
                 row,
                 prev_results=[],
-                existing_row=True,
+                existing_row=existing_row,
                 row_number=row_number,
             )
         row[column_name] = cell
@@ -208,6 +211,16 @@ def validate_cell_trees(config, table_name, column_name, cell, context, prev_res
     return cell
 
 
+def get_datatypes_to_check(config, primary_dt_name, dt_name):
+    datatypes = []
+    if dt_name is not None:
+        datatype = config["datatype"][dt_name]
+        if datatype["datatype"] != primary_dt_name and datatype["condition"] is not None:
+            datatypes.append(datatype)
+        datatypes += get_datatypes_to_check(config, primary_dt_name, datatype["parent"])
+    return datatypes
+
+
 def validate_cell_datatype(config, table_name, column_name, cell):
     """
     Given a config map, a table name, a column name, and a cell to validate, validate the cell's
@@ -219,18 +232,9 @@ def validate_cell_datatype(config, table_name, column_name, cell):
     primary_dt_description = primary_datatype["description"]
     primary_dt_condition_func = primary_datatype.get("condition")
 
-    def get_datatypes_to_check(dt_name):
-        datatypes = []
-        if dt_name is not None:
-            datatype = config["datatype"][dt_name]
-            if datatype["datatype"] != primary_dt_name and datatype["condition"] is not None:
-                datatypes.append(datatype)
-            datatypes += get_datatypes_to_check(datatype["parent"])
-        return datatypes
-
     if primary_dt_condition_func and not primary_dt_condition_func(cell["value"]):
         cell["valid"] = False
-        parent_datatypes = get_datatypes_to_check(primary_dt_name)
+        parent_datatypes = get_datatypes_to_check(config, primary_dt_name, primary_dt_name)
         # If this datatype has any parents, check them beginning from the most general to the most
         # specific. We use while and pop() instead of a for loop so as to check conditions in LIFO
         # order:
@@ -255,6 +259,14 @@ def validate_cell_datatype(config, table_name, column_name, cell):
     return cell
 
 
+def make_error(column_name, rule):
+    return {
+        "rule": rule,
+        "level": "error",
+        "message": "Values of {} must be unique".format(column_name),
+    }
+
+
 def validate_unique_constraints(
     config, table_name, column_name, cell, context, prev_results, existing_row, row_number
 ):
@@ -275,13 +287,6 @@ def validate_unique_constraints(
     is_primary = column_name in constraints["primary"][table_name]
     is_unique = False if is_primary else column_name in constraints["unique"][table_name]
     is_tree_child = column_name in [c["child"] for c in constraints["tree"][table_name]]
-
-    def make_error(rule):
-        return {
-            "rule": rule,
-            "level": "error",
-            "message": "Values of {} must be unique".format(column_name),
-        }
 
     if any([is_primary, is_unique, is_tree_child]):
         with_sql = ""
@@ -308,9 +313,9 @@ def validate_unique_constraints(
         ] or config["db"].execute(query).fetchall():
             cell["valid"] = False
             if is_primary or is_unique:
-                cell["messages"].append(make_error("key:primary" if is_primary else "key:unique"))
+                cell["messages"].append(make_error(column_name, "key:primary" if is_primary else "key:unique"))
             if is_tree_child:
-                cell["messages"].append(make_error("tree:child-unique"))
+                cell["messages"].append(make_error(column_name, "tree:child-unique"))
     return cell
 
 
