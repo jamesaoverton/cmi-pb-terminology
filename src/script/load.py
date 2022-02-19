@@ -242,7 +242,6 @@ def read_config_files(table_table_path, condition_parser):
 
             # Compile the when and then conditions:
             for column in ["when condition", "then condition"]:
-                row[f"{column} text"] = row[column]
                 row[column] = compile_condition(row[column])
 
             # Add the rule specified in the given row to the list of rules associated with the
