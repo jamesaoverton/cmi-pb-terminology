@@ -1,3 +1,4 @@
 table	when column	when condition	then column	then condition	level	description
 test_tree_under	foo	null	bar	null	error	bar must be null whenever foo is null
 test_tree_under	foo	not null	bar	not null	error	bar cannot be null if foo is not null
+test_tree_under	foo	IRI	bar	word	error	bar must be a word if foo is an IRI
