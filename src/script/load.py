@@ -222,6 +222,7 @@ def read_config_files(table_table_path, condition_parser):
                 "then column",
                 "then condition",
                 "level",
+                "description",
             ]:
                 if column not in row or row[column] is None:
                     raise ConfigError(f"Missing required column '{column}' reading '{path}'")
