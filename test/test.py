@@ -77,7 +77,7 @@ def test_messages(db_file):
         {
             "db": db_file,
             "output_dir": output_dir,
-            "tables": ["prefix", "import", "test_tree_under"],
+            "tables": ["prefix", "import", "foobar"],
             "a1": False,
         }
     )
@@ -98,7 +98,7 @@ def test_messages(db_file):
         {
             "db": db_file,
             "output_dir": output_dir,
-            "tables": ["prefix", "import", "test_tree_under"],
+            "tables": ["prefix", "import", "foobar"],
             "a1": True,
         }
     )

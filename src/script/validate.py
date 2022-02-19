@@ -10,9 +10,9 @@ def validate_existing_row(config, table_name, row, row_number):
     perform both intra- and inter-row validation and return the validated row.
     """
     for column_name, cell in row.items():
+        cell = validate_cell_rules(config, table_name, column_name, row, cell)
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
         if cell.get("nulltype") is None:
-            # TODO: Call validate_cell_rules() here.
             cell = validate_cell_datatype(config, table_name, column_name, cell)
             cell = validate_cell_trees(config, table_name, column_name, cell, row, prev_results=[])
             cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
@@ -264,20 +264,6 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
     Given a config map, a table name, a column name, the row context, and the cell to validate,
     look in the rule table (if it exists) and validate the cell according to any applicable rules.
     """
-
-    def condition_is_satisfied(cond, value):
-        if cond in ["null", "not null"]:
-            return (cond == "null" and value == "") or (cond == "not null" and value != "")
-        elif value == "":
-            return False
-        elif cond["type"] == "function":
-            # TODO: Implement this.
-            return True
-        else:
-            # Any other type of condition is assumed to represent a datatype name.
-            datatype_condition = config["datatype"][cond["value"]]["condition"]
-            return datatype_condition(value)
-
     if (
         not config.get("rule")
         or not config["rule"].get(table_name)
@@ -287,14 +273,8 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
 
     applicable_rules = config["rule"][table_name][column_name]
     for rule_number, rule in enumerate(applicable_rules, start=1):
-        when_condition = rule["when condition"]
-        # Only one when condition is allowed:
-        when_condition = when_condition[0] if type(when_condition) == list else when_condition
-        if condition_is_satisfied(when_condition, cell["value"]):
-            then_condition = rule["then condition"]
-            # Only one then condition is allowed:
-            then_condition = then_condition[0] if type(then_condition) == list else then_condition
-            if not condition_is_satisfied(then_condition, context[rule["then column"]]):
+        if rule["when condition"](cell["value"]):
+            if not rule["then condition"](context[rule["then column"]]):
                 cell["valid"] = False
                 cell["messages"].append(
                     {

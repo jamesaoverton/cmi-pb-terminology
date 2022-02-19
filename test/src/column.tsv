@@ -28,9 +28,9 @@ import	id		CURIE	unique
 import	label		label	primary	
 import	parent	empty	label	tree(label)	
 import	related	empty	trimmed_line		
-test_tree_under	child		trimmed_line	from(foreign_table.foreign_column)	
-test_tree_under	parent	empty	trimmed_line	tree(child)	
-test_tree_under	xyzzy	empty	trimmed_line	under(test_tree_under.child, d)	
-test_tree_under	foo	empty	text		
-test_tree_under	bar	empty	text		
+foobar	child		trimmed_line	from(foreign_table.foreign_column)	
+foobar	parent	empty	trimmed_line	tree(child)	
+foobar	xyzzy	empty	trimmed_line	under(foobar.child, d)	
+foobar	foo	empty	text		
+foobar	bar	empty	text		
 foreign_table	foreign_column		text	primary	

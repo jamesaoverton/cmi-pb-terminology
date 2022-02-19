@@ -59,6 +59,12 @@ def read_config_files(table_table_path, condition_parser):
         if condition is None:
             return None
 
+        # "null" and "not null" are treated specially:
+        if condition in ["null", "not null"]:
+            return lambda x: (condition == "null" and x == "") or (
+                condition == "not null" and x != ""
+            )
+
         parsed_condition = config["parser"].parse(condition)
         if len(parsed_condition) != 1:
             raise ValueError(
@@ -79,16 +85,22 @@ def read_config_files(table_table_path, condition_parser):
             flags = "(?" + "".join(flags) + ")" if flags else ""
             pattern = re.compile(flags + pattern)
             if parsed_condition["name"] == "exclude":
-                return lambda x: not bool(pattern.search(x))
+                return lambda x: x != "" and not bool(pattern.search(x))
             elif parsed_condition["name"] == "match":
-                return lambda x: bool(pattern.fullmatch(x))
+                return lambda x: x != "" and bool(pattern.fullmatch(x))
             else:
-                return lambda x: bool(pattern.search(x))
+                return lambda x: x != "" and bool(pattern.search(x))
         elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
             alternatives = [
                 re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
             ]
             return lambda x: x in alternatives
+        elif (
+            parsed_condition["type"] != "function"
+            and parsed_condition["value"] in config["datatype"]
+        ):
+            # If the condition is a recognized (thus, already compiled) datatype, just return that:
+            return config["datatype"][parsed_condition["value"]]["condition"]
         else:
             raise ConfigError(f"Unrecognized condition: {condition}")
 
@@ -227,13 +239,10 @@ def read_config_files(table_table_path, condition_parser):
                         )
                     )
 
-            # Parse the when and then conditions using our grammar, unless they correspond to the
-            # special "null" or "not null" conditions:
+            # Compile the when and then conditions:
             for column in ["when condition", "then condition"]:
-                if row[column].casefold() in ["null", "not null"]:
-                    row[column] = row[column].casefold()
-                else:
-                    row[column] = config["parser"].parse((row[column]))
+                row[f"{column} text"] = row[column]
+                row[column] = compile_condition(row[column])
 
             # Add the rule specified in the given row to the list of rules associated with the
             # value of the when column:
