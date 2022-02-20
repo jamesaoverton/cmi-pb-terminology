@@ -417,8 +417,12 @@ def validate_under(config, table_name):
 
         rows = config["db"].execute(sql).fetchall()
         for row in rows:
-            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
-            meta = json.loads(meta)
+            if row[2]:
+                meta = json.loads(re.sub(r"^json\((.+)\)$", r"\g<1>", row[2]))
+            else:
+                # A null value in the meta column signifies a plain valid cell:
+                meta = {"valid": True, "messages": []}
+
             # If the value in the parent column is legitimately empty, then just skip this row:
             if meta.get("nulltype"):
                 continue
@@ -486,8 +490,11 @@ def validate_tree_foreign_keys(config, table_name):
         )
 
         for row in rows:
-            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
-            meta = json.loads(meta)
+            if row[2]:
+                meta = json.loads(re.sub(r"^json\((.+)\)$", r"\g<1>", row[2]))
+            else:
+                # A null value in the meta column signifies a plain valid cell:
+                meta = {"valid": True, "messages": []}
             # If the value in the parent column is legitimately empty, then just skip this row:
             if meta.get("nulltype"):
                 continue

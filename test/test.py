@@ -162,13 +162,13 @@ def test_validate_and_update_row(config):
         None,
         'json({"messages": [{"rule": "key:foreign", "level": "error", "message": "Value ZOB of column source is not in prefix.prefix"}], "valid": false, "value": "ZOB"})',
         "ZOB:0000013",
-        'json({"messages": [], "valid": true})',
+        None,
         "bar",
-        'json({"messages": [], "valid": true})',
+        None,
         "owl:Class",
-        'json({"messages": [], "valid": true})',
+        None,
         "car",
-        'json({"messages": [], "valid": true})',
+        None,
     )
     if actual_row != expected_row:
         print(
