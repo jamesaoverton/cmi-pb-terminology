@@ -4,7 +4,7 @@ import re
 from sql_utils import safe_sql
 
 
-def validate_existing_row(config, table_name, row, row_number):
+def validate_row(config, table_name, row, existing_row=True, row_number=None):
     """
     Given a config map, a table name, an existing row to validate, and its associated row number,
     perform both intra- and inter-row validation and return the validated row.
@@ -23,7 +23,7 @@ def validate_existing_row(config, table_name, row, row_number):
                 cell,
                 row,
                 prev_results=[],
-                existing_row=True,
+                existing_row=existing_row,
                 row_number=row_number,
             )
         row[column_name] = cell
