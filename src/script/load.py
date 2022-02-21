@@ -368,7 +368,7 @@ def create_db_and_write_sql(config):
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
 
-            """# Initialize a manager with an associated dictionary which we will use to accumulate
+            # Initialize a manager with an associated dictionary which we will use to accumulate
             # the intra-row validation results from each worker process. Each process is assigned
             # one chunk of data to work on.
             manager = Manager()
@@ -416,32 +416,7 @@ def create_db_and_write_sql(config):
                     config["db"].execute(conflict)
                     config["db"].commit()
                     print("{}\n".format(main))
-                    print("{}\n".format(conflict))"""
-
-            results = OrderedDict()
-            for chunk_number, chunk in enumerate(chunks):
-                chunk = filter(None, chunk)
-                validate_rows_intra(config, table_name, chunk, chunk_number, results)
-
-            for chunk_num, intra_validated_rows in results.items():
-                validated_rows = validate_rows_trees(config, table_name, intra_validated_rows)
-                main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
-                # Try to insert the rows to the db without first validating unique and foreign
-                # constraints. If there are constraint violations this will cause the db to
-                # raise an IntegrityError, in which case we then explicitly do the constraint
-                # validation and insert the resulting rows:
-                try:
-                    config["db"].execute(main)
-                except sqlite3.IntegrityError:
-                    validated_rows = validate_rows_constraints(
-                        config, table_name, intra_validated_rows
-                    )
-                    main, conflict = make_inserts(config, table_name, validated_rows, chunk_num)
-                    config["db"].execute(main)
-                config["db"].execute(conflict)
-                config["db"].commit()
-                print("{}\n".format(main))
-                print("{}\n".format(conflict))
+                    print("{}\n".format(conflict))
 
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column
