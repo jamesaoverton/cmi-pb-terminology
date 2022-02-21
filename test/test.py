@@ -16,7 +16,7 @@ sys.path.append("{}/../src/script".format(pwd))
 
 from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
 from export import export_data, export_messages
-from validate import validate_row
+from validate import validate_row, get_matching_values
 
 
 def test_load_contents(db_file, this_script):
@@ -180,6 +180,15 @@ def test_validate_and_update_row(config):
     return 0
 
 
+def test_auto_complete(config):
+    actual = get_matching_values(config, "foobar", "xyzzy")
+    expected = '[{"id": "d", "label": "d", "order": 1}, {"id": "e", "label": "e", "order": 2}, {"id": "f", "label": "f", "order": 3}, {"id": "g", "label": "g", "order": 4}, {"id": "h", "label": "h", "order": 5}]'
+    if actual != expected:
+        print(f"Actual auto_complete values: {actual} do not match the expected values: {expected}")
+        return 1
+    return 0
+
+
 def main():
     p = ArgumentParser()
     p.add_argument("db_file", help="The name of the database file to use for testing")
@@ -205,6 +214,7 @@ def main():
     ret += test_export(db_file)
     ret += test_messages(db_file)
     ret += test_validate_and_update_row(config)
+    ret += test_auto_complete(config)
     sys.exit(ret)
 
 

@@ -55,13 +55,14 @@ def read_config_files(table_table_path, condition_parser):
 
     def compile_condition(condition):
         """Given a datatype condition, parse it using the configured parser and pre-compile the
-        regular expression and function corresponding to it."""
+        regular expression and function corresponding to it. Return both the parsed expression and
+        the re-compiled regular expression."""
         if condition is None:
-            return None
+            return None, None
 
         # "null" and "not null" are treated specially:
         if condition in ["null", "not null"]:
-            return lambda x: (condition == "null" and x == "") or (
+            return None, lambda x: (condition == "null" and x == "") or (
                 condition == "not null" and x != ""
             )
 
@@ -74,7 +75,7 @@ def read_config_files(table_table_path, condition_parser):
         parsed_condition = parsed_condition[0]
         if parsed_condition["type"] == "function" and parsed_condition["name"] == "equals":
             expected = re.sub(r"^['\"](.*)['\"]$", r"\1", parsed_condition["args"][0]["value"])
-            return lambda x: x == expected
+            return parsed_condition, lambda x: x == expected
         elif parsed_condition["type"] == "function" and parsed_condition["name"] in (
             "exclude",
             "match",
@@ -85,22 +86,26 @@ def read_config_files(table_table_path, condition_parser):
             flags = "(?" + "".join(flags) + ")" if flags else ""
             pattern = re.compile(flags + pattern)
             if parsed_condition["name"] == "exclude":
-                return lambda x: x != "" and not bool(pattern.search(x))
+                return parsed_condition, lambda x: x != "" and not bool(pattern.search(x))
             elif parsed_condition["name"] == "match":
-                return lambda x: x != "" and bool(pattern.fullmatch(x))
+                return parsed_condition, lambda x: x != "" and bool(pattern.fullmatch(x))
             else:
-                return lambda x: x != "" and bool(pattern.search(x))
+                return parsed_condition, lambda x: x != "" and bool(pattern.search(x))
         elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
             alternatives = [
                 re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
             ]
-            return lambda x: x in alternatives
+            return parsed_condition, lambda x: x in alternatives
         elif (
             parsed_condition["type"] != "function"
             and parsed_condition["value"] in config["datatype"]
         ):
             # If the condition is a recognized (thus, already compiled) datatype, just return that:
-            return config["datatype"][parsed_condition["value"]]["condition"]
+            condition_name = parsed_condition["value"]
+            return (
+                config["datatype"][condition_name]["parsed_condition"],
+                config["datatype"][condition_name]["compiled_condition"],
+            )
         else:
             raise ConfigError(f"Unrecognized condition: {condition}")
 
@@ -180,7 +185,9 @@ def read_config_files(table_table_path, condition_parser):
                 row[column] = None
         config["datatype"][row["datatype"]] = row
         condition = config["datatype"][row["datatype"]]["condition"]
-        config["datatype"][row["datatype"]]["condition"] = compile_condition(condition)
+        parsed_condition, compiled_condition = compile_condition(condition)
+        config["datatype"][row["datatype"]]["compiled_condition"] = compiled_condition
+        config["datatype"][row["datatype"]]["parsed_condition"] = parsed_condition
 
     for dt in ["text", "empty", "line", "word"]:
         if dt not in config["datatype"]:
@@ -207,6 +214,10 @@ def read_config_files(table_table_path, condition_parser):
         if row["datatype"] not in config["datatype"]:
             raise ConfigError("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
         row["configured"] = True
+        if row["structure"]:
+            row["parsed_structure"] = config["parser"].parse(row["structure"])[0]
+        else:
+            row["parsed_structure"] = None
         config["table"][row["table"]]["column"][row["column"]] = row
 
     # Load rule table if it exists
@@ -242,7 +253,9 @@ def read_config_files(table_table_path, condition_parser):
 
             # Compile the when and then conditions:
             for column in ["when condition", "then condition"]:
-                row[column] = compile_condition(row[column])
+                parsed_condition, compiled_condition = compile_condition(row[column])
+                row[f"parsed {column}"] = parsed_condition
+                row[f"compiled {column}"] = compiled_condition
 
             # Add the rule specified in the given row to the list of rules associated with the
             # value of the when column:
@@ -507,7 +520,7 @@ def create_db_and_write_sql(config):
 
 
 def get_SQL_type(config, datatype):
-    """Given the config structure and the name of a datatype, climb the datatype tree (as required),
+    """Given the config map and the name of a datatype, climb the datatype tree (as required),
     and return the first 'SQL type' found."""
     if "datatype" not in config:
         raise ConfigError("Missing datatypes in config")
@@ -519,7 +532,7 @@ def get_SQL_type(config, datatype):
 
 
 def create_schema(config, table_name):
-    """Given the config structure and a table name, generate a SQL schema string, including each
+    """Given the config map and a table name, generate a SQL schema string, including each
     column C and its matching C_meta column, then return the schema string as well as a list of the
     table's constraints."""
     output = [
