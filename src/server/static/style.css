@@ -1,3 +1,31 @@
+.bg-debug {
+    background-color: #abc4ff !important;
+}
+.bg-error {
+    background-color: #ffabab !important;
+}
+.bg-info {
+    background-color: #fff8ab !important;
+}
+.bg-null {
+    background-color: #ededed !important;
+}
+.bg-warn {
+    background-color: #ffcdab !important;
+}
+.inner-btn {
+    margin-top: -11px;
+    margin-left: -3px;
+}
+.sm-btn {
+    height: 18px;
+    width: 30px;
+}
+.tooltip-inner {
+    white-space: pre-wrap;
+}
+
+
 #annotations {
   padding-left: 1em;
   list-style-type: none !important;
@@ -33,10 +61,15 @@
   width: 0em;
   margin-left: -1em;
 }
-#nonpeptides .tt-dataset {
+.tt-dataset {
   max-height: 300px;
   overflow-y: scroll;
 }
+a {
+  text-decoration: none;
+}
+
+
 span.twitter-typeahead .tt-menu {
   cursor: pointer;
 }

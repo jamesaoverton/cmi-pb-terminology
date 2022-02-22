@@ -1,0 +1,403 @@
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
+	<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+	<nav class="navbar navbar-expand-lg navbar-light bg-light">
+		<div class="container-fluid">
+			<a class="navbar-brand">CMI-PB Terminology</a>
+			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+				{% for t in tables %}
+				<li class="nav-item"><a class="nav-link" href="/{{ t }}">{{ t }}</a></li>
+				{% endfor %}
+			</ul>
+		</div>
+	</nav>
+	<div class="container">
+		{% if show_search %}
+		<div class="row">
+			<form class="form-row mt-2 mb-2" method="get">
+				<input id="statements-typeahead" name="text" class="typeahead form-control" type="text" value="" placeholder="Search"/>
+			</form>
+		</div>
+		{% endif %}
+		<div class="row" style="padding-top:10px;">
+			{% if title %}
+			<div class="row">
+				<h2>{{ title|safe }}</h2>
+			</div>
+			{% endif %}
+			{{ html|safe }}
+			{% block content %}
+            {% endblock %}
+		</div>
+	</div>
+</body>
+<script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script type="text/javascript" src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.11.1/typeahead.bundle.min.js"></script>
+<script>
+	// Enable tooltips
+	var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+	var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+	  return new bootstrap.Tooltip(tooltipTriggerEl)
+	})
+
+	// Init headers
+	var headers = [];
+	{% for h in headers %}
+	headers.push('{{ h }}');
+	{% endfor %}
+
+	function condense(level, msg, rowNum, cellNum) {
+		document.getElementById(`expandedRow${rowNum}`).remove();
+
+		// Add tooltip
+		var td = document.getElementById(`td${rowNum}-${cellNum}`);
+		td.setAttribute("data-bs-toggle", "tooltip");
+		td.setAttribute("data-bs-placement", "bottom");
+		td.setAttribute("data-bs-original-title", msg);
+		td.setAttribute("title", msg);
+
+		// Update btn
+		var btn = document.getElementById(`expand${rowNum}`);
+		btn.href = `javascript:expand('${level}', '${msg}', ${rowNum}, ${cellNum})`;
+		var txt = document.getElementById(`expandInner${rowNum}`);
+		txt.innerText = "+";
+	}
+
+	function expand(level, msg, rowNum, cellNum) {
+		var row = document.getElementById(`row${rowNum}`);
+		var newHtml = `<tr id="expandedRow${rowNum}">`;
+		for (i=0; i < cellNum; i++) {
+			newHtml += "<td></td>";
+		}
+		newHtml += `<td>${level.toUpperCase()}: ${msg}</td>`
+		row.insertAdjacentHTML('afterend', newHtml);
+
+		// Remove tooltip
+		var td = document.getElementById(`td${rowNum}-${cellNum}`);
+		var tooltipID = td.getAttribute("aria-describedby");
+		td.removeAttribute("data-bs-toggle");
+		td.removeAttribute("data-bs-placement");
+		td.removeAttribute("data-bs-original-title");
+		td.removeAttribute("title");
+		td.removeAttribute("aria-describedby");
+		var tt = document.getElementById(tooltipID);
+		if (tt !== null) {
+			tt.remove();
+		}
+
+		// Update btn
+		var btn = document.getElementById(`expand${rowNum}`);
+		btn.href = `javascript:condense('${level}', '${msg}', ${rowNum}, ${cellNum})`;
+		var txt = document.getElementById(`expandInner${rowNum}`);
+		txt.innerText = "-";
+	}
+
+	function reset() {
+		var url = window.location.href.split('?')[0];
+		window.location.href = url;
+	}
+
+	function sort(col, desc) {
+		// Get current parameters
+		var qString = window.location.search;
+		var params = new URLSearchParams(qString);
+		var newParams = [];
+		var newOrder = [];
+		// Add all current params to new params, only add order keys that are not col
+		for (var entry of params.entries()) {
+			if (entry[0] !== "order") {
+				newParams.push(`${entry[0]}=${entry[1]}`);
+			} else {
+				for (var ord of entry[1].split(",")) {
+					if (!ord.startsWith(col + ".") && ord !== col) {
+						newOrder.push(ord);
+					}
+				}
+			}
+		}
+		// Add this col to the order
+		if (desc) {
+			newOrder.push(col + ".desc");
+		} else {
+			newOrder.push(col);
+		}
+		// Redirect to new URL
+		newParams.push("order=" + newOrder.join(","));
+		if (newParams.length > 0) {
+			window.location.href = "?" + newParams.join("&");
+		}
+	}
+
+	function submitForm(headers, hidden) {
+		var args = []
+		headers = headers.filter(e => e !== "rowid");
+		// Get the where options
+		for (var h of headers) {
+			var operator = document.getElementById(h + 'Operator').value;
+			var constraint = document.getElementById(h + 'Constraint').value;
+			if (operator && constraint) {
+				args.push(h + "=" + operator + "." + constraint);
+			}
+		}
+
+		// Get any hidden args
+		for (var h of hidden) {
+			var val = document.getElementById(h).value;
+			args.push(h + "=" + val);
+		}
+
+		// Get the select options
+		var n = document.getElementsByName('select[]');
+		var s = [];
+		for (i=0; i < (n.length); i++) {
+			if (n[i].checked) {
+				s.push(n[i].value);
+			}
+		}
+		if (s.length > 0 && s.length < headers.length) {
+			args.push("select=" + s.join(","));
+		}
+
+		// Get the violation filters
+		var n = document.getElementsByName('violation[]');
+		var v = [];
+		for (i=0;i < (n.length); i++) {
+			console.log(n[i].checked);
+			if (n[i].checked) {
+				v.push(n[i].value);
+			}
+		}
+		if (v.length > 0) {
+			args.push("violations=" + v.join(","));
+		}
+
+		// Get the limit option
+		var l = document.getElementById("limitValue").value;
+		args.push("limit=" + l);
+
+		// Redirect to new URL
+		if (args.length > 0) {
+			window.location.href = "?" + args.join("&")
+		}
+	}
+
+	function vertical(rowNum, offset) {
+		var qString = window.location.search;
+		var params = new URLSearchParams(qString);
+		var newParams = [];
+		for (var entry of params.entries()) {
+			if (entry[0] === "limit" || entry[0] === "offset") {
+				continue;
+			} else {
+				newParams.push(`${entry[0]}=${entry[1]}`);
+			}
+		}
+		console.log(newParams);
+		var newOS = rowNum + offset - 1;
+		newParams.push(`offset=${newOS}`);
+		newParams.push("limit=1");
+		if (newParams.length > 0) {
+			window.location.href = "?" + newParams.join("&");
+		}
+	}
+
+	// Configure typeahead for Parent labels
+	function configure_typeahead_form(node) {
+		if (!node.id || !node.id.endsWith("-typeahead-form")) {
+		  return;
+		}
+		table = node.id.split("-")[0];
+		var bloodhound = new Bloodhound({
+		  datumTokenizer: Bloodhound.tokenizers.obj.nonword('label'),
+		  queryTokenizer: Bloodhound.tokenizers.nonword,
+		  sorter: function(a, b) {
+			return a.order - b.order;
+		  },
+		  remote: {
+			url: `/${table}?text=%QUERY&format=json`,
+			wildcard: '%QUERY',
+			transform : function(response) {
+			  return bloodhound.sorter(response);
+			}
+		  }
+		});
+		$(node).typeahead({
+		  minLength: 0,
+		  hint: false,
+		  highlight: true
+		}, {
+		  name: table,
+		  source: bloodhound,
+		  display: function(item) {
+			return item.label;
+		  },
+		  limit: 40
+		});
+		$(node).bind('click', function(e) {
+		  $(node).select();
+		});
+	}
+
+	function configure_typeahead(node) {
+	  if (!node.id || !node.id.endsWith("-typeahead")) {
+		return;
+	  }
+	  table = node.id.split("-")[0];
+	  var bloodhound = new Bloodhound({
+		datumTokenizer: Bloodhound.tokenizers.obj.nonword('short_label', 'label', 'synonym'),
+		queryTokenizer: Bloodhound.tokenizers.nonword,
+		sorter: function(a, b) {
+		  return a.order - b.order;
+		},
+		remote: {
+		  {% if search_param %} url: '?{{ search_param }}&text=%QUERY&format=json', {% else %} url: '?text=%QUERY&format=json', {% endif %}
+		  wildcard: '%QUERY',
+		  transform : function(response) {
+			  return bloodhound.sorter(response);
+		  }
+		}
+	  });
+	  $(node).typeahead({
+		minLength: 0,
+		hint: false,
+		highlight: true
+	  }, {
+		name: table,
+		source: bloodhound,
+		display: function(item) {
+		  if (item.label && item.short_label && item.synonym) {
+			return item.short_label + ' - ' + item.label + ' - ' + item.synonym;
+		  } else if (item.label && item.short_label) {
+			return item.short_label + ' - ' + item.label;
+		  } else if (item.label && item.synonym) {
+			return item.label + ' - ' + item.synonym;
+		  } else if (item.short_label && item.synonym) {
+			return item.short_label + ' - ' + item.synonym;
+		  } else if (item.short_label && !item.label) {
+			return item.short_label;
+		  } else {
+			return item.label;
+		  }
+		},
+		limit: 40
+	  });
+	  $(node).bind('click', function(e) {
+		$(node).select();
+	  });
+	  $(node).bind('typeahead:select', function(ev, suggestion) {
+		$(node).prev().val(suggestion.id);
+		go(table, suggestion.id);
+	  });
+	}
+	$('.typeahead').each(function() { configure_typeahead(this); });
+
+	function go(table, value) {
+	  q = {}
+	  table = table.replace('_all', '');
+	  q[table] = value
+	  window.location = query(q);
+	}
+
+	function query(obj) {
+	  var str = [];
+	  for (var p in obj)
+		if (obj.hasOwnProperty(p)) {
+		  str.push("/{{ base_path }}/" + encodeURIComponent(obj[p]) + "");
+		}
+	  return str.join("&");
+	}
+
+	// redirect to the sprocket table when clicking view all children
+	function show_children() {
+		var curURL = window.location.href;
+		console.l
+		var tableURL = curURL.substr(0, curURL.lastIndexOf("/"));
+		var termId = curURL.substr(curURL.lastIndexOf("/") + 1);
+		if (termId.includes("?")) {
+			termId = termId.split("?")[0];
+		}
+		var url = new URL(tableURL);
+		url.searchParams.append("subClassOf", termId);
+		window.location = url;
+	}
+
+	// Add a 'new' button for horizontal view
+	function addNewRowBtn() {
+		var table = document.getElementById("sqlTableHorizontal");
+		if (table === null) {
+			// Not vertical view
+			return;
+		}
+
+		// Create div to hold new button
+		var divRow = document.createElement("div");
+		divRow.setAttribute("class", "row justify-content-end");
+		divRow.setAttribute("style", "padding-bottom: 5px;");
+		var divCol = document.createElement("div");
+		divCol.setAttribute("class", "col-auto");
+
+		// Add the edit query param to URL
+		var url = new URL(location.protocol + "//" + location.host + location.pathname + "/new");
+		url.searchParams.append("view", "form");
+
+		// Create button with link to edit
+		var btn = document.createElement("a");
+		btn.setAttribute("class", "btn btn-primary");
+		btn.setAttribute("href", url.toString());
+		btn.innerHTML = "New Row";
+
+		// Add to page
+		divRow.appendChild(divCol);
+		divCol.appendChild(btn);
+		table.parentNode.insertBefore(divRow, table);
+	}
+	addNewRowBtn();
+
+	// Add an edit button for vertical row
+	function addEditBtn() {
+		var table = document.getElementById("sqlTableVertical");
+		if (table === null) {
+			// Not vertical view
+			return;
+		}
+		// Retrieve row ID
+		var rowId = document.getElementById("row-id");
+		if (rowId === null) {
+			// Not a data row
+			return;
+		}
+
+		// Create div to hold edit button
+		var divRow = document.createElement("div");
+		divRow.setAttribute("class", "row justify-content-end");
+		divRow.setAttribute("style", "padding-bottom: 5px;");
+		var divCol = document.createElement("div");
+		divCol.setAttribute("class", "col-auto");
+
+		// Add the edit query param to URL
+		var url = new URL(window.location);
+		url.searchParams.append("view", "form");
+
+		// Create button with link to edit
+		var btn = document.createElement("a");
+		btn.setAttribute("class", "btn btn-primary");
+		btn.setAttribute("href", url.toString());
+		btn.innerHTML = "Edit Row";
+
+		// Add to page
+		divRow.appendChild(divCol);
+		divCol.appendChild(btn);
+		table.parentNode.insertBefore(divRow, table);
+	}
+	addEditBtn();
+</script>
+</html>

@@ -89,6 +89,12 @@
     
 
 
+    <!-- http://purl.org/dc/terms/title -->
+
+    <owl:AnnotationProperty rdf:about="http://purl.org/dc/terms/title"/>
+    
+
+
     <!-- http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym -->
 
     <owl:AnnotationProperty rdf:about="http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym"/>
@@ -210,6 +216,7 @@
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
         <obo:IAO_0000112 xml:lang="en">PMID:18089833.Cancer Res. 2007 Dec 15;67(24):12018-25. &quot;...Epithelial cells were harvested from histologically confirmed adenocarcinomas ..&quot;</obo:IAO_0000112>
         <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A material entity of anatomical origin (part of or deriving from an organism) that has as its parts a maximally connected cell compartment surrounded by a plasma membrane.</obo:IAO_0000115>
+        <obo:IAO_0000115>A material entity that has a plasma membrane and results from cellular division.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cell</rdfs:label>
     </owl:Class>
     
@@ -590,6 +597,12 @@
         <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">information</rdfs:label>
     </owl:Class>
+    <owl:Axiom>
+        <owl:annotatedSource rdf:resource="http://purl.obolibrary.org/obo/COB_0000061"/>
+        <owl:annotatedProperty rdf:resource="http://www.w3.org/2000/01/rdf-schema#label"/>
+        <owl:annotatedTarget rdf:datatype="http://www.w3.org/2001/XMLSchema#string">information</owl:annotatedTarget>
+        <rdfs:comment>comment</rdfs:comment>
+    </owl:Axiom>
     
 
 
@@ -649,10 +662,9 @@
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0000011">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000015"/>
-        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Injecting mice with a vaccine in order to test its efficacy</obo:IAO_0000112>
+        <obo:IAO_0000112>Injecting mice with a vaccine in order to test its efficacy</obo:IAO_0000112>
         <obo:IAO_0000115 xml:lang="en">A process that realizes a plan which is the concretization of a plan specification.</obo:IAO_0000115>
-        <obo:IAO_0000115 xml:lang="en">A processual entity that realizes a plan which is the concretization of a plan specification.</obo:IAO_0000115>
-        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">branch derived</obo:IAO_0000119>
+        <obo:IAO_0000119>branch derived</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">planned process</rdfs:label>
     </owl:Class>
     
@@ -664,9 +676,9 @@
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Blood</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sample.sample_type</cmi-pb:column>
-        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood drawn from a human for glucose assay</obo:IAO_0000112>
-        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">a material entity derived from a portion of blood collected from an organism</obo:IAO_0000115>
-        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Bjoern Peters</obo:IAO_0000119>
+        <obo:IAO_0000112>blood drawn from a human for glucose assay</obo:IAO_0000112>
+        <obo:IAO_0000115>a material entity derived from a portion of blood collected from an organism</obo:IAO_0000115>
+        <obo:IAO_0000119>Bjoern Peters</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">blood specimen</rdfs:label>
     </owl:Class>
     
@@ -678,10 +690,10 @@
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">nasal swab</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sample.sample_type</cmi-pb:column>
-        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">type of sample used in the PCIRN influenza network</obo:IAO_0000112>
-        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A specimen obtained using a cotton swab on a stick, passed up the nostril to obtain a sample of
+        <obo:IAO_0000112>type of sample used in the PCIRN influenza network</obo:IAO_0000112>
+        <obo:IAO_0000115>A specimen obtained using a cotton swab on a stick, passed up the nostril to obtain a sample of
 exudate and epithelial debris for microbiological or cellular examination.</obo:IAO_0000115>
-        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">WEB: http://www.wpro.who.int/NR/rdonlyres/EFD2B9A7-2265-4AD0-BC98-97937B4FA83C/0/manualonanimalaidiagnosisandsurveillance.pdf</obo:IAO_0000119>
+        <obo:IAO_0000119>WEB: http://www.wpro.who.int/NR/rdonlyres/EFD2B9A7-2265-4AD0-BC98-97937B4FA83C/0/manualonanimalaidiagnosisandsurveillance.pdf</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">nasal swab specimen</rdfs:label>
     </owl:Class>
     
@@ -693,8 +705,8 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sputum</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sample.sample_type</cmi-pb:column>
-        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A specimen that is derived from sputum.</obo:IAO_0000115>
-        <obo:IAO_0000119 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Chris Stoeckert, Penn Medicine Biobank</obo:IAO_0000119>
+        <obo:IAO_0000115>A specimen that is derived from sputum.</obo:IAO_0000115>
+        <obo:IAO_0000119>Chris Stoeckert, Penn Medicine Biobank</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sputum specimen</rdfs:label>
     </owl:Class>
     
@@ -706,6 +718,8 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0000011"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Automated</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cell_type.gating_method</cmi-pb:column>
+        <obo:IAO_0000115>A gating in which the output of a flow- or mass- cytometry experiment is separated into gates that were set by an algorithm in order to quantify the frequency of different cell populations of interest.</obo:IAO_0000115>
+        <obo:IAO_0000119>CMI-PB</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">automatic cell gating</rdfs:label>
     </owl:Class>
     
@@ -717,6 +731,8 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0000011"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Manual</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cell_type.gating_method</cmi-pb:column>
+        <obo:IAO_0000115>A gating in which the output of a flow- or mass- cytometry experiment is separated into gates that were set by a human operator in order to quantify the frequency of different cell populations of interest.</obo:IAO_0000115>
+        <obo:IAO_0000119>CMI-PB</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manual cell gating</rdfs:label>
     </owl:Class>
     
@@ -741,7 +757,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/OBI_0100051">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/BFO_0000040"/>
-        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Biobanking of blood taken and stored in a freezer for potential future investigations stores specimen.</obo:IAO_0000112>
+        <obo:IAO_0000112>Biobanking of blood taken and stored in a freezer for potential future investigations stores specimen.</obo:IAO_0000112>
         <obo:IAO_0000115 xml:lang="en">A material entity that has the specimen role.</obo:IAO_0000115>
         <obo:IAO_0000119 xml:lang="en">GROUP: OBI Biomaterial Branch</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">specimen</rdfs:label>
@@ -755,7 +771,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/OBI_0100051"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PBMC</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sample.sample_type</cmi-pb:column>
-        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A mixed cell population obtained by processing whole blood. The cells are characterized by having a similar density and are largely mononuclear cells (includes T cells, B cells, and other cell types).</obo:IAO_0000115>
+        <obo:IAO_0000115>A mixed cell population obtained by processing whole blood. The cells are characterized by having a similar density and are largely mononuclear cells (includes T cells, B cells, and other cell types).</obo:IAO_0000115>
         <obo:IAO_0000118>PBMC cell culture sample</obo:IAO_0000118>
         <obo:IAO_0000119 xml:lang="en">IEDB</obo:IAO_0000119>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cultured PBMC cell population</rdfs:label>
@@ -779,7 +795,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PATO_0000001"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Female</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">subject.biological_sex </cmi-pb:column>
-        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A biological sex quality inhering in an individual or a population that only produces gametes that can be fertilised by male gametes.</obo:IAO_0000115>
+        <obo:IAO_0000115>A biological sex quality inhering in an individual or a population that only produces gametes that can be fertilised by male gametes.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Female</rdfs:label>
     </owl:Class>
     
@@ -791,7 +807,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PATO_0000001"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Male</cmi-pb:alternativeTerm>
         <cmi-pb:column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">subject.biological_sex </cmi-pb:column>
-        <obo:IAO_0000115 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">A biological sex quality inhering in an individual or a population whose sex organs contain only male gametes.</obo:IAO_0000115>
+        <obo:IAO_0000115>A biological sex quality inhering in an individual or a population whose sex organs contain only male gametes.</obo:IAO_0000115>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Male</rdfs:label>
     </owl:Class>
     
@@ -801,7 +817,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
 
     <owl:Class rdf:about="http://purl.obolibrary.org/obo/PR_000000001">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/COB_0000013"/>
-        <obo:IAO_0000112 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">antithrombin III is a protein</obo:IAO_0000112>
+        <obo:IAO_0000112>antithrombin III is a protein</obo:IAO_0000112>
         <obo:IAO_0000115>An amino acid chain that is produced de novo by ribosome-mediated translation of a genetically-encoded mRNA, and any derivatives thereof.</obo:IAO_0000115>
         <oboInOwl:hasExactSynonym>natural protein</oboInOwl:hasExactSynonym>
         <oboInOwl:hasNarrowSynonym>native protein</oboInOwl:hasNarrowSynonym>
@@ -1412,11 +1428,13 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P00352">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ALDH1A1</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">3-deoxyglucosone dehydrogenase</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ALDH-E1</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ALHDII</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Aldehyde dehydrogenase family 1 member A1</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Aldehyde dehydrogenase, cytosolic</obo:IAO_0000118>
-        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Retinal dehydrogenase 1</rdfs:label>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Retinal dehydrogenase 1</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Aldehyde dehydrogenase 1A1</rdfs:label>
     </owl:Class>
     
 
@@ -1467,6 +1485,16 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/P01135 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P01135">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TGFA</cmi-pb:alternativeTerm>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Protransforming growth factor alpha</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/P01137 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P01137">
@@ -1485,6 +1513,18 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Thyroid-stimulating hormone subunit beta</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Thyrotropin beta chain</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Thyrotropin subunit beta</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P01374 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P01374">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LTA</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TNF-beta</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Tumor necrosis factor ligand superfamily member 1</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Lymphotoxin-alpha</rdfs:label>
     </owl:Class>
     
 
@@ -1535,6 +1575,17 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/P01584 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P01584">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IL1B</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Catabolin</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-1 beta</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/P01730 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P01730">
@@ -1565,6 +1616,31 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">10 kDa interferon gamma-induced protein</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Small-inducible cytokine B10</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">C-X-C motif chemokine 10</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P03956 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P03956">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">MMP1</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fibroblast collagenase</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Matrix metalloproteinase-1</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interstitial collagenase</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P04141 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P04141">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CSF2</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Colony-stimulating factor</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Molgramostin</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Sargramostim</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Granulocyte-macrophage colony-stimulating factor</rdfs:label>
     </owl:Class>
     
 
@@ -1874,6 +1950,17 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/P09919 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P09919">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CSF3</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Pluripoietin</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Granulocyte colony-stimulating factor</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/P0A3R5 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P0A3R5">
@@ -2042,6 +2129,16 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Large fibroblast proteoglycan</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PG-M</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Versican core protein</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P13725 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P13725">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OSM</cmi-pb:alternativeTerm>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Oncostatin-M</rdfs:label>
     </owl:Class>
     
 
@@ -2645,6 +2742,16 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/P40933 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P40933">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IL15</cmi-pb:alternativeTerm>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-15</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/P41236 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P41236">
@@ -2792,6 +2899,17 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/P49771 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P49771">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">FLT3LG</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SL cytokine</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Fms-related tyrosine kinase 3 ligand</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/P50135 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P50135">
@@ -2868,7 +2986,9 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/P51693">
         <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">APLP1</cmi-pb:alternativeTerm>
-        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Amyloid-like protein 1</rdfs:label>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Amyloid beta (A4) precursor-like protein 1</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Amyloid-like protein 1</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Amyloid beta precursor like protein 1</rdfs:label>
     </owl:Class>
     
 
@@ -2991,6 +3111,19 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SFRS protein kinase 2</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Serine/arginine-rich protein-specific kinase 2</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SRSF protein kinase 2</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/P78380 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/P78380">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OLR1</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">C-type lectin domain family 8 member A</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Lectin-like oxidized LDL receptor 1</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Lectin-type oxidized LDL receptor 1</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Oxidized low-density lipoprotein receptor 1</rdfs:label>
     </owl:Class>
     
 
@@ -3509,6 +3642,17 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/Q16552 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q16552">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IL17A</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Cytotoxic T-lymphocyte-associated antigen 8</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-17A</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/Q16773 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q16773">
@@ -3789,6 +3933,18 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/Q8NEV9 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q8NEV9">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IL27</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-30</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">p28</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-27 subunit alpha</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/Q8NHJ6 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q8NHJ6">
@@ -3871,6 +4027,7 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CLEC4D</cmi-pb:alternativeTerm>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">C-type lectin superfamily member 8</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">C-type lectin-like receptor 6</obo:IAO_0000118>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Dendritic cell-associated C-type lectin 3</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">C-type lectin domain family 4 member D</rdfs:label>
     </owl:Class>
     
@@ -3920,6 +4077,16 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TANK</cmi-pb:alternativeTerm>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TRAF-interacting protein</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TRAF family member-associated NF-kappa-B activator</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/Q969D9 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q969D9">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">TSLP</cmi-pb:alternativeTerm>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Thymic stromal lymphopoietin</rdfs:label>
     </owl:Class>
     
 
@@ -3980,6 +4147,17 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CUB, LCCL and coagulation factor V/VIII-homology domains protein 1</obo:IAO_0000118>
         <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Endothelial and smooth muscle cell-derived neuropilin-like protein</obo:IAO_0000118>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Discoidin, CUB and LCCL domain-containing protein 2</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- https://www.uniprot.org/uniprot/Q96PD4 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q96PD4">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IL17F</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Cytokine ML-1</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-17F</rdfs:label>
     </owl:Class>
     
 
@@ -4300,6 +4478,17 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     
 
 
+    <!-- https://www.uniprot.org/uniprot/Q9P0M4 -->
+
+    <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q9P0M4">
+        <rdfs:subClassOf rdf:resource="http://purl.obolibrary.org/obo/PR_000000001"/>
+        <cmi-pb:alternativeTerm rdf:datatype="http://www.w3.org/2001/XMLSchema#string">IL17C</cmi-pb:alternativeTerm>
+        <obo:IAO_0000118 rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Cytokine CX2</obo:IAO_0000118>
+        <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Interleukin-17C</rdfs:label>
+    </owl:Class>
+    
+
+
     <!-- https://www.uniprot.org/uniprot/Q9UBU3 -->
 
     <owl:Class rdf:about="https://www.uniprot.org/uniprot/Q9UBU3">
@@ -4518,7 +4707,6 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     <!-- http://www.w3.org/1999/02/22-rdf-syntax-ns#type -->
 
     <owl:NamedIndividual rdf:about="http://www.w3.org/1999/02/22-rdf-syntax-ns#type">
-        <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">type</rdfs:label>
     </owl:NamedIndividual>
     
@@ -4527,12 +4715,11 @@ exudate and epithelial debris for microbiological or cellular examination.</obo:
     <!-- http://www.w3.org/2000/01/rdf-schema#subClassOf -->
 
     <owl:NamedIndividual rdf:about="http://www.w3.org/2000/01/rdf-schema#subClassOf">
-        <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
         <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">subclass of</rdfs:label>
     </owl:NamedIndividual>
 </rdf:RDF>
 
 
 
-<!-- Generated by the OWL API (version 4.5.6) https://github.com/owlcs/owlapi -->
+<!-- Generated by the OWL API (version 4.5.9.2019-02-01T07:24:44Z) https://github.com/owlcs/owlapi -->
 
