@@ -13,6 +13,7 @@ def validate_row(config, table_name, row, existing_row=True, row_number=None):
     perform both intra- and inter-row validation and return the validated row.
     """
     for column_name, cell in row.items():
+        cell = validate_cell_rules(config, table_name, column_name, row, cell)
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
         if cell.get("nulltype") is None:
             cell = validate_cell_datatype(config, table_name, column_name, cell)
@@ -37,6 +38,7 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
     Given a config map, a table name, a chunk of rows to perform intra-row validation on, the
     chunk number assigned to the rows, and a results dictionary, validate all of the rows in the
     chunk and add the validated rows to the results dictionary using the chunk number as its key.
+    In addition to adding the results to the results dictionary, also return them.
     """
     result_rows = []
     for row in rows:
@@ -48,12 +50,14 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
                 "messages": [],
             }
         for column_name, cell in result_row.items():
+            cell = validate_cell_rules(config, table_name, column_name, row, cell)
             cell = validate_cell_nulltype(config, table_name, column_name, cell)
             if cell.get("nulltype") is None:
                 cell = validate_cell_datatype(config, table_name, column_name, cell)
             result_row[column_name] = cell
         result_rows.append(result_row)
     results[chunk_number] = result_rows
+    return result_rows
 
 
 def validate_rows_trees(config, table_name, rows):
@@ -255,6 +259,33 @@ def validate_cell_datatype(config, table_name, column_name, cell):
                     "message": f"{column_name} should be {primary_dt_description}",
                 }
             )
+    return cell
+
+
+def validate_cell_rules(config, table_name, column_name, context, cell):
+    """
+    Given a config map, a table name, a column name, the row context, and the cell to validate,
+    look in the rule table (if it exists) and validate the cell according to any applicable rules.
+    """
+    if (
+        not config.get("rule")
+        or not config["rule"].get(table_name)
+        or not config["rule"][table_name].get(column_name)
+    ):
+        return cell
+
+    applicable_rules = config["rule"][table_name][column_name]
+    for rule_number, rule in enumerate(applicable_rules, start=1):
+        if rule["when condition"](cell["value"]):
+            if not rule["then condition"](context[rule["then column"]]):
+                cell["valid"] = False
+                cell["messages"].append(
+                    {
+                        "rule": f"rule:{column_name}-{rule_number}",
+                        "level": rule["level"],
+                        "message": rule["description"],
+                    }
+                )
     return cell
 
 

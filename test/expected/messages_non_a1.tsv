@@ -21,9 +21,14 @@ import	molecular dentity	source	error	datatype:word	source should be a single wo
 import	molecular dentity	source	error	datatype:prefix	source should be a prefix for a CURIE	CO B
 import	molecular dentity	source	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
 import	molecular entity	id	error	key:unique	Values of id must be unique	COB:0000013
-test_tree_under	2	xyzzy	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
-test_tree_under	3	xyzzy	error	under:not-under	Value 'f' of column xyzzy is not under 'd'	f
-test_tree_under	4	xyzzy	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
-test_tree_under	5	xyzzy	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
-test_tree_under	7	xyzzy	error	under:not-in-tree	Value z of column xyzzy is not in test_tree_under.child	z
-test_tree_under	9	child	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i
+foobar	1	foo	error	rule:foo-2	bar cannot be null if foo is not null	x
+foobar	1	foo	error	rule:foo-3	bar must be a word if foo is an IRI	x
+foobar	1	foo	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
+foobar	2	xyzzy	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
+foobar	2	foo	error	rule:foo-1	bar must be null whenever foo is null	
+foobar	3	xyzzy	error	under:not-under	Value 'f' of column xyzzy is not under 'd'	f
+foobar	4	xyzzy	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
+foobar	4	foo	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
+foobar	5	xyzzy	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
+foobar	7	xyzzy	error	under:not-in-tree	Value z of column xyzzy is not in foobar.child	z
+foobar	9	child	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i

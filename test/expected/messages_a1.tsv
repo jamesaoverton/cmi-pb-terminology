@@ -21,9 +21,14 @@ import	A7	error	datatype:word	source should be a single word: letters, numbers, 
 import	A7	error	datatype:prefix	source should be a prefix for a CURIE	CO B
 import	A7	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
 import	B8	error	key:unique	Values of id must be unique	COB:0000013
-test_tree_under	C2	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
-test_tree_under	C3	error	under:not-under	Value 'f' of column xyzzy is not under 'd'	f
-test_tree_under	C4	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
-test_tree_under	C5	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
-test_tree_under	C7	error	under:not-in-tree	Value z of column xyzzy is not in test_tree_under.child	z
-test_tree_under	A9	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i
+foobar	D1	error	rule:foo-2	bar cannot be null if foo is not null	x
+foobar	D1	error	rule:foo-3	bar must be a word if foo is an IRI	x
+foobar	D1	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
+foobar	C2	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
+foobar	D2	error	rule:foo-1	bar must be null whenever foo is null	
+foobar	C3	error	under:not-under	Value 'f' of column xyzzy is not under 'd'	f
+foobar	C4	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
+foobar	D4	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
+foobar	C5	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
+foobar	C7	error	under:not-in-tree	Value z of column xyzzy is not in foobar.child	z
+foobar	A9	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i
