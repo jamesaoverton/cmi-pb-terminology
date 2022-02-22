@@ -17,8 +17,8 @@ def validate_row(config, table_name, row, existing_row=True, row_number=None):
     perform both intra- and inter-row validation and return the validated row.
     """
     for column_name, cell in row.items():
-        cell = validate_cell_rules(config, table_name, column_name, row, cell)
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
+        cell = validate_cell_rules(config, table_name, column_name, row, cell)
         if cell.get("nulltype") is None:
             cell = validate_cell_datatype(config, table_name, column_name, cell)
             cell = validate_cell_trees(config, table_name, column_name, cell, row, prev_results=[])
@@ -91,8 +91,8 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
                 "messages": [],
             }
         for column_name, cell in result_row.items():
-            cell = validate_cell_rules(config, table_name, column_name, row, cell)
             cell = validate_cell_nulltype(config, table_name, column_name, cell)
+            cell = validate_cell_rules(config, table_name, column_name, row, cell)
             if cell.get("nulltype") is None:
                 cell = validate_cell_datatype(config, table_name, column_name, cell)
             result_row[column_name] = cell
@@ -311,6 +311,20 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
     Given a config map, a table name, a column name, the row context, and the cell to validate,
     look in the rule table (if it exists) and validate the cell according to any applicable rules.
     """
+
+    def get_compiled_nulltype_condition(nulltype, condition):
+        def blank(x):
+            return x == ""
+
+        if nulltype == "":
+            null_cond = blank
+        else:
+            null_cond = config["datatype"][nulltype]["compiled_condition"]
+
+        return lambda x: (condition == "null" and null_cond(x)) or (
+            condition == "not null" and not null_cond(x)
+        )
+
     if (
         not config.get("rule")
         or not config["rule"].get(table_name)
@@ -320,8 +334,20 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
 
     applicable_rules = config["rule"][table_name][column_name]
     for rule_number, rule in enumerate(applicable_rules, start=1):
-        if rule["compiled when condition"](cell["value"]):
-            if not rule["compiled then condition"](context[rule["then column"]]):
+        if rule["when condition"] in ["null", "not null"]:
+            nulltype = cell.get("nulltype") or ""
+            when_cond = get_compiled_nulltype_condition(nulltype, rule["when condition"])
+        else:
+            when_cond = rule["compiled when condition"]
+
+        if when_cond(cell["value"]):
+            if rule["then condition"] in ["null", "not null"]:
+                nulltype = config["table"][table_name]["column"][rule["then column"]]["nulltype"]
+                then_cond = get_compiled_nulltype_condition(nulltype, rule["then condition"])
+            else:
+                then_cond = rule["compiled then condition"]
+
+            if not then_cond(context[rule["then column"]]):
                 cell["valid"] = False
                 cell["messages"].append(
                     {

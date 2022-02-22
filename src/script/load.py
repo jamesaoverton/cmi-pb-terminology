@@ -68,14 +68,11 @@ def read_config_files(table_table_path, condition_parser):
         """Given a datatype condition, parse it using the configured parser and pre-compile the
         regular expression and function corresponding to it. Return both the parsed expression and
         the re-compiled regular expression."""
-        if condition is None:
-            return None, None
 
-        # "null" and "not null" are treated specially:
-        if condition in ["null", "not null"]:
-            return None, lambda x: (condition == "null" and x == "") or (
-                condition == "not null" and x != ""
-            )
+        # "null" and "not null" conditions do not get assigned a compiled condition but are dealt
+        # with separately. We also return Nones if the condition is None.
+        if condition in [None, "null", "not null"]:
+            return None, None
 
         parsed_condition = config["parser"].parse(condition)
         if len(parsed_condition) != 1:
