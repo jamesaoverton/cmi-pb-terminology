@@ -71,8 +71,7 @@ def get_matching_values(config, table_name, column_name, leading_string=""):
             values = [r[0] for r in rows.fetchall()]
 
     values = [v for v in values if v.startswith(leading_string)]
-    values = [{"id": v, "label": v, "order": i} for i, v in enumerate(values, start=1)]
-    return json.dumps(values)
+    return [{"id": v, "label": v, "order": i} for i, v in enumerate(values, start=1)]
 
 
 def validate_rows_intra(config, table_name, rows, chunk_number, results):

@@ -36,7 +36,7 @@ except ModuleNotFoundError:
     )
 
 CHUNK_SIZE = 300
-MULTIPROCESSING = True
+MULTIPROCESSING = False
 DEFAULT_CPU_COUNT = 4
 
 # TODO include synonyms?
