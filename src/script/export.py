@@ -182,7 +182,11 @@ def export_messages(args):
 
         message_rows = []
         for column_key in [ckey for ckey in row if ckey.endswith("_meta")]:
-            meta = json.loads(re.sub(r"^json\((.*)\)$", r"\1", row[column_key]))
+            if row[column_key]:
+                meta = json.loads(re.sub(r"^json\((.*)\)$", r"\1", row[column_key]))
+            else:
+                # A null value in the meta column signifies a plain valid cell:
+                meta = meta = {"valid": True, "messages": []}
             if not meta["valid"]:
                 columnid = column_key.removesuffix("_meta")
                 if a1:
