@@ -7,7 +7,7 @@ import sqlite3
 from collections import defaultdict
 
 import gizmos.tree
-from flask import abort, Flask, redirect, request, render_template, Response
+from flask import abort, Flask, redirect, request, render_template, Response, url_for
 from gizmos.export import export
 from gizmos.helpers import get_children, get_descendants, get_entity_type, get_ids
 from gizmos.hiccup import render
@@ -136,8 +136,8 @@ def table(table_name):
     if request.args.get("limit") == "1":
         # Override for how sprocket handles vertical view - we want to treat row ID like term ID
         row_id = int(request.args.get("offset")) + 1
-        return redirect(f"/{table_name}/{row_id}")
-    html = render_database_table(conn, table_name, display_messages=messages, show_help=True)
+        return redirect(url_for("term", table_name=table_name, term_id=row_id))
+    html = render_database_table(conn, table_name, display_messages=messages, show_help=True, standalone=False)
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template("template.html", html=html, tables=tables)
 
@@ -234,7 +234,7 @@ def term(table_name, term_id):
     # Redirect to main ontology table search, do not limit search results
     search_text = request.args.get("text")
     if search_text:
-        return redirect(f"/{table_name}?text={search_text}")
+        return redirect(url_for("table", table_name=table_name, text=search_text))
 
     view = request.args.get("view")
     if view == "form":
@@ -267,16 +267,19 @@ def term(table_name, term_id):
             else:
                 return abort(400, "Unknown format: " + fmt)
             return Response(render_tsv_table([data], fmt=fmt), mimetype=mt)
+        base_url = url_for("term", table_name=table_name, term_id=term_id)
+        tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
+        form_url = url_for("term", table_name=table_name, term_id=term_id, view="form")
         html = [
             '<div class="row">',
-            f'<p>View in: <a href="/{table_name}/{term_id}?view=tree">tree</a> | <a href="/{table_name}/{term_id}?view=form">form</a></p>',
+            f'<p>View in: <a href="{tree_url}">tree</a> | <a href="{form_url}">form</a></p>',
             "</div>",
             render_html_table(
                 [data],
                 table_name,
                 [],
                 request.args,
-                base_url=f"/{table_name}/{term_id}",
+                base_url=base_url,
                 hidden=["search_text"],
                 include_expand=False,
                 show_options=False,
@@ -559,7 +562,7 @@ def get_data_for_term(table_name, term_id, predicates=None):
     spv2annotation = gizmos.tree.get_nested_annotations(stanza)
 
     data = {}
-    href = "/" + table_name + "/{curie}"
+    href = url_for("term", table_name=table_name, term_id="{curie}")
     for predicate, rows in predicate_to_vals.items():
         if predicate in labels:
             pred_label = labels[predicate]
@@ -619,8 +622,8 @@ def render_ontology_table(table_name, data, title, add_params=None):
     # get the columns we want and add links
     data = [
         {
-            "ID": f"<a href=\"/{table_name}/{itm['id']}\">{itm['id']}</a>",
-            "Label": f"<a href=\"/{table_name}/{itm['id']}\">{itm['label']}</a>",
+            "ID": f"<a href=\"{url_for('term', table_name=table_name, term_id=itm['id'])}\">{itm['id']}</a>",
+            "Label": f"<a href=\"{url_for('term', table_name=table_name, term_id=itm['id'])}\">{itm['label']}</a>",
             "Synonym": itm["synonym"] or "",
         }
         for itm in data
@@ -638,7 +641,7 @@ def render_ontology_table(table_name, data, title, add_params=None):
             table_name,
             [],
             request.args,
-            base_url="/" + table_name,
+            base_url=url_for("table", table_name=table_name),
             hidden=["search_text"],
             show_options=False,
             include_expand=False,
@@ -655,7 +658,7 @@ def render_ontology_table(table_name, data, title, add_params=None):
 def render_subclass_of(table_name, param, arg):
     id_to_label = get_terms_from_arg(table_name, arg)
     hrefs = [
-        f"<a href='/{table_name}/{term_id}'>{label}</a>" for term_id, label in id_to_label.items()
+        f"<a href='/{url_for('term', table_name=table_name, term_id=term_id)}'>{label}</a>" for term_id, label in id_to_label.items()
     ]
     title = "Showing children of " + ", ".join(hrefs)
 
@@ -844,12 +847,14 @@ def render_tree(table_name, term_id: str = None):
     # nothing to search, just return the tree view
     html = ""
     if term_id:
-        html += f'<p>View in: <a href="/{table_name}/{term_id}">table</a> | <a href="/{table_name}/{term_id}?view=form">form</a></p>'
+        term_url = url_for("term", table_name=table_name, term_id=term_id)
+        form_url = url_for("term", table_name=table_name, term_id=term_id, view="form")
+        html += f'<p>View in: <a href="{term_url}">table</a> | <a href="{form_url}">form</a></p>'
     html += tree(
         conn,
         "ontie",
         term_id,
-        href="/" + table_name + "/{curie}?view=tree",
+        href=url_for("term", table_name=table_name, term_id="{curie}", view="tree"),
         standalone=False,
         max_children=2,
         statements=table_name,

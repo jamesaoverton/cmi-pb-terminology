@@ -12,9 +12,16 @@
 		<div class="container-fluid">
 			<a class="navbar-brand">CMI-PB Terminology</a>
 			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
-				{% for t in tables %}
-				<li class="nav-item"><a class="nav-link" href="/{{ t }}">{{ t }}</a></li>
-				{% endfor %}
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+						Tables
+					</a>
+					<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+						{% for t in tables %}
+            			<li><a class="dropdown-item" href="{{ url_for('table', table_name=t) }}">{{ t }}</a></li>
+						{% endfor %}
+					</ul>
+				</li>
 			</ul>
 		</div>
 	</nav>
