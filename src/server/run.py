@@ -53,13 +53,31 @@ app = Flask(__name__)
 setup_conn = sqlite3.connect("build/cmi-pb.db", check_same_thread=False)
 config = read_config_files("src/table.tsv", Lark(grammar, parser="lalr", transformer=TreeToDict()))
 config["db"] = setup_conn
-create_db_and_write_sql(config)
+# create_db_and_write_sql(config)
 
 # SQLAlchemy connection required for sprocket/gizmos
 abspath = os.path.abspath("build/cmi-pb.db")
 db_url = "sqlite:///" + abspath + "?check_same_thread=False"
 engine = create_engine(db_url)
 conn = engine.connect()
+
+# Update columns
+for table_name in config["table"].keys():
+    defined_columns = config["table"][table_name]["column"]
+    actual_columns = get_sql_columns(conn, table_name)
+
+    all_columns = {}
+    for column_name in actual_columns:
+        column = {
+            "table": table_name,
+            "column": column_name,
+            "nulltype": "empty",
+            "datatype": "text",
+        }
+        if column_name in defined_columns:
+            column = defined_columns[column_name]
+        all_columns[column_name] = column
+    config["table"][table_name]["column"] = all_columns
 
 
 @app.route("/")
