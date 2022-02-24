@@ -53,31 +53,13 @@ app = Flask(__name__)
 setup_conn = sqlite3.connect("build/cmi-pb.db", check_same_thread=False)
 config = read_config_files("src/table.tsv", Lark(grammar, parser="lalr", transformer=TreeToDict()))
 config["db"] = setup_conn
-# create_db_and_write_sql(config)
+create_db_and_write_sql(config)
 
 # SQLAlchemy connection required for sprocket/gizmos
 abspath = os.path.abspath("build/cmi-pb.db")
 db_url = "sqlite:///" + abspath + "?check_same_thread=False"
 engine = create_engine(db_url)
 conn = engine.connect()
-
-# Update columns
-for table_name in config["table"].keys():
-    defined_columns = config["table"][table_name]["column"]
-    actual_columns = get_sql_columns(conn, table_name)
-
-    all_columns = {}
-    for column_name in actual_columns:
-        column = {
-            "table": table_name,
-            "column": column_name,
-            "nulltype": "empty",
-            "datatype": "text",
-        }
-        if column_name in defined_columns:
-            column = defined_columns[column_name]
-        all_columns[column_name] = column
-    config["table"][table_name]["column"] = all_columns
 
 
 @app.route("/")
@@ -155,7 +137,9 @@ def table(table_name):
         # Override for how sprocket handles vertical view - we want to treat row ID like term ID
         row_id = int(request.args.get("offset")) + 1
         return redirect(url_for("term", table_name=table_name, term_id=row_id))
-    html = render_database_table(conn, table_name, display_messages=messages, show_help=True, standalone=False)
+    html = render_database_table(
+        conn, table_name, display_messages=messages, show_help=True, standalone=False
+    )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template("template.html", html=html, tables=tables)
 
@@ -246,7 +230,7 @@ def term(table_name, term_id):
         request_args["offset"] = str(row_id - 1)
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
-        html = render_database_table(conn, table_name, show_help=True)
+        html = render_database_table(conn, table_name, show_help=True, standalone=False)
         return render_template("template.html", html=html, tables=tables)
 
     # Redirect to main ontology table search, do not limit search results
@@ -315,6 +299,7 @@ def term(table_name, term_id):
 
 
 # ----- DATA TABLE METHODS -----
+
 
 def get_form_row(table_name, row):
     """Transform a row either from query results or validation into a row suitable for the Jinja
@@ -580,7 +565,11 @@ def get_data_for_term(table_name, term_id, predicates=None):
     spv2annotation = gizmos.tree.get_nested_annotations(stanza)
 
     data = {}
-    href = url_for("term", table_name=table_name, term_id="{curie}")
+    href = (
+        url_for("term", table_name=table_name, term_id="{curie}")
+        .replace("%7B", "{")
+        .replace("%7D", "}")
+    )
     for predicate, rows in predicate_to_vals.items():
         if predicate in labels:
             pred_label = labels[predicate]
@@ -676,7 +665,8 @@ def render_ontology_table(table_name, data, title, add_params=None):
 def render_subclass_of(table_name, param, arg):
     id_to_label = get_terms_from_arg(table_name, arg)
     hrefs = [
-        f"<a href='/{url_for('term', table_name=table_name, term_id=term_id)}'>{label}</a>" for term_id, label in id_to_label.items()
+        f"<a href='/{url_for('term', table_name=table_name, term_id=term_id)}'>{label}</a>"
+        for term_id, label in id_to_label.items()
     ]
     title = "Showing children of " + ", ".join(hrefs)
 
@@ -872,7 +862,9 @@ def render_tree(table_name, term_id: str = None):
         conn,
         "ontie",
         term_id,
-        href=url_for("term", table_name=table_name, term_id="{curie}", view="tree"),
+        href=url_for("term", table_name=table_name, term_id="{curie}", view="tree")
+        .replace("%7B", "{")
+        .replace("%7D", "}"),
         standalone=False,
         max_children=2,
         statements=table_name,
