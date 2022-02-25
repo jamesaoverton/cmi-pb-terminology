@@ -37,14 +37,19 @@ def validate_row(config, table_name, row, existing_row=True, row_number=None):
     return row
 
 
-def get_matching_values(config, table_name, column_name, leading_string=""):
+def get_matching_values(config, table_name, column_name, matching_string=""):
     """
-    Given a config map, a table name, a column name, and (optionally) a leading string, return a
-    JSON array of the possible valid values of the given column whose first part matches the leading
-    string. If the leading string is unspecified, then all valid values are returned. The JSON array
-    returned is formatted for Typeahead, i.e., it takes the form:
-    [{"id": id, "label": label, "order": order}, ...]
+    Given a config map, a table name, a column name, and (optionally) a string to match, return a
+    JSON array of possible valid values for the given column which contain the matching string as a
+    substring (or all of them if no matching string is given). The JSON array returned is formatted
+    for Typeahead, i.e., it takes the form:
+    [{"id": id, "label": label, "order": order}, ...].
+    This function may throw a `ValidationException` if the structure used to fetch the matching
+    values refers to a tree that does not exist.
     """
+    # If the datatype for the given column is explicated in terms of an `in(...)` condition, then
+    # the arguments to the `in(...)` function, filtered by the matching string, are the values to
+    # be returned:
     dt_name = config["table"][table_name]["column"][column_name]["datatype"]
     datatype = config["datatype"][dt_name]
     dt_condition = datatype["parsed_condition"]
@@ -52,12 +57,24 @@ def get_matching_values(config, table_name, column_name, leading_string=""):
     if dt_condition["type"] == "function" and dt_condition["name"] == "in":
         # Remove the enclosing quotes from the values being returned:
         values = [arg["value"].strip("'\"") for arg in dt_condition["args"]]
+        values = [v for v in values if matching_string in v]
     else:
+        # If the datatype for the column does not correspond to an `in(...)` function, then we check
+        # the column's structure constraints. If they include a `from(foreign_table.foreign_column)`
+        # condition, then the values are taken from the foreign column. Otherwise if the structure
+        # includes an `under(tree_table.tree_column, value)` condition, then get the values from the
+        # tree column that are under `value`
         structure = config["table"][table_name]["column"][column_name]["parsed_structure"]
+        # Convert the given matching string into one suitable for substring matching in SQL:
+        matching_string = "%" if not matching_string else f"%{matching_string}%"
         if structure and structure["type"] == "function" and structure["name"] == "from":
             ftable = structure["args"][0]["table"]
             fcolumn = structure["args"][0]["column"]
-            rows = config["db"].execute(f"SELECT `{fcolumn}` FROM `{ftable}`")
+            sql = safe_sql(
+                f"SELECT `{fcolumn}` FROM `{ftable}` WHERE `{fcolumn}` LIKE :value",
+                {"value": matching_string},
+            )
+            rows = config["db"].execute(sql)
             values = [r[0] for r in rows.fetchall()]
         elif structure and structure["type"] == "function" and structure["name"] == "under":
             tree_col = structure["args"][0]["column"]
@@ -65,12 +82,16 @@ def get_matching_values(config, table_name, column_name, leading_string=""):
             if not tree:
                 raise ValidationException(f"No tree: '{table_name}.{tree_col}' found")
             tree = tree[0]
+            child_column = tree["child"]
             under_val = structure["args"][1]["value"]
-            sql = with_tree_sql(tree, table_name, under_val) + "SELECT * FROM `tree`"
+            sql = safe_sql(
+                with_tree_sql(tree, table_name, under_val)
+                + f"SELECT `{child_column}` FROM `tree` WHERE `{child_column}` LIKE :value",
+                {"value": matching_string},
+            )
             rows = config["db"].execute(sql)
             values = [r[0] for r in rows.fetchall()]
 
-    values = [v for v in values if v.startswith(leading_string)]
     return [{"id": v, "label": v, "order": i} for i, v in enumerate(values, start=1)]
 
 
