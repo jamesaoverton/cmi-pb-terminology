@@ -433,16 +433,16 @@ def validate_and_insert_chunks(config, table_name, chunks):
             validate_rows_inter_and_insert(intra_results, chunk_number)
 
 
-def create_db_and_write_sql(config):
-    """Given a config map, read the TSVs corresponding to the various defined tables, then create
-    a database containing those tables and write the data from the TSVs to them, all the while
-    writing the SQL strings used to generate the database to STDOUT."""
-
-    table_list = list(config["table"].keys())
+def configure_db(config, write_sql_to_stdout=False, write_to_db=False):
+    """Given a config map, read in the TSV files corresponding to the tables defined in the config,
+    and use that information to fill in table-specific info in the config map. If the flag
+    `write_sql_to_stdout` is set to True, emit SQL to create the database schema to STDOUT. If the
+    flag `write_to_db` is set to True, execute the SQL in the database, whose connection is
+    given in `config` under the "db" key."""
     # Begin by reading in the TSV files corresponding to the tables defined in config, and use
     # that information to create the associated database tables, while saving constraint information
     # to the config map.
-    for table_name in table_list:
+    for table_name in list(config["table"].keys()):
         path = config["table"][table_name]["path"]
         with open(path) as f:
             # Open a DictReader to get the first row from which we will read the column names of the
@@ -479,20 +479,29 @@ def create_db_and_write_sql(config):
                     config["constraints"]["primary"][table_name] = table_constraints["primary"]
                     config["constraints"]["tree"][table_name] = table_constraints["tree"]
                     config["constraints"]["under"][table_name] = table_constraints["under"]
-                config["db"].executescript(table_sql)
-                print("{}\n".format(table_sql))
+                if write_to_db:
+                    config["db"].executescript(table_sql)
+                if write_sql_to_stdout:
+                    print("{}\n".format(table_sql))
 
             # Create a view as the union of the regular and conflict versions of the table:
             sql = "DROP VIEW IF EXISTS `{}`;\n".format(table_name + "_view")
             sql += "CREATE VIEW `{}` AS SELECT * FROM `{}` UNION SELECT * FROM `{}`;".format(
                 table_name + "_view", table_name, table_name + "_conflict"
             )
-            config["db"].executescript(sql)
-            print("{}\n".format(sql))
-            config["db"].commit()
+            if write_sql_to_stdout:
+                print("{}\n".format(sql))
+            if write_to_db:
+                config["db"].executescript(sql)
+                config["db"].commit()
 
+
+def load_db(config):
+    """Given a config map, read in the data TSV files corresponding to each configured table,
+    then validate and load all of the corresponding rows."""
     # Sort tables according to their foreign key dependencies so that tables are always loaded
     # after the tables they depend on:
+    table_list = list(config["table"].keys())
     table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
     # Now load the rows:
@@ -525,6 +534,14 @@ def create_db_and_write_sql(config):
             )
             config["db"].execute(sql)
         config["db"].commit()
+
+
+def configure_and_load_db(config):
+    """Given a config map, read the TSVs corresponding to the various defined tables, then create
+    a database containing those tables and write the data from the TSVs to them, all the while
+    writing the SQL strings used to generate the database to STDOUT."""
+    configure_db(config, write_sql_to_stdout=True, write_to_db=True)
+    load_db(config)
 
 
 def get_SQL_type(config, datatype):
@@ -768,7 +785,7 @@ if __name__ == "__main__":
         with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
             config["db"] = conn
             config["db"].execute("PRAGMA foreign_keys = ON")
-            create_db_and_write_sql(config)
+            configure_and_load_db(config)
     except (
         CycleError,
         FileNotFoundError,

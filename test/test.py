@@ -14,7 +14,7 @@ from subprocess import DEVNULL, run
 pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
-from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
+from load import grammar, TreeToDict, read_config_files, configure_and_load_db, update_row
 from export import export_data, export_messages
 from validate import validate_row, get_matching_values
 
@@ -207,7 +207,7 @@ def main():
         old_stdout = sys.stdout
         with open(os.devnull, "w") as black_hole:
             sys.stdout = black_hole
-            create_db_and_write_sql(config)
+            configure_and_load_db(config)
             sys.stdout = old_stdout
 
     ret = test_load_contents(db_file, this_script)
