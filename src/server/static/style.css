@@ -13,19 +13,11 @@
 .bg-warn {
     background-color: #ffcdab !important;
 }
-.inner-btn {
-    margin-top: -11px;
-    margin-left: -3px;
-}
-.sm-btn {
-    height: 18px;
-    width: 30px;
-}
 .tooltip-inner {
     white-space: pre-wrap;
 }
 
-.btn-circle.btn-xl {
+.btn-xl-plus {
     width: 50px;
     height: 50px;
     padding: 7px 7px;
@@ -33,14 +25,13 @@
     font-size: 35px;
     line-height: 1.33;
 }
-.btn-circle {
-    width: 30px;
-    height: 30px;
-    padding: 6px 0px;
-    border-radius: 15px;
-    text-align: center;
-    font-size: 12px;
-    line-height: 1.42857;
+.btn-xl-pencil {
+    width: 50px;
+    height: 50px;
+    padding: 12px 12px;
+    border-radius: 35px;
+    font-size: 24px;
+    line-height: 1.33;
 }
 
 #annotations {

@@ -55,7 +55,9 @@
 	{% endfor %}
 
 	function condense(level, msg, rowNum, cellNum) {
-		document.getElementById(`expandedRow${rowNum}`).remove();
+		// document.getElementById(`expandedRow${rowNum}`).remove();
+		var value = document.getElementById(`value${rowNum}-${cellNum}`);
+		value.innerText = value.innerText.replace(`\n${msg}`, "");
 
 		// Add tooltip
 		var td = document.getElementById(`td${rowNum}-${cellNum}`);
@@ -65,20 +67,22 @@
 		td.setAttribute("title", msg);
 
 		// Update btn
-		var btn = document.getElementById(`expand${rowNum}`);
+		var btn = document.getElementById(`expand${rowNum}-${cellNum}`);
 		btn.href = `javascript:expand('${level}', '${msg}', ${rowNum}, ${cellNum})`;
-		var txt = document.getElementById(`expandInner${rowNum}`);
-		txt.innerText = "+";
+		btn.innerHTML = '<i class="bi-plus"></i>';
 	}
 
 	function expand(level, msg, rowNum, cellNum) {
-		var row = document.getElementById(`row${rowNum}`);
-		var newHtml = `<tr id="expandedRow${rowNum}">`;
-		for (i=0; i < cellNum; i++) {
-			newHtml += "<td></td>";
-		}
-		newHtml += `<td>${level.toUpperCase()}: ${msg}</td>`
-		row.insertAdjacentHTML('afterend', newHtml);
+		// var row = document.getElementById(`row${rowNum}`);
+		// var newHtml = `<tr id="expandedRow${rowNum}">`;
+		// for (i=0; i < cellNum; i++) {
+		//	newHtml += "<td></td>";
+		// }
+		// newHtml += `<td class="bg-${level}">${msg}</td>`
+		// row.insertAdjacentHTML('afterend', newHtml);
+
+		var value = document.getElementById(`value${rowNum}-${cellNum}`);
+		value.innerHTML = value.innerText + `<br><small class="fst-italic">${msg}</small>`;
 
 		// Remove tooltip
 		var td = document.getElementById(`td${rowNum}-${cellNum}`);
@@ -94,10 +98,9 @@
 		}
 
 		// Update btn
-		var btn = document.getElementById(`expand${rowNum}`);
+		var btn = document.getElementById(`expand${rowNum}-${cellNum}`);
 		btn.href = `javascript:condense('${level}', '${msg}', ${rowNum}, ${cellNum})`;
-		var txt = document.getElementById(`expandInner${rowNum}`);
-		txt.innerText = "-";
+		btn.innerHTML = '<i class="bi-dash"></i>';
 	}
 
 	function reset() {
@@ -200,7 +203,6 @@
 				newParams.push(`${entry[0]}=${entry[1]}`);
 			}
 		}
-		console.log(newParams);
 		var newOS = rowNum + offset - 1;
 		newParams.push(`offset=${newOS}`);
 		newParams.push("limit=1");
@@ -329,85 +331,93 @@
 		window.location = url;
 	}
 
-	// Add a 'new' button for horizontal view
-	function addNewRowBtn() {
-		var table = document.getElementById("sqlTableHorizontal");
-		if (table === null) {
-			// Not vertical view
-			return;
+	function addBtns() {
+		var includeEdit = true;
+		var includeNew = false;
+		var ele = document.getElementById("sqlTableVertical");
+		if (ele === null) {
+			ele = document.getElementById("sqlTableHorizontal");
+			if (ele === null) {
+				ele = document.getElementById("gizmosTree");
+				if (ele === null) {
+					// Not correct view
+					return;
+				}
+				// Include both edit & new buttons
+				includeNew = true;
+			} else {
+				// Multiple rows, include only 'new' button
+				includeEdit = false;
+				includeNew = true;
+			}
 		}
 
 		// Create footer to hold new button
 		var footer = document.createElement("footer");
 		footer.setAttribute("class", "footer mt-auto py-3 fixed-bottom");
 		var container = document.createElement("div");
-		// container.setAttribute("class", "container");
-		var divRow = document.createElement("div");
-		divRow.setAttribute("class", "row justify-content-end");
-		divRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
-		var divCol = document.createElement("div");
-		divCol.setAttribute("class", "col-auto");
-
-		// Add the edit query param to URL
-		var url = new URL(location.protocol + "//" + location.host + location.pathname + "/new");
-		url.searchParams.append("view", "form");
-
-		// Create button with link to edit
-		var btn = document.createElement("a");
-		btn.setAttribute("class", "btn btn-primary btn-circle btn-xl");
-		btn.setAttribute("data-bs-toggle", "tooltip");
-		btn.setAttribute("data-bs-placement", "left");
-		btn.setAttribute("title", "New row");
-		btn.setAttribute("href", url.toString());
-		btn.innerHTML = '<i class="bi-plus"></i>';
-
-		// Add to page
 		footer.appendChild(container);
-		container.appendChild(divRow);
-		divRow.appendChild(divCol);
-		divCol.appendChild(btn);
+
+		if (includeNew) {
+			var newURL = new URL(window.location.origin + '{{ url_for("table", table_name=table_name, view="form") }}');
+			var newBtn = document.createElement("a");
+			newBtn.setAttribute("data-bs-toggle", "tooltip");
+			newBtn.setAttribute("data-bs-placement", "left");
+			newBtn.setAttribute("href", newURL.toString());
+			newBtn.setAttribute("class", "btn btn-primary btn-xl-plus");
+			newBtn.setAttribute("title", "New");
+			newBtn.innerHTML = '<i class="bi-plus"></i>';
+
+			var newRow = document.createElement("div");
+			newRow.setAttribute("class", "row justify-content-end");
+			newRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
+			var newCol = document.createElement("div");
+			newCol.setAttribute("class", "col-auto");
+			newRow.appendChild(newCol);
+			newCol.appendChild(newBtn);
+			container.appendChild(newRow);
+		}
+		if (includeEdit) {
+			// Get the URL and maybe remove current view
+			var url = new URL(window.location);
+			if (url.searchParams.get("view")) {
+				url.searchParams.delete("view");
+			}
+			url.searchParams.append("view", "form");
+			var editBtn = document.createElement("a");
+			editBtn.setAttribute("data-bs-toggle", "tooltip");
+			editBtn.setAttribute("data-bs-placement", "left");
+			editBtn.setAttribute("href", url.toString());
+			editBtn.setAttribute("class", "btn btn-primary btn-xl-pencil");
+			editBtn.setAttribute("title", "Edit");
+			editBtn.innerHTML = '<i class="bi-pencil"></i>';
+
+			var editRow = document.createElement("div");
+			editRow.setAttribute("class", "row justify-content-end");
+			editRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
+			var editCol = document.createElement("div");
+			editCol.setAttribute("class", "col-auto");
+			editRow.appendChild(editCol);
+			editCol.appendChild(editBtn);
+			container.appendChild(editRow);
+		}
+
 		var container = document.getElementById("cmi-pb");
 		container.parentElement.insertBefore(footer, container);
 	}
-	addNewRowBtn();
 
-	// Add an edit button for vertical row
-	function addEditBtn() {
-		var table = document.getElementById("sqlTableVertical");
-		if (table === null) {
-			// Not vertical view
-			return;
-		}
-		// Retrieve row ID
-		var rowId = document.getElementById("row-id");
-		if (rowId === null) {
-			// Not a data row
-			return;
-		}
-
-		// Create div to hold edit button
-		var divRow = document.createElement("div");
-		divRow.setAttribute("class", "row justify-content-end");
-		divRow.setAttribute("style", "padding-bottom: 5px;");
-		var divCol = document.createElement("div");
-		divCol.setAttribute("class", "col-auto");
-
-		// Add the edit query param to URL
-		var url = new URL(window.location);
-		url.searchParams.append("view", "form");
-
-		// Create button with link to edit
-		var btn = document.createElement("a");
-		btn.setAttribute("class", "btn btn-primary");
-		btn.setAttribute("href", url.toString());
-		btn.innerHTML = "Edit Row";
-
-		// Add to page
-		divRow.appendChild(divCol);
-		divCol.appendChild(btn);
-		table.parentNode.insertBefore(divRow, table);
+	var deletes = document.getElementsByClassName("bi-x-circle");
+	for (var i = 0; i < deletes.length; i++){
+		deletes[i].onmouseenter = (function(delBtn) {
+			return function() { delBtn.setAttribute("class", "bi-x-circle-fill"); }
+		})(deletes[i]);
+		deletes[i].onmouseleave = (function(delBtn) {
+			return function() { delBtn.setAttribute("class", "bi-x-circle"); }
+		})(deletes[i]);
 	}
-	addEditBtn();
+
+	// Add new/edit buttons
+	addBtns();
 
 	// Enable tooltips
 	var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))

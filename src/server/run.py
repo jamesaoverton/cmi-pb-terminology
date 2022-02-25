@@ -141,7 +141,7 @@ def table(table_name):
         conn, table_name, display_messages=messages, show_help=True, standalone=False
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
-    return render_template("template.html", html=html, tables=tables)
+    return render_template("template.html", html=html, table_name=table_name, tables=tables)
 
 
 @app.route("/<table_name>/<term_id>", methods=["GET", "POST"])
@@ -150,13 +150,23 @@ def term(table_name, term_id):
     if not is_ontology(table_name):
         row = None
         status = None
-        row_number = get_row_number(table_name, term_id)
+        row_number = None
+        try:
+            row_number = int(term_id)
+        except ValueError:
+            if term_id == "new" and request.args.get("view") != "form":
+                return abort(400, f"Term ID ({term_id}) for data table must be an integer")
+
         if request.method == "POST":
             new_row = dict(request.form)
             del new_row["action"]
             if request.form["action"] == "validate":
-                validated_row = {"row_number": row_number}
-                validated_row.update(validate_table_row(table_name, row_number, new_row))
+                validated_row = validate_table_row(table_name, row_number, new_row)
+                if row_number:
+                    # Place row_number first
+                    validated_row_2 = {"row_number": row_number}
+                    validated_row_2.update(validated_row)
+                    validated_row = validated_row_2
                 row = get_form_row(table_name, validated_row)
                 status = "valid"
                 if "error" in get_messages(validated_row):
@@ -195,7 +205,7 @@ def term(table_name, term_id):
                 # Get the row
                 res = dict(
                     conn.execute(
-                        f"SELECT * FROM {table_name} WHERE row_number = {row_number}"
+                        f"SELECT * FROM {table_name}_view WHERE row_number = {row_number}"
                     ).fetchone()
                 )
                 row = get_form_row(table_name, res)
@@ -222,7 +232,12 @@ def term(table_name, term_id):
                 else:
                     row = {c: {} for c in cols if not c.endswith("_meta") and not c == "row_number"}
             return render_template(
-                "data_form.html", messages=messages, row=row, status=status, tables=tables
+                "data_form.html",
+                messages=messages,
+                row=row,
+                status=status,
+                table_name=table_name,
+                tables=tables,
             )
 
         # Set the request.args to be in the format sprocket expects (like swagger)
@@ -231,7 +246,7 @@ def term(table_name, term_id):
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
         html = render_database_table(conn, table_name, show_help=True, standalone=False)
-        return render_template("template.html", html=html, tables=tables)
+        return render_template("template.html", html=html, table_name=table_name, tables=tables)
 
     # Redirect to main ontology table search, do not limit search results
     search_text = request.args.get("text")
@@ -271,11 +286,11 @@ def term(table_name, term_id):
             return Response(render_tsv_table([data], fmt=fmt), mimetype=mt)
         base_url = url_for("term", table_name=table_name, term_id=term_id)
         tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
-        form_url = url_for("term", table_name=table_name, term_id=term_id, view="form")
         html = [
-            '<div class="row">',
-            f'<p>View in: <a href="{tree_url}">tree</a> | <a href="{form_url}">form</a></p>',
-            "</div>",
+            '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">',
+            f'<a href="{base_url}" class="btn btn-sm btn-outline-primary active">Table</a>',
+            f'<a href="{tree_url}" class="btn btn-sm btn-outline-primary">Tree</a>',
+            "</div></div></div>",
             render_html_table(
                 [data],
                 table_name,
@@ -293,7 +308,8 @@ def term(table_name, term_id):
             "template.html",
             html="\n".join(html),
             base_path=table_name,
-            show_search=False,
+            show_search=is_ontology(table_name),
+            table_name=table_name,
             tables=tables,
         )
 
@@ -358,15 +374,6 @@ def get_messages(row):
     return messages
 
 
-def get_row_number(table_name, row_id):
-    """Get the row number for a row. The row number may be different than the row ID."""
-    if "row_number" in get_sql_columns(conn, table_name):
-        res = conn.execute(f"SELECT row_number FROM {table_name} WHERE rowid = {row_id}").fetchone()
-        if res:
-            return int(res["row_number"])
-    return int(row_id)
-
-
 def validate_table_row(table_name, row_number, row):
     """Perform validation on a row"""
     # Transform row into dict expected for validate
@@ -396,24 +403,17 @@ def build_form_field(
     else:
         display = header
 
-    html = [f'<div class="row mb-3" id="{FORM_ROW_ID}">']
+    html = [f'<div class="row mb-3" id="{FORM_ROW_ID}">', '<label class="col-sm-3 col-form-label">']
     if allow_delete:
         html.extend(
             [
-                f'<div class="col-auto">',
-                f'<a class="btn btn-sm btn-danger" href="javascript:del(\'{FORM_ROW_ID}\')">x</a>'
-                "</div>",
-                f'<label class="col-sm-2 col-form-label">{display}</label>',
-                '<div class="col-sm-9">',
+                f"<a href=\"javascript:del('{FORM_ROW_ID}')\">",
+                f'<i class="bi-x-circle" style="font-size: 16px; color: #dc3545;"></i>' "</a>",
+                "&nbsp;",
             ]
         )
-    else:
-        html.extend(
-            [
-                f'<label class="col-sm-2 col-form-label">{display}</label>',
-                '<div class="col-sm-10">',
-            ]
-        )
+
+    html.extend([display, "</label>", '<div class="col-sm-9">'])
     FORM_ROW_ID += 1
 
     value_html = ""
@@ -658,6 +658,7 @@ def render_ontology_table(table_name, data, title, add_params=None):
         title=title,
         add_params=param_str,
         show_search=True,
+        table_name=table_name,
         tables=tables,
     )
 
@@ -821,6 +822,7 @@ def render_term_form(table_name, term_id):
     return render_template(
         "ontology_form.html",
         table_name=table_name,
+        tables=get_sql_tables(conn),
         term_id=term_id,
         title=f"Update " + label or term_id,
         annotation_properties=aps,
@@ -856,8 +858,11 @@ def render_tree(table_name, term_id: str = None):
     html = ""
     if term_id:
         term_url = url_for("term", table_name=table_name, term_id=term_id)
-        form_url = url_for("term", table_name=table_name, term_id=term_id, view="form")
-        html += f'<p>View in: <a href="{term_url}">table</a> | <a href="{form_url}">form</a></p>'
+        tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
+        html += '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">'
+        html += f'<a href="{term_url}" class="btn btn-sm btn-outline-primary">Table</a>'
+        html += f'<a href="{tree_url}" class="btn btn-sm btn-outline-primary active">Tree</a>'
+        html += "</div></div></div>"
     html += tree(
         conn,
         "ontie",
@@ -871,7 +876,12 @@ def render_tree(table_name, term_id: str = None):
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template(
-        "template.html", html=html, base_path=table_name, show_search=True, tables=tables
+        "template.html",
+        html=html,
+        base_path=table_name,
+        show_search=True,
+        table_name=table_name,
+        tables=tables,
     )
 
 
