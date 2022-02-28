@@ -1,5 +1,4 @@
 import json
-import re
 
 try:
     from sql_utils import safe_sql
@@ -493,7 +492,17 @@ def validate_under(config, table_name):
             with_tree_sql(tree, ukey["ttable"], ukey["value"]) + f"SELECT "
             f"  `row_number`, "
             f"  `{table_name}`.`{column}`, "
-            f"  `{table_name}`.`{column}_meta`, "
+            f"  CASE "
+            f"    WHEN `{table_name}`.`{column}_meta` IS NOT NULL "
+            f"      THEN JSON_EXTRACT( "
+            f"             RTRIM( "
+            f"               SUBSTRING(`{table_name}`.`{column}_meta`, 6), "
+            f"               ')' "
+            f"             ), "
+            f"           '$' "
+            f"          ) "
+            '     ELSE JSON(\'{"valid": true, "messages": []}\') '
+            f"  END AS `{column}_meta`, "
             f"  CASE "
             f"    WHEN `{table_name}`.`{column}` IN ( "
             f"      SELECT `{tree_child}` FROM `{tree_table}` "
@@ -511,12 +520,7 @@ def validate_under(config, table_name):
 
         rows = config["db"].execute(sql).fetchall()
         for row in rows:
-            if row[2]:
-                meta = json.loads(re.sub(r"^json\((.+)\)$", r"\g<1>", row[2]))
-            else:
-                # A null value in the meta column signifies a plain valid cell:
-                meta = {"valid": True, "messages": []}
-
+            meta = json.loads(row[2])
             # If the value in the parent column is legitimately empty, then just skip this row:
             if meta.get("nulltype"):
                 continue
@@ -572,7 +576,19 @@ def validate_tree_foreign_keys(config, table_name):
         rows = (
             config["db"]
             .execute(
-                f"SELECT t1.row_number, t1.`{parent_col}`, t1.`{parent_col}_meta` "
+                f"SELECT "
+                f"  t1.row_number, t1.`{parent_col}`, "
+                f"  CASE "
+                f"    WHEN t1.`{parent_col}_meta` IS NOT NULL "
+                f"      THEN JSON_EXTRACT( "
+                f"             RTRIM( "
+                f"               SUBSTRING(t1.`{parent_col}_meta`, 6), "
+                f"               ')' "
+                f"             ), "
+                f"           '$' "
+                f"          ) "
+                '     ELSE JSON(\'{"valid": true, "messages": []}\') '
+                f"  END AS `{parent_col}_meta` "
                 f"FROM `{table_name}` t1 "
                 f"WHERE NOT EXISTS ( "
                 f"    SELECT 1 "
@@ -584,11 +600,7 @@ def validate_tree_foreign_keys(config, table_name):
         )
 
         for row in rows:
-            if row[2]:
-                meta = json.loads(re.sub(r"^json\((.+)\)$", r"\g<1>", row[2]))
-            else:
-                # A null value in the meta column signifies a plain valid cell:
-                meta = {"valid": True, "messages": []}
+            meta = json.loads(row[2])
             # If the value in the parent column is legitimately empty, then just skip this row:
             if meta.get("nulltype"):
                 continue
