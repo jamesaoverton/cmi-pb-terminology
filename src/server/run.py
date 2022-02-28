@@ -133,12 +133,13 @@ def table(table_name):
         return render_ontology_table(table_name, data, "Showing terms from " + table_name)
 
     # Otherwise render default sprocket table
-    if request.args.get("limit") == "1":
-        # Override for how sprocket handles vertical view - we want to treat row ID like term ID
-        row_id = int(request.args.get("offset")) + 1
-        return redirect(url_for("term", table_name=table_name, term_id=row_id))
     html = render_database_table(
-        conn, table_name, display_messages=messages, show_help=True, standalone=False
+        conn,
+        table_name,
+        display_messages=messages,
+        hide_in_row=["row_number"],
+        show_help=True,
+        standalone=False,
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template("template.html", html=html, table_name=table_name, tables=tables)

@@ -23,7 +23,7 @@
 			</ul>
 		</div>
 	</nav>
-	<div id="cmi-pb" class="container">
+	<div id="cmi-pb" class="px-5 py-1">
 		{% if show_search %}
 		<div class="row">
 			<form class="form-row mt-2 mb-2" method="get">
@@ -37,9 +37,11 @@
 				<h2>{{ title|safe }}</h2>
 			</div>
 			{% endif %}
+			<div class="row">
 			{{ html|safe }}
 			{% block content %}
             {% endblock %}
+			</div>
 		</div>
 	</div>
 </body>
@@ -47,291 +49,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"></script>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.11.1/typeahead.bundle.min.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='script.js') }}"></script>
 <script>
-	// Init headers
-	var headers = [];
-	{% for h in headers %}
-	headers.push('{{ h }}');
-	{% endfor %}
-
-	function condense(level, msg, rowNum, cellNum) {
-		// document.getElementById(`expandedRow${rowNum}`).remove();
-		var value = document.getElementById(`value${rowNum}-${cellNum}`);
-		value.innerText = value.innerText.replace(`\n${msg}`, "");
-
-		// Add tooltip
-		var td = document.getElementById(`td${rowNum}-${cellNum}`);
-		td.setAttribute("data-bs-toggle", "tooltip");
-		td.setAttribute("data-bs-placement", "bottom");
-		td.setAttribute("data-bs-original-title", msg);
-		td.setAttribute("title", msg);
-
-		// Update btn
-		var btn = document.getElementById(`expand${rowNum}-${cellNum}`);
-		btn.href = `javascript:expand('${level}', '${msg}', ${rowNum}, ${cellNum})`;
-		btn.innerHTML = '<i class="bi-plus"></i>';
-	}
-
-	function expand(level, msg, rowNum, cellNum) {
-		// var row = document.getElementById(`row${rowNum}`);
-		// var newHtml = `<tr id="expandedRow${rowNum}">`;
-		// for (i=0; i < cellNum; i++) {
-		//	newHtml += "<td></td>";
-		// }
-		// newHtml += `<td class="bg-${level}">${msg}</td>`
-		// row.insertAdjacentHTML('afterend', newHtml);
-
-		var value = document.getElementById(`value${rowNum}-${cellNum}`);
-		value.innerHTML = value.innerText + `<br><small class="fst-italic">${msg}</small>`;
-
-		// Remove tooltip
-		var td = document.getElementById(`td${rowNum}-${cellNum}`);
-		var tooltipID = td.getAttribute("aria-describedby");
-		td.removeAttribute("data-bs-toggle");
-		td.removeAttribute("data-bs-placement");
-		td.removeAttribute("data-bs-original-title");
-		td.removeAttribute("title");
-		td.removeAttribute("aria-describedby");
-		var tt = document.getElementById(tooltipID);
-		if (tt !== null) {
-			tt.remove();
-		}
-
-		// Update btn
-		var btn = document.getElementById(`expand${rowNum}-${cellNum}`);
-		btn.href = `javascript:condense('${level}', '${msg}', ${rowNum}, ${cellNum})`;
-		btn.innerHTML = '<i class="bi-dash"></i>';
-	}
-
-	function reset() {
-		var url = window.location.href.split('?')[0];
-		window.location.href = url;
-	}
-
-	function sort(col, desc) {
-		// Get current parameters
-		var qString = window.location.search;
-		var params = new URLSearchParams(qString);
-		var newParams = [];
-		var newOrder = [];
-		// Add all current params to new params, only add order keys that are not col
-		for (var entry of params.entries()) {
-			if (entry[0] !== "order") {
-				newParams.push(`${entry[0]}=${entry[1]}`);
-			} else {
-				for (var ord of entry[1].split(",")) {
-					if (!ord.startsWith(col + ".") && ord !== col) {
-						newOrder.push(ord);
-					}
-				}
-			}
-		}
-		// Add this col to the order
-		if (desc) {
-			newOrder.push(col + ".desc");
-		} else {
-			newOrder.push(col);
-		}
-		// Redirect to new URL
-		newParams.push("order=" + newOrder.join(","));
-		if (newParams.length > 0) {
-			window.location.href = "?" + newParams.join("&");
-		}
-	}
-
-	function submitForm(headers, hidden) {
-		var args = []
-		headers = headers.filter(e => e !== "rowid");
-		// Get the where options
-		for (var h of headers) {
-			var operator = document.getElementById(h + 'Operator').value;
-			var constraint = document.getElementById(h + 'Constraint').value;
-			if (operator && constraint) {
-				args.push(h + "=" + operator + "." + constraint);
-			}
-		}
-
-		// Get any hidden args
-		for (var h of hidden) {
-			var val = document.getElementById(h).value;
-			args.push(h + "=" + val);
-		}
-
-		// Get the select options
-		var n = document.getElementsByName('select[]');
-		var s = [];
-		for (i=0; i < (n.length); i++) {
-			if (n[i].checked) {
-				s.push(n[i].value);
-			}
-		}
-		if (s.length > 0 && s.length < headers.length) {
-			args.push("select=" + s.join(","));
-		}
-
-		// Get the violation filters
-		var n = document.getElementsByName('violation[]');
-		var v = [];
-		for (i=0;i < (n.length); i++) {
-			console.log(n[i].checked);
-			if (n[i].checked) {
-				v.push(n[i].value);
-			}
-		}
-		if (v.length > 0) {
-			args.push("violations=" + v.join(","));
-		}
-
-		// Get the limit option
-		var l = document.getElementById("limitValue").value;
-		args.push("limit=" + l);
-
-		// Redirect to new URL
-		if (args.length > 0) {
-			window.location.href = "?" + args.join("&")
-		}
-	}
-
-	function vertical(rowNum, offset) {
-		var qString = window.location.search;
-		var params = new URLSearchParams(qString);
-		var newParams = [];
-		for (var entry of params.entries()) {
-			if (entry[0] === "limit" || entry[0] === "offset") {
-				continue;
-			} else {
-				newParams.push(`${entry[0]}=${entry[1]}`);
-			}
-		}
-		var newOS = rowNum + offset - 1;
-		newParams.push(`offset=${newOS}`);
-		newParams.push("limit=1");
-		if (newParams.length > 0) {
-			window.location.href = "?" + newParams.join("&");
-		}
-	}
-
-	// Configure typeahead for Parent labels
-	function configure_typeahead_form(node) {
-		if (!node.id || !node.id.endsWith("-typeahead-form")) {
-		  return;
-		}
-		table = node.id.split("-")[0];
-		var bloodhound = new Bloodhound({
-		  datumTokenizer: Bloodhound.tokenizers.obj.nonword('label'),
-		  queryTokenizer: Bloodhound.tokenizers.nonword,
-		  sorter: function(a, b) {
-			return a.order - b.order;
-		  },
-		  remote: {
-			url: `/${table}?text=%QUERY&format=json`,
-			wildcard: '%QUERY',
-			transform : function(response) {
-			  return bloodhound.sorter(response);
-			}
-		  }
-		});
-		$(node).typeahead({
-		  minLength: 0,
-		  hint: false,
-		  highlight: true
-		}, {
-		  name: table,
-		  source: bloodhound,
-		  display: function(item) {
-			return item.label;
-		  },
-		  limit: 40
-		});
-		$(node).bind('click', function(e) {
-		  $(node).select();
-		});
-	}
-
-	function configure_typeahead(node) {
-	  if (!node.id || !node.id.endsWith("-typeahead")) {
-		return;
-	  }
-	  table = node.id.split("-")[0];
-	  var bloodhound = new Bloodhound({
-		datumTokenizer: Bloodhound.tokenizers.obj.nonword('short_label', 'label', 'synonym'),
-		queryTokenizer: Bloodhound.tokenizers.nonword,
-		sorter: function(a, b) {
-		  return a.order - b.order;
-		},
-		remote: {
-		  {% if search_param %} url: '?{{ search_param }}&text=%QUERY&format=json', {% else %} url: '?text=%QUERY&format=json', {% endif %}
-		  wildcard: '%QUERY',
-		  transform : function(response) {
-			  return bloodhound.sorter(response);
-		  }
-		}
-	  });
-	  $(node).typeahead({
-		minLength: 0,
-		hint: false,
-		highlight: true
-	  }, {
-		name: table,
-		source: bloodhound,
-		display: function(item) {
-		  if (item.label && item.short_label && item.synonym) {
-			return item.short_label + ' - ' + item.label + ' - ' + item.synonym;
-		  } else if (item.label && item.short_label) {
-			return item.short_label + ' - ' + item.label;
-		  } else if (item.label && item.synonym) {
-			return item.label + ' - ' + item.synonym;
-		  } else if (item.short_label && item.synonym) {
-			return item.short_label + ' - ' + item.synonym;
-		  } else if (item.short_label && !item.label) {
-			return item.short_label;
-		  } else {
-			return item.label;
-		  }
-		},
-		limit: 40
-	  });
-	  $(node).bind('click', function(e) {
-		$(node).select();
-	  });
-	  $(node).bind('typeahead:select', function(ev, suggestion) {
-		$(node).prev().val(suggestion.id);
-		go(table, suggestion.id);
-	  });
-	}
-	$('.typeahead').each(function() { configure_typeahead(this); });
-
-	function go(table, value) {
-	  q = {}
-	  table = table.replace('_all', '');
-	  q[table] = value
-	  window.location = query(q);
-	}
-
-	function query(obj) {
-	  var str = [];
-	  for (var p in obj)
-		if (obj.hasOwnProperty(p)) {
-		  str.push("/{{ base_path }}/" + encodeURIComponent(obj[p]) + "");
-		}
-	  return str.join("&");
-	}
-
-	// redirect to the sprocket table when clicking view all children
-	function show_children() {
-		var curURL = window.location.href;
-		console.l
-		var tableURL = curURL.substr(0, curURL.lastIndexOf("/"));
-		var termId = curURL.substr(curURL.lastIndexOf("/") + 1);
-		if (termId.includes("?")) {
-			termId = termId.split("?")[0];
-		}
-		var url = new URL(tableURL);
-		url.searchParams.append("subClassOf", termId);
-		window.location = url;
-	}
-
 	function addBtns() {
+		/**
+		 * Add new and/or edit buttons. The ontology tree view gets both. Horizontal data tables get a 'new' button.
+		 * Vertical data tables get an 'edit' button.
+		 */
 		var includeEdit = true;
 		var includeNew = false;
 		var ele = document.getElementById("sqlTableVertical");
@@ -406,6 +130,132 @@
 		container.parentElement.insertBefore(footer, container);
 	}
 
+	function showVertical(rowNum, offset) {
+		/**
+		 * Show the given row in vertical view. This overrides sprocket default behavior,
+		 * as we are redirecting to {table_name}/{row_number}.
+		 */
+		// Get the row_number for this row
+		var sqlRowNum = document.getElementById(`row_number${rowNum}`).innerText;
+		var newURL = "{{ url_for('table', table_name=table_name) }}";
+		newURL += "/" + sqlRowNum;
+		window.location.href = newURL;
+	}
+
+	// Init headers
+	var headers = [];
+	{% for h in headers %}
+	headers.push('{{ h }}');
+	{% endfor %}
+
+	// Configure typeahead for Parent labels
+	function configure_typeahead_form(node) {
+		if (!node.id || !node.id.endsWith("-typeahead-form")) {
+		  return;
+		}
+		table = node.id.split("-")[0];
+		var bloodhound = new Bloodhound({
+		  datumTokenizer: Bloodhound.tokenizers.obj.nonword('label'),
+		  queryTokenizer: Bloodhound.tokenizers.nonword,
+		  sorter: function(a, b) {
+			return a.order - b.order;
+		  },
+		  remote: {
+			url: `/${table}?text=%QUERY&format=json`,
+			wildcard: '%QUERY',
+			transform : function(response) {
+			  return bloodhound.sorter(response);
+			}
+		  }
+		});
+		$(node).typeahead({
+		  minLength: 0,
+		  hint: false,
+		  highlight: true
+		}, {
+		  name: table,
+		  source: bloodhound,
+		  display: function(item) {
+			return item.label;
+		  },
+		  limit: 40
+		});
+		$(node).bind('click', function(e) {
+		  $(node).select();
+		});
+	}
+
+	// Configure typeahead for search
+	function configure_typeahead(node) {
+	  if (!node.id || !node.id.endsWith("-typeahead")) {
+		return;
+	  }
+	  table = node.id.split("-")[0];
+	  var bloodhound = new Bloodhound({
+		datumTokenizer: Bloodhound.tokenizers.obj.nonword('short_label', 'label', 'synonym'),
+		queryTokenizer: Bloodhound.tokenizers.nonword,
+		sorter: function(a, b) {
+		  return a.order - b.order;
+		},
+		remote: {
+		  {% if search_param %} url: '?{{ search_param }}&text=%QUERY&format=json', {% else %} url: '?text=%QUERY&format=json', {% endif %}
+		  wildcard: '%QUERY',
+		  transform : function(response) {
+			  return bloodhound.sorter(response);
+		  }
+		}
+	  });
+	  $(node).typeahead({
+		minLength: 0,
+		hint: false,
+		highlight: true
+	  }, {
+		name: table,
+		source: bloodhound,
+		display: function(item) {
+		  if (item.label && item.short_label && item.synonym) {
+			return item.short_label + ' - ' + item.label + ' - ' + item.synonym;
+		  } else if (item.label && item.short_label) {
+			return item.short_label + ' - ' + item.label;
+		  } else if (item.label && item.synonym) {
+			return item.label + ' - ' + item.synonym;
+		  } else if (item.short_label && item.synonym) {
+			return item.short_label + ' - ' + item.synonym;
+		  } else if (item.short_label && !item.label) {
+			return item.short_label;
+		  } else {
+			return item.label;
+		  }
+		},
+		limit: 40
+	  });
+	  $(node).bind('click', function(e) {
+		$(node).select();
+	  });
+	  $(node).bind('typeahead:select', function(ev, suggestion) {
+		$(node).prev().val(suggestion.id);
+		go(table, suggestion.id);
+	  });
+	}
+	$('.typeahead').each(function() { configure_typeahead(this); });
+
+	function go(table, value) {
+	  q = {}
+	  table = table.replace('_all', '');
+	  q[table] = value
+	  window.location = query(q);
+	}
+
+	function query(obj) {
+	  var str = [];
+	  for (var p in obj)
+		if (obj.hasOwnProperty(p)) {
+		  str.push("/{{ base_path }}/" + encodeURIComponent(obj[p]) + "");
+		}
+	  return str.join("&");
+	}
+
+	// Icon change for hovering on ontology form delete buttons
 	var deletes = document.getElementsByClassName("bi-x-circle");
 	for (var i = 0; i < deletes.length; i++){
 		deletes[i].onmouseenter = (function(delBtn) {
