@@ -22,7 +22,6 @@ import	A7	error	datatype:prefix	source should be a prefix for a CURIE	CO B
 import	A7	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
 import	B8	error	key:unique	Values of id must be unique	COB:0000013
 foobar	D1	error	rule:foo-2	bar cannot be null if foo is not null	x
-foobar	D1	error	rule:foo-3	bar must be a word if foo is an IRI	x
 foobar	D1	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
 foobar	C2	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
 foobar	D2	error	rule:foo-1	bar must be null whenever foo is null	

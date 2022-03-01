@@ -94,11 +94,11 @@ def read_config_files(table_table_path, condition_parser):
             flags = "(?" + "".join(flags) + ")" if flags else ""
             pattern = re.compile(flags + pattern)
             if parsed_condition["name"] == "exclude":
-                return parsed_condition, lambda x: x != "" and not bool(pattern.search(x))
+                return parsed_condition, lambda x: not bool(pattern.search(x))
             elif parsed_condition["name"] == "match":
-                return parsed_condition, lambda x: x != "" and bool(pattern.fullmatch(x))
+                return parsed_condition, lambda x: bool(pattern.fullmatch(x))
             else:
-                return parsed_condition, lambda x: x != "" and bool(pattern.search(x))
+                return parsed_condition, lambda x: bool(pattern.search(x))
         elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
             alternatives = [
                 re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]

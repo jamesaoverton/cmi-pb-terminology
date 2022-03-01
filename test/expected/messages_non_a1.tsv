@@ -22,7 +22,6 @@ import	molecular dentity	source	error	datatype:prefix	source should be a prefix 
 import	molecular dentity	source	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
 import	molecular entity	id	error	key:unique	Values of id must be unique	COB:0000013
 foobar	1	foo	error	rule:foo-2	bar cannot be null if foo is not null	x
-foobar	1	foo	error	rule:foo-3	bar must be a word if foo is an IRI	x
 foobar	1	foo	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
 foobar	2	xyzzy	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
 foobar	2	foo	error	rule:foo-1	bar must be null whenever foo is null	
