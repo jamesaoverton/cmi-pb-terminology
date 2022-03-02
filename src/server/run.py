@@ -28,7 +28,7 @@ from sqlalchemy.sql.expression import text as sql_text
 from werkzeug.datastructures import ImmutableMultiDict
 
 from src.script.cmi_pb_grammar import grammar, TreeToDict
-from src.script.load import create_db_and_write_sql, update_row, read_config_files
+from src.script.load import configure_db, read_config_files, update_row
 from src.script.validate import validate_row
 
 
@@ -53,7 +53,7 @@ app = Flask(__name__)
 setup_conn = sqlite3.connect("build/cmi-pb.db", check_same_thread=False)
 config = read_config_files("src/table.tsv", Lark(grammar, parser="lalr", transformer=TreeToDict()))
 config["db"] = setup_conn
-create_db_and_write_sql(config)
+configure_db(config)
 
 # SQLAlchemy connection required for sprocket/gizmos
 abspath = os.path.abspath("build/cmi-pb.db")
@@ -330,7 +330,7 @@ def get_form_row(table_name, row):
             # Check for meta row
             meta_row = row.get(header + "_meta")
             if meta_row:
-                meta = json.loads(meta_row[5:-1])
+                meta = json.loads(meta_row)
                 if meta.get("value"):
                     value = meta["value"]
             if not value:
