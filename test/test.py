@@ -160,7 +160,7 @@ def test_validate_and_update_row(config):
     expected_row = (
         2,
         None,
-        'json({"messages": [{"rule": "key:foreign", "level": "error", "message": "Value ZOB of column source is not in prefix.prefix"}], "valid": false, "value": "ZOB"})',
+        '{"messages":[{"rule":"key:foreign","level":"error","message":"Value ZOB of column source is not in prefix.prefix"}],"valid":false,"value":"ZOB"}',
         "ZOB:0000013",
         None,
         "bar",

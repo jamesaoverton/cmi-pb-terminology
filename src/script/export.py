@@ -97,12 +97,7 @@ def export_data(args):
                             f"""
                             CASE
                               WHEN `{column}` IS NOT NULL THEN `{column}`
-                              ELSE JSON_EXTRACT(
-                                     RTRIM(
-                                       SUBSTRING(`{column}_meta`, 6),
-                                       ")"),
-                                     '$.value'
-                                   )
+                              ELSE JSON_EXTRACT(`{column}_meta`, '$.value')
                               END AS `{column}`
                             """
                         )
@@ -209,14 +204,8 @@ def export_messages(args):
             sql = f"`{column}`"
         else:
             sql = (
-                f"CASE WHEN `{column}` IS NOT NULL "
-                f"  THEN JSON( "
-                f"         RTRIM( "
-                f"           SUBSTRING(`{column}`, 6), "
-                f"           ')' "
-                f"         ) "
-                f"      ) "
-                '   ELSE JSON(\'{"valid": true, "messages": []}\') '
+                f"CASE WHEN `{column}` IS NOT NULL THEN JSON(`{column}`) "
+                ' ELSE JSON(\'{"valid": true, "messages": []}\') '
                 f"END AS `{column}`"
             )
 

@@ -531,10 +531,10 @@ def load_db(config):
         for record in records_to_update:
             table, column, meta = table_name, record["column"], record["column"] + "_meta"
             sql = safe_sql(
-                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = :mval "
+                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = JSON(:mval) "
                 f"WHERE `row_number` = :row_number;",
                 {
-                    "mval": "json({})".format(json.dumps(record["meta"])),
+                    "mval": "{}".format(json.dumps(record["meta"])),
                     "row_number": record["row_number"],
                 },
             )
@@ -703,7 +703,7 @@ def make_inserts(config, table_name, rows, chunk_number):
                     value = cell["value"]
                     cell.pop("value")
                 values.append(f":{column}")
-                values.append(f":{column}_meta")
+                values.append(f"JSON(:{column}_meta)")
                 params[column] = value
                 # If the cell value is valid and there is no extra information (e.g., nulltype),
                 # then just set the metadata to None, which can be taken to represent a "plain"
@@ -711,7 +711,7 @@ def make_inserts(config, table_name, rows, chunk_number):
                 if cell["valid"] and all([k in ["value", "valid", "messages"] for k in cell]):
                     params[column + "_meta"] = None
                 else:
-                    params[column + "_meta"] = "json({})".format(json.dumps(cell))
+                    params[column + "_meta"] = "{}".format(json.dumps(cell))
             line = ", ".join(values)
             line = f"({line})"
             lines.append(safe_sql(line, params))
@@ -766,14 +766,14 @@ def update_row(config, table_name, row, row_number):
             value = cell["value"]
             cell.pop("value")
         assignments.append(f"`{column}` = :{variable}")
-        assignments.append(f"`{column}_meta` = :{variable}_meta")
+        assignments.append(f"`{column}_meta` = JSON(:{variable}_meta)")
         params[variable] = value
         # If the cell value is valid and there is no extra information (e.g., nulltype), then
         # just set the metadata to None, which can be taken to represent a "plain" valid cell:
         if cell["valid"] and all([k in ["value", "valid", "messages"] for k in cell]):
             params[variable + "_meta"] = None
         else:
-            params[variable + "_meta"] = "json({})".format(json.dumps(cell))
+            params[variable + "_meta"] = "{}".format(json.dumps(cell))
 
     update_stmt = f"UPDATE `{table_name}` SET "
     update_stmt += safe_sql(", ".join(assignments), params)
