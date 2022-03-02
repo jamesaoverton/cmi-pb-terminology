@@ -90,3 +90,31 @@ class TreeToDict(Transformer):
 
     def start(self, start):
         return start
+
+
+def reverse_parse(config, parsed_cond):
+    """Given a config map and a parsed condition, return the text version of the condition."""
+    cond_type = parsed_cond["type"]
+    text_cond = None
+    if cond_type == "label":
+        if config["datatype"].get(parsed_cond["value"]):
+            text_cond = config["datatype"][parsed_cond["value"]]["datatype"]
+        else:
+            text_cond = "'{}'".format(parsed_cond["value"])
+    elif cond_type == "field":
+        return "{}.{}".format(parsed_cond["table"], parsed_cond["column"])
+    elif cond_type == "named_arg":
+        text_cond = "{}={}".format(parsed_cond["key"], parsed_cond["value"])
+    elif cond_type == "regex":
+        pattern = parsed_cond["pattern"]
+        flags = "".join(parsed_cond["flags"])
+        replace = parsed_cond.get("replace")
+        text_cond = f"/{pattern}/{flags}" if not replace else f"s/{pattern}/{replace}/{flags}"
+    elif cond_type == "function":
+        text_cond = map(lambda arg: reverse_parse(config, arg), parsed_cond["args"])
+        text_cond = ", ".join(text_cond)
+        text_cond = "{}({})".format(parsed_cond["name"], text_cond)
+    else:
+        raise Exception(f"Unknown parsed_cond type: {cond_type} for {parsed_cond}")
+
+    return text_cond

@@ -1,5 +1,4 @@
 import json
-import re
 
 try:
     from sql_utils import safe_sql
@@ -7,30 +6,110 @@ except ModuleNotFoundError:
     from src.script.sql_utils import safe_sql
 
 
+class ValidationException(Exception):
+    pass
+
+
 def validate_row(config, table_name, row, existing_row=True, row_number=None):
     """
     Given a config map, a table name, an existing row to validate, and its associated row number,
     perform both intra- and inter-row validation and return the validated row.
     """
-    for column_name, cell in row.items():
-        cell = validate_cell_rules(config, table_name, column_name, row, cell)
+    if existing_row:
+        result_row = row
+    else:
+        result_row = {}
+        for column, value in row.items():
+            result_row[column] = {
+                "value": value,
+                "valid": True,
+                "messages": [],
+            }
+
+    # We check all the cells for nulltype first, since the rules validation requires that we
+    # have this information for all cells.
+    for column_name, cell in result_row.items():
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
+        result_row[column_name] = cell
+
+    for column_name, cell in result_row.items():
+        cell = validate_cell_rules(config, table_name, column_name, result_row, cell)
         if cell.get("nulltype") is None:
             cell = validate_cell_datatype(config, table_name, column_name, cell)
-            cell = validate_cell_trees(config, table_name, column_name, cell, row, prev_results=[])
+            cell = validate_cell_trees(
+                config, table_name, column_name, cell, result_row, prev_results=[]
+            )
             cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
             cell = validate_unique_constraints(
                 config,
                 table_name,
                 column_name,
                 cell,
-                row,
+                result_row,
                 prev_results=[],
                 existing_row=existing_row,
                 row_number=row_number,
             )
-        row[column_name] = cell
-    return row
+        result_row[column_name] = cell
+    return result_row
+
+
+def get_matching_values(config, table_name, column_name, matching_string=""):
+    """
+    Given a config map, a table name, a column name, and (optionally) a string to match, return a
+    JSON array of possible valid values for the given column which contain the matching string as a
+    substring (or all of them if no matching string is given). The JSON array returned is formatted
+    for Typeahead, i.e., it takes the form:
+    [{"id": id, "label": label, "order": order}, ...].
+    This function may throw a `ValidationException` if the structure used to fetch the matching
+    values refers to a tree that does not exist.
+    """
+    # If the datatype for the given column is explicated in terms of an `in(...)` condition, then
+    # the arguments to the `in(...)` function, filtered by the matching string, are the values to
+    # be returned:
+    dt_name = config["table"][table_name]["column"][column_name]["datatype"]
+    datatype = config["datatype"][dt_name]
+    dt_condition = datatype["parsed_condition"]
+    values = []
+    if dt_condition["type"] == "function" and dt_condition["name"] == "in":
+        # Remove the enclosing quotes from the values being returned:
+        values = [arg["value"].strip("'\"") for arg in dt_condition["args"]]
+        values = [v for v in values if matching_string in v]
+    else:
+        # If the datatype for the column does not correspond to an `in(...)` function, then we check
+        # the column's structure constraints. If they include a `from(foreign_table.foreign_column)`
+        # condition, then the values are taken from the foreign column. Otherwise if the structure
+        # includes an `under(tree_table.tree_column, value)` condition, then get the values from the
+        # tree column that are under `value`
+        structure = config["table"][table_name]["column"][column_name]["parsed_structure"]
+        # Convert the given matching string into one suitable for substring matching in SQL:
+        matching_string = "%" if not matching_string else f"%{matching_string}%"
+        if structure and structure["type"] == "function" and structure["name"] == "from":
+            ftable = structure["args"][0]["table"]
+            fcolumn = structure["args"][0]["column"]
+            sql = safe_sql(
+                f"SELECT `{fcolumn}` FROM `{ftable}` WHERE `{fcolumn}` LIKE :value",
+                {"value": matching_string},
+            )
+            rows = config["db"].execute(sql)
+            values = [r[0] for r in rows.fetchall()]
+        elif structure and structure["type"] == "function" and structure["name"] == "under":
+            tree_col = structure["args"][0]["column"]
+            tree = [c for c in config["constraints"]["tree"][table_name] if c["child"] == tree_col]
+            if not tree:
+                raise ValidationException(f"No tree: '{table_name}.{tree_col}' found")
+            tree = tree[0]
+            child_column = tree["child"]
+            under_val = structure["args"][1]["value"]
+            sql = safe_sql(
+                with_tree_sql(tree, table_name, under_val)
+                + f"SELECT `{child_column}` FROM `tree` WHERE `{child_column}` LIKE :value",
+                {"value": matching_string},
+            )
+            rows = config["db"].execute(sql)
+            values = [r[0] for r in rows.fetchall()]
+
+    return [{"id": v, "label": v, "order": i} for i, v in enumerate(values, start=1)]
 
 
 def validate_rows_intra(config, table_name, rows, chunk_number, results):
@@ -49,12 +128,19 @@ def validate_rows_intra(config, table_name, rows, chunk_number, results):
                 "valid": True,
                 "messages": [],
             }
+
+        # We check all the cells for nulltype first, since the rules validation requires that we
+        # have this information for all cells.
         for column_name, cell in result_row.items():
-            cell = validate_cell_rules(config, table_name, column_name, row, cell)
             cell = validate_cell_nulltype(config, table_name, column_name, cell)
+            result_row[column_name] = cell
+
+        for column_name, cell in result_row.items():
+            cell = validate_cell_rules(config, table_name, column_name, result_row, cell)
             if cell.get("nulltype") is None:
                 cell = validate_cell_datatype(config, table_name, column_name, cell)
             result_row[column_name] = cell
+
         result_rows.append(result_row)
     results[chunk_number] = result_rows
     return result_rows
@@ -114,7 +200,7 @@ def validate_cell_nulltype(config, table_name, column_name, cell):
     if column["nulltype"]:
         nt_name = column["nulltype"]
         nulltype = config["datatype"][nt_name]
-        if nulltype["condition"](cell["value"]):
+        if nulltype["compiled_condition"](cell["value"]):
             cell["nulltype"] = nt_name
     return cell
 
@@ -224,13 +310,16 @@ def validate_cell_datatype(config, table_name, column_name, cell):
     primary_dt_name = column["datatype"]
     primary_datatype = config["datatype"][primary_dt_name]
     primary_dt_description = primary_datatype["description"]
-    primary_dt_condition_func = primary_datatype.get("condition")
+    primary_dt_condition_func = primary_datatype.get("compiled_condition")
 
     def get_datatypes_to_check(dt_name):
         datatypes = []
         if dt_name is not None:
             datatype = config["datatype"][dt_name]
-            if datatype["datatype"] != primary_dt_name and datatype["condition"] is not None:
+            if (
+                datatype["datatype"] != primary_dt_name
+                and datatype["compiled_condition"] is not None
+            ):
                 datatypes.append(datatype)
             datatypes += get_datatypes_to_check(datatype["parent"])
         return datatypes
@@ -243,7 +332,7 @@ def validate_cell_datatype(config, table_name, column_name, cell):
         # order:
         while parent_datatypes:
             datatype = parent_datatypes.pop()
-            if not datatype["condition"](cell["value"]):
+            if not datatype["compiled_condition"](cell["value"]):
                 cell["messages"].append(
                     {
                         "rule": "datatype:{}".format(datatype["datatype"]),
@@ -267,6 +356,17 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
     Given a config map, a table name, a column name, the row context, and the cell to validate,
     look in the rule table (if it exists) and validate the cell according to any applicable rules.
     """
+
+    def check_condition(condition_type, cell, rule):
+        condition = rule[f"{condition_type} condition"]
+        if condition in ["null", "not null"]:
+            return (condition == "null" and cell.get("nulltype")) or (
+                condition == "not null" and not cell.get("nulltype")
+            )
+        else:
+            compiled_condition = rule[f"compiled {condition_type} condition"]
+            return compiled_condition(cell["value"])
+
     if (
         not config.get("rule")
         or not config["rule"].get(table_name)
@@ -276,8 +376,8 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
 
     applicable_rules = config["rule"][table_name][column_name]
     for rule_number, rule in enumerate(applicable_rules, start=1):
-        if rule["when condition"](cell["value"]):
-            if not rule["then condition"](context[rule["then column"]]):
+        if check_condition("when", cell, rule):
+            if not check_condition("then", context[rule["then column"]], rule):
                 cell["valid"] = False
                 cell["messages"].append(
                     {
@@ -402,7 +502,11 @@ def validate_under(config, table_name):
             with_tree_sql(tree, ukey["ttable"], ukey["value"]) + f"SELECT "
             f"  `row_number`, "
             f"  `{table_name}`.`{column}`, "
-            f"  `{table_name}`.`{column}_meta`, "
+            f"  CASE "
+            f"    WHEN `{table_name}`.`{column}_meta` IS NOT NULL "
+            f"      THEN JSON(`{table_name}`.`{column}_meta`) "
+            '     ELSE JSON(\'{"valid": true, "messages": []}\') '
+            f"  END AS `{column}_meta`, "
             f"  CASE "
             f"    WHEN `{table_name}`.`{column}` IN ( "
             f"      SELECT `{tree_child}` FROM `{tree_table}` "
@@ -420,8 +524,7 @@ def validate_under(config, table_name):
 
         rows = config["db"].execute(sql).fetchall()
         for row in rows:
-            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
-            meta = json.loads(meta)
+            meta = json.loads(row[2])
             # If the value in the parent column is legitimately empty, then just skip this row:
             if meta.get("nulltype"):
                 continue
@@ -477,7 +580,13 @@ def validate_tree_foreign_keys(config, table_name):
         rows = (
             config["db"]
             .execute(
-                f"SELECT t1.row_number, t1.`{parent_col}`, t1.`{parent_col}_meta` "
+                f"SELECT "
+                f"  t1.row_number, t1.`{parent_col}`, "
+                f"  CASE "
+                f"    WHEN t1.`{parent_col}_meta` IS NOT NULL "
+                f"      THEN JSON(t1.`{parent_col}_meta`) "
+                '     ELSE JSON(\'{"valid": true, "messages": []}\') '
+                f"  END AS `{parent_col}_meta` "
                 f"FROM `{table_name}` t1 "
                 f"WHERE NOT EXISTS ( "
                 f"    SELECT 1 "
@@ -489,8 +598,7 @@ def validate_tree_foreign_keys(config, table_name):
         )
 
         for row in rows:
-            meta = re.sub(r"^json\((.+)\)$", r"\g<1>", row[2])
-            meta = json.loads(meta)
+            meta = json.loads(row[2])
             # If the value in the parent column is legitimately empty, then just skip this row:
             if meta.get("nulltype"):
                 continue
