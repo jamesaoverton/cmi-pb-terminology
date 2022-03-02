@@ -14,7 +14,7 @@ from subprocess import DEVNULL, run
 pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
-from load import grammar, TreeToDict, read_config_files, create_db_and_write_sql, update_row
+from load import grammar, TreeToDict, read_config_files, configure_and_load_db, update_row
 from export import export_data, export_messages
 from validate import validate_row, get_matching_values
 
@@ -160,7 +160,7 @@ def test_validate_and_update_row(config):
     expected_row = (
         2,
         None,
-        'json({"messages": [{"rule": "key:foreign", "level": "error", "message": "Value ZOB of column source is not in prefix.prefix"}], "valid": false, "value": "ZOB"})',
+        '{"messages":[{"rule":"key:foreign","level":"error","message":"Value ZOB of column source is not in prefix.prefix"}],"valid":false,"value":"ZOB"}',
         "ZOB:0000013",
         None,
         "bar",
@@ -181,14 +181,8 @@ def test_validate_and_update_row(config):
 
 
 def test_auto_complete(config):
-    actual = get_matching_values(config, "foobar", "xyzzy")
-    expected = [
-        {"id": "d", "label": "d", "order": 1},
-        {"id": "e", "label": "e", "order": 2},
-        {"id": "f", "label": "f", "order": 3},
-        {"id": "g", "label": "g", "order": 4},
-        {"id": "h", "label": "h", "order": 5},
-    ]
+    actual = get_matching_values(config, "foobar", "xyzzy", "d")
+    expected = [{"id": "d", "label": "d", "order": 1}]
     if actual != expected:
         print(f"Actual auto_complete values: {actual} do not match the expected values: {expected}")
         return 1
@@ -213,7 +207,7 @@ def main():
         old_stdout = sys.stdout
         with open(os.devnull, "w") as black_hole:
             sys.stdout = black_hole
-            create_db_and_write_sql(config)
+            configure_and_load_db(config)
             sys.stdout = old_stdout
 
     ret = test_load_contents(db_file, this_script)

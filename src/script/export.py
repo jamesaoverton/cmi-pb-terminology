@@ -3,7 +3,6 @@
 import csv
 import json
 import os.path
-import re
 import sqlite3
 import sys
 
@@ -98,12 +97,7 @@ def export_data(args):
                             f"""
                             CASE
                               WHEN `{column}` IS NOT NULL THEN `{column}`
-                              ELSE JSON_EXTRACT(
-                                     RTRIM(
-                                       SUBSTRING(`{column}_meta`, 6),
-                                       ")"),
-                                     '$.value'
-                                   )
+                              ELSE JSON_EXTRACT(`{column}_meta`, '$.value')
                               END AS `{column}`
                             """
                         )
@@ -176,17 +170,13 @@ def export_messages(args):
             for pk in primary_keys:
                 rn = row[pk]
                 if not rn:
-                    rn = json.loads(re.sub(r"^json\((.*)\)$", r"\1", row[f"{pk}_meta"]))["value"]
+                    rn = json.loads(row[f"{pk}_meta"])["value"]
                 row_number.append(rn)
             row_number = "###".join(row_number)
 
         message_rows = []
         for column_key in [ckey for ckey in row if ckey.endswith("_meta")]:
-            if row[column_key]:
-                meta = json.loads(re.sub(r"^json\((.*)\)$", r"\1", row[column_key]))
-            else:
-                # A null value in the meta column signifies a plain valid cell:
-                meta = meta = {"valid": True, "messages": []}
+            meta = json.loads(row[column_key])
             if not meta["valid"]:
                 columnid = column_key.removesuffix("_meta")
                 if a1:
@@ -208,6 +198,18 @@ def export_messages(args):
                         m.update({"cell": f"{columnid}{row_number}"})
                     message_rows.append(m)
         return message_rows
+
+    def select_column(column):
+        if not column.endswith("_meta"):
+            sql = f"`{column}`"
+        else:
+            sql = (
+                f"CASE WHEN `{column}` IS NOT NULL THEN JSON(`{column}`) "
+                ' ELSE JSON(\'{"valid": true, "messages": []}\') '
+                f"END AS `{column}`"
+            )
+
+        return sql
 
     with sqlite3.connect(db) as conn:
         if a1:
@@ -234,7 +236,7 @@ def export_messages(args):
                     sorted_columns = columns_info["sorted_columns"]
                     primary_keys = columns_info["primary_keys"]
 
-                    select = ", ".join([f"`{c}`" for c in unsorted_columns])
+                    select = ", ".join([select_column(c) for c in unsorted_columns])
                     order_by = ", ".join([f"`{c}`" for c in sorted_columns])
                     rows = conn.execute(f"SELECT {select} FROM `{table}_view` ORDER BY {order_by}")
                     columns_info = [d[0] for d in rows.description]

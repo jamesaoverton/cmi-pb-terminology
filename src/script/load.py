@@ -16,7 +16,7 @@ from multiprocessing import cpu_count, Manager, Process
 
 try:
     from sql_utils import safe_sql
-    from cmi_pb_grammar import grammar, TreeToDict
+    from cmi_pb_grammar import grammar, TreeToDict, reverse_parse
     from validate import (
         validate_rows_intra,
         validate_rows_trees,
@@ -68,18 +68,15 @@ def read_config_files(table_table_path, condition_parser):
         """Given a datatype condition, parse it using the configured parser and pre-compile the
         regular expression and function corresponding to it. Return both the parsed expression and
         the re-compiled regular expression."""
-        if condition is None:
-            return None, None
 
-        # "null" and "not null" are treated specially:
-        if condition in ["null", "not null"]:
-            return None, lambda x: (condition == "null" and x == "") or (
-                condition == "not null" and x != ""
-            )
+        # "null" and "not null" conditions do not get assigned a condition but are dealt
+        # with specially. We also return Nones if the incoming condition is None.
+        if condition in [None, "null", "not null"]:
+            return None, None
 
         parsed_condition = config["parser"].parse(condition)
         if len(parsed_condition) != 1:
-            raise ValueError(
+            raise ConfigError(
                 f"Condition: '{condition}' is invalid. Only one condition per column is allowed."
             )
 
@@ -97,11 +94,11 @@ def read_config_files(table_table_path, condition_parser):
             flags = "(?" + "".join(flags) + ")" if flags else ""
             pattern = re.compile(flags + pattern)
             if parsed_condition["name"] == "exclude":
-                return parsed_condition, lambda x: x != "" and not bool(pattern.search(x))
+                return parsed_condition, lambda x: not bool(pattern.search(x))
             elif parsed_condition["name"] == "match":
-                return parsed_condition, lambda x: x != "" and bool(pattern.fullmatch(x))
+                return parsed_condition, lambda x: bool(pattern.fullmatch(x))
             else:
-                return parsed_condition, lambda x: x != "" and bool(pattern.search(x))
+                return parsed_condition, lambda x: bool(pattern.search(x))
         elif parsed_condition["type"] == "function" and parsed_condition["name"] == "in":
             alternatives = [
                 re.sub(r"^['\"](.*)['\"]$", r"\1", arg["value"]) for arg in parsed_condition["args"]
@@ -224,9 +221,15 @@ def read_config_files(table_table_path, condition_parser):
             raise ConfigError("Undefined nulltype '{}' reading '{}'".format(row["nulltype"], path))
         if row["datatype"] not in config["datatype"]:
             raise ConfigError("Undefined datatype '{}' reading '{}'".format(row["datatype"], path))
-        row["configured"] = True
         if row["structure"]:
-            row["parsed_structure"] = config["parser"].parse(row["structure"])[0]
+            try:
+                row["parsed_structure"] = config["parser"].parse(row["structure"])[0]
+            except Exception as e:
+                raise ConfigError(
+                    "While parsing structure: '{}' for column: '{}.{}' got error:\n{}".format(
+                        row["structure"], row["table"], row["column"], e
+                    )
+                ) from None
         else:
             row["parsed_structure"] = None
         config["table"][row["table"]]["column"][row["column"]] = row
@@ -334,7 +337,7 @@ def verify_table_deps_and_sort(table_list, constraints):
                     for tkey in constraints["tree"][ukey["ttable"]]
                     if tkey["child"] == ukey["tcolumn"]
                 ]:
-                    raise ValueError(
+                    raise ConfigError(
                         "under({}.{}, {}) refers to a non-existent tree.".format(
                             ukey["ttable"], ukey["tcolumn"], ukey["value"]
                         )
@@ -362,7 +365,7 @@ def verify_table_deps_and_sort(table_list, constraints):
                 )
             if i < (end_index - 1):
                 message += " and "
-        raise CycleError(message)
+        raise CycleError(message) from None
 
 
 def validate_and_insert_chunks(config, table_name, chunks):
@@ -436,16 +439,16 @@ def validate_and_insert_chunks(config, table_name, chunks):
             validate_rows_inter_and_insert(intra_results, chunk_number)
 
 
-def create_db_and_write_sql(config):
-    """Given a config map, read the TSVs corresponding to the various defined tables, then create
-    a database containing those tables and write the data from the TSVs to them, all the while
-    writing the SQL strings used to generate the database to STDOUT."""
-
-    table_list = list(config["table"].keys())
+def configure_db(config, write_sql_to_stdout=False, write_to_db=False):
+    """Given a config map, read in the TSV files corresponding to the tables defined in the config,
+    and use that information to fill in table-specific info in the config map. If the flag
+    `write_sql_to_stdout` is set to True, emit SQL to create the database schema to STDOUT. If the
+    flag `write_to_db` is set to True, execute the SQL in the database, whose connection is
+    given in `config` under the "db" key."""
     # Begin by reading in the TSV files corresponding to the tables defined in config, and use
     # that information to create the associated database tables, while saving constraint information
     # to the config map.
-    for table_name in table_list:
+    for table_name in list(config["table"]):
         path = config["table"][table_name]["path"]
         with open(path) as f:
             # Open a DictReader to get the first row from which we will read the column names of the
@@ -456,9 +459,9 @@ def create_db_and_write_sql(config):
             # Update columns
             defined_columns = config["table"][table_name]["column"]
             try:
-                actual_columns = list(next(rows).keys())
+                actual_columns = list(next(rows))
             except StopIteration:
-                raise StopIteration(f"No rows in {path}")
+                raise StopIteration(f"No rows in {path}") from None
 
             all_columns = {}
             for column_name in actual_columns:
@@ -475,27 +478,36 @@ def create_db_and_write_sql(config):
 
             # Create the table and its corresponding conflict table:
             for table in [table_name, table_name + "_conflict"]:
-                table_sql, table_constraints = create_schema(config, table)
+                table_sql, table_constraints = create_table(config, table)
                 if not table.endswith("_conflict"):
                     config["constraints"]["foreign"][table_name] = table_constraints["foreign"]
                     config["constraints"]["unique"][table_name] = table_constraints["unique"]
                     config["constraints"]["primary"][table_name] = table_constraints["primary"]
                     config["constraints"]["tree"][table_name] = table_constraints["tree"]
                     config["constraints"]["under"][table_name] = table_constraints["under"]
-                config["db"].executescript(table_sql)
-                print("{}\n".format(table_sql))
+                if write_to_db:
+                    config["db"].executescript(table_sql)
+                if write_sql_to_stdout:
+                    print("{}\n".format(table_sql))
 
             # Create a view as the union of the regular and conflict versions of the table:
             sql = "DROP VIEW IF EXISTS `{}`;\n".format(table_name + "_view")
             sql += "CREATE VIEW `{}` AS SELECT * FROM `{}` UNION SELECT * FROM `{}`;".format(
                 table_name + "_view", table_name, table_name + "_conflict"
             )
-            config["db"].executescript(sql)
-            print("{}\n".format(sql))
-            config["db"].commit()
+            if write_sql_to_stdout:
+                print("{}\n".format(sql))
+            if write_to_db:
+                config["db"].executescript(sql)
+                config["db"].commit()
 
+
+def load_db(config):
+    """Given a config map, read in the data TSV files corresponding to each configured table,
+    then validate and load all of the corresponding rows."""
     # Sort tables according to their foreign key dependencies so that tables are always loaded
     # after the tables they depend on:
+    table_list = list(config["table"])
     table_list = verify_table_deps_and_sort(table_list, config["constraints"])
 
     # Now load the rows:
@@ -519,15 +531,23 @@ def create_db_and_write_sql(config):
         for record in records_to_update:
             table, column, meta = table_name, record["column"], record["column"] + "_meta"
             sql = safe_sql(
-                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = :mval "
+                f"UPDATE `{table}` SET `{column}` = NULL, `{meta}` = JSON(:mval) "
                 f"WHERE `row_number` = :row_number;",
                 {
-                    "mval": "json({})".format(json.dumps(record["meta"])),
+                    "mval": "{}".format(json.dumps(record["meta"])),
                     "row_number": record["row_number"],
                 },
             )
             config["db"].execute(sql)
         config["db"].commit()
+
+
+def configure_and_load_db(config):
+    """Given a config map, read the TSVs corresponding to the various defined tables, then create
+    a database containing those tables and write the data from the TSVs to them, all the while
+    writing the SQL strings used to generate the database to STDOUT."""
+    configure_db(config, write_sql_to_stdout=True, write_to_db=True)
+    load_db(config)
 
 
 def get_SQL_type(config, datatype):
@@ -542,7 +562,7 @@ def get_SQL_type(config, datatype):
     return get_SQL_type(config, config["datatype"][datatype]["parent"])
 
 
-def create_schema(config, table_name):
+def create_table(config, table_name):
     """Given the config map and a table name, generate a SQL schema string, including each
     column C and its matching C_meta column, then return the schema string as well as a list of the
     table's constraints."""
@@ -567,7 +587,6 @@ def create_schema(config, table_name):
         structure = row.get("structure")
         if structure and not table_name.endswith("_conflict"):
             parser = config["parser"]
-            # TODO: output user-friendly error messages when the structure syntax is invalid.
             for expression in parser.parse(structure):
                 if expression["type"] == "label" and expression["value"] == "primary":
                     line += " PRIMARY KEY"
@@ -577,7 +596,7 @@ def create_schema(config, table_name):
                     table_constraints["unique"].append(column_name)
                 elif expression["type"] == "function" and expression["name"] == "from":
                     if len(expression["args"]) != 1 or expression["args"][0]["type"] != "field":
-                        raise ValueError(f"Invalid foreign key: {structure} for: {table_name}")
+                        raise ConfigError(f"Invalid foreign key: {structure} for: {table_name}")
                     table_constraints["foreign"].append(
                         {
                             "column": column_name,
@@ -587,19 +606,19 @@ def create_schema(config, table_name):
                     )
                 elif expression["type"] == "function" and expression["name"] == "tree":
                     if len(expression["args"]) != 1 or expression["args"][0]["type"] != "label":
-                        raise ValueError(
+                        raise ConfigError(
                             f"Invalid 'tree' constraint: {structure} for: {table_name}"
                         )
                     child = expression["args"][0]["value"]
                     child_datatype = columns.get(child, {}).get("datatype")
                     if not child_datatype:
-                        raise ValueError(
+                        raise ConfigError(
                             f"Could not determine SQL datatype for {child} of tree({child})"
                         )
                     parent = column_name
                     child_sql_type = get_SQL_type(config, child_datatype)
                     if sql_type != child_sql_type:
-                        raise ValueError(
+                        raise ConfigError(
                             f"SQL type '{child_sql_type}' of '{child}' in 'tree({child})' for "
                             f"table '{table_name}' does not match SQL type: '{sql_type}' of "
                             f"parent: '{parent}'."
@@ -611,7 +630,7 @@ def create_schema(config, table_name):
                         or expression["args"][0]["type"] != "field"
                         or expression["args"][1]["type"] != "label"
                     ):
-                        raise ValueError(
+                        raise ConfigError(
                             f"Invalid 'under' constraint: {structure} for: {table_name}"
                         )
                     table_constraints["under"].append(
@@ -621,6 +640,12 @@ def create_schema(config, table_name):
                             "tcolumn": expression["args"][0]["column"],
                             "value": expression["args"][1]["value"],
                         }
+                    )
+                else:
+                    unparsed_condition = reverse_parse(config, expression)
+                    raise ConfigError(
+                        f"Unrecognized structure expression: {unparsed_condition} "
+                        + f"for column: {table_name}.{column_name}"
                     )
         line += ","
         output.append(line)
@@ -658,7 +683,8 @@ def create_schema(config, table_name):
 
 def make_inserts(config, table_name, rows, chunk_number):
     """Given a config map, a table name, and a list of rows (dicts from column names to column
-    values), return a SQL string for an INSERT statement with VALUES for all the rows."""
+    values), return a two-place tuple containing SQL strings for INSERT statement with VALUES for
+    all the rows in the normal and conflict versions of the table, respectively."""
 
     def generate_sql(table_name, rows):
         lines = []
@@ -677,7 +703,7 @@ def make_inserts(config, table_name, rows, chunk_number):
                     value = cell["value"]
                     cell.pop("value")
                 values.append(f":{column}")
-                values.append(f":{column}_meta")
+                values.append(f"JSON(:{column}_meta)")
                 params[column] = value
                 # If the cell value is valid and there is no extra information (e.g., nulltype),
                 # then just set the metadata to None, which can be taken to represent a "plain"
@@ -685,7 +711,7 @@ def make_inserts(config, table_name, rows, chunk_number):
                 if cell["valid"] and all([k in ["value", "valid", "messages"] for k in cell]):
                     params[column + "_meta"] = None
                 else:
-                    params[column + "_meta"] = "json({})".format(json.dumps(cell))
+                    params[column + "_meta"] = "{}".format(json.dumps(cell))
             line = ", ".join(values)
             line = f"({line})"
             lines.append(safe_sql(line, params))
@@ -712,8 +738,8 @@ def make_inserts(config, table_name, rows, chunk_number):
 
     main_rows = []
     conflict_rows = []
-    for i, row in enumerate(rows):
-        row["row_number"] = i + 1 + chunk_number * CHUNK_SIZE
+    for i, row in enumerate(rows, start=1):
+        row["row_number"] = i + chunk_number * CHUNK_SIZE
         if has_conflict(row, conflict_columns):
             conflict_rows.append(row)
         else:
@@ -740,14 +766,14 @@ def update_row(config, table_name, row, row_number):
             value = cell["value"]
             cell.pop("value")
         assignments.append(f"`{column}` = :{variable}")
-        assignments.append(f"`{column}_meta` = :{variable}_meta")
+        assignments.append(f"`{column}_meta` = JSON(:{variable}_meta)")
         params[variable] = value
         # If the cell value is valid and there is no extra information (e.g., nulltype), then
         # just set the metadata to None, which can be taken to represent a "plain" valid cell:
         if cell["valid"] and all([k in ["value", "valid", "messages"] for k in cell]):
             params[variable + "_meta"] = None
         else:
-            params[variable + "_meta"] = "json({})".format(json.dumps(cell))
+            params[variable + "_meta"] = "{}".format(json.dumps(cell))
 
     update_stmt = f"UPDATE `{table_name}` SET "
     update_stmt += safe_sql(", ".join(assignments), params)
@@ -765,18 +791,19 @@ if __name__ == "__main__":
         )
         p.add_argument("db_dir", help="The directory in which to save the database file")
         args = p.parse_args()
+
         config = read_config_files(
             args.table, Lark(grammar, parser="lalr", transformer=TreeToDict())
         )
+
         with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
             config["db"] = conn
             config["db"].execute("PRAGMA foreign_keys = ON")
-            create_db_and_write_sql(config)
+            configure_and_load_db(config)
     except (
         CycleError,
         FileNotFoundError,
         StopIteration,
-        ValueError,
         ConfigError,
         VisitError,
         TSVReadError,
