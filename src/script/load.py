@@ -461,7 +461,14 @@ def configure_db(config, write_sql_to_stdout=False, write_to_db=False):
             try:
                 actual_columns = list(next(rows))
             except StopIteration:
-                raise StopIteration(f"No rows in {path}") from None
+                # Handle empty placeholder files - these only have the headers
+                try:
+                    f.close()
+                    with open(path, "r") as f2:
+                        rows = csv.reader(f2, delimiter="\t")
+                        actual_columns = next(rows)
+                except StopIteration:
+                    raise StopIteration(f"No rows in {path}") from None
 
             all_columns = {}
             for column_name in actual_columns:

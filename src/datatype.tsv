@@ -18,3 +18,22 @@ text					any text	TEXT	xsd:string	textarea
 trimmed_line	line		match(/\S([^\n]*\S)*/)		a line of text that does not begin or end with whitespace			
 trimmed_text	text		exclude(/^\s+|\s+$/)		text that does not begin or end with whitespace			
 word	nonspace		exclude(/\W/)		a single word: letters, numbers, underscore			
+nonnegative_integer	nonspace		match(/\d+/)		a non-negative integer	INTEGER		
+positive_integer	nonspace		match(/\d+/)		a positive integer	INTEGER		
+subject_id	positive_integer		match(/\d+/)		a CMI-PB subject ID, i.e. a positive integer	INTEGER		
+specimen_id	positive_integer		match(/\d+/)		a CMI-PB sample ID, i.e. a positive integer	INTEGER		
+olink_id	word		match(/OID\d{5}/)		an OLink protein ID			
+uniprot_id	word		match(/\w+/)		a Uniprot protein ID			
+percentage	float		match(/\d+(\.\d+)/)		a percentage	REAL		
+float	nonspace		match(/\d+(\.\d+)/)		a floating point number	REAL		
+dataset	word		in("2020_dataset", "2021_dataset")		a CMI-PB dataset name			
+gating_method	word		in("Automated", "Manual")		a gating method, either "Automated" or "Manual"			
+vaccine	word		in("wP", "aP")		a Pertussis vaccine code: "wP" or "aP"			
+integer	nonspace		match(/-?\d+/)		an integer	INTEGER		
+boolean	word		in("True", "False")		a boolean: "True" or "False"			
+pass_fail	word		in("Pass", "Fail")		a quality control status: "Pass" or "Fail"			
+date	nonspace		match(/\d\d\d\d-\d\d-\d\d/)		an ISO8601 date: YYYY-MM-DD			
+versioned_ensembl_gene_id	nonspace		match(/ENSG\d{11}\.\d+/)		a versioned Ensembl gene ID			
+versioned_ensembl_transcript_id	nonspace		match(/ENST\d{11}\.\d+/)		a versioned Ensembl transcript ID			
+versioned_ensembl_protein_id	nonspace		match(/ENSP\d{11}\.\d+/)		a versioned Ensembl protein ID			
+ncbi_id	positive_integer		match(/\d+/)		an NCBI Taxonomy ID, i.e. a positive integer	INTEGER		

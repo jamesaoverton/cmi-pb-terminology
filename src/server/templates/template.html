@@ -161,7 +161,7 @@
 			return a.order - b.order;
 		  },
 		  remote: {
-			url: `/${table}?text=%QUERY&format=json`,
+			url: '{{ url_for("table", table_name=table_name) }}' + "?text=%QUERY&format=json",
 			wildcard: '%QUERY',
 			transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -198,7 +198,10 @@
 		  return a.order - b.order;
 		},
 		remote: {
-		  {% if search_param %} url: '?{{ search_param }}&text=%QUERY&format=json', {% else %} url: '?text=%QUERY&format=json', {% endif %}
+		  {% if search_param %}
+		  url: '{{ url_for("table", table_name=table_name) }}' + '?{{ search_param }}&text=%QUERY&format=json'
+		  {% else %}
+		  url: '{{ url_for("table", table_name=table_name) }}' + '?text=%QUERY&format=json', {% endif %}
 		  wildcard: '%QUERY',
 		  transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -250,7 +253,7 @@
 	  var str = [];
 	  for (var p in obj)
 		if (obj.hasOwnProperty(p)) {
-		  str.push("/{{ base_path }}/" + encodeURIComponent(obj[p]) + "");
+		  str.push("{{ url_for('table', table_name=table_name) }}/" + encodeURIComponent(obj[p]) + "");
 		}
 	  return str.join("&");
 	}
