@@ -210,12 +210,11 @@ def export_messages(args):
         else:
             sql = (
                 f"CASE WHEN `{column}` IS NOT NULL "
-                f"  THEN JSON_EXTRACT( "
+                f"  THEN JSON( "
                 f"         RTRIM( "
                 f"           SUBSTRING(`{column}`, 6), "
                 f"           ')' "
-                f"         ), "
-                f"       '$' "
+                f"         ) "
                 f"      ) "
                 '   ELSE JSON(\'{"valid": true, "messages": []}\') '
                 f"END AS `{column}`"
