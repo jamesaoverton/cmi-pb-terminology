@@ -1046,7 +1046,8 @@ def update_term(table_name, term_id):
 if __name__ == "__main__":
     # Next line is used to run as a Flask app - comment/uncomment as needed
     # app.run()
-    # Next three lines are required for running as CGI script - comment/uncomment as needed
+    # Next lines are required for running as CGI script - comment/uncomment as needed
+    # The SCRIPT_NAME specifies the prefix to be used for url_for - currently hardcoded
     os.environ["SCRIPT_NAME"] = f"/CMI-PB/branches/next/views/src/server/run.py"
     from wsgiref.handlers import CGIHandler
     CGIHandler().run(app)
