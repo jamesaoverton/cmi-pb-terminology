@@ -14,7 +14,14 @@ from subprocess import DEVNULL, run
 pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
-from load import grammar, TreeToDict, read_config_files, configure_and_load_db, update_row
+from load import (
+    grammar,
+    TreeToDict,
+    read_config_files,
+    configure_and_load_db,
+    update_row,
+    insert_new_row,
+)
 from export import export_data, export_messages
 from validate import validate_row, get_matching_values
 
@@ -118,6 +125,68 @@ def test_messages(db_file):
     return return_status
 
 
+def test_validate_and_insert_new_row(config):
+    row = {
+        "id": {"messages": [], "valid": True, "value": "BFO:0000027"},
+        "label": {"messages": [], "valid": True, "value": "zar"},
+        "parent": {"messages": [], "valid": True, "value": "car"},
+        "source": {"messages": [], "valid": True, "value": "BFO"},
+        "type": {"messages": [], "valid": True, "value": "owl:Class"},
+    }
+    # The result of the validation should be identical to the original row since there are no
+    # problems with it:
+    expected_row = row
+    actual_row = validate_row(config, "import", row)
+    if actual_row != expected_row:
+        print(
+            "Actual result of validate_row() differs from expected.\n"
+            + "Actual:\n{}\n\nExpected:\n{}".format(pformat(actual_row), pformat(expected_row))
+        )
+        return 1
+
+    expected_new_row_num = (
+        config["db"].execute("SELECT MAX(`row_number`) FROM `import`").fetchall()[0][0]
+    )
+    expected_new_row_num = 1 if expected_new_row_num is None else expected_new_row_num + 1
+    actual_new_row_num = insert_new_row(config, "import", row)
+    if actual_new_row_num != expected_new_row_num:
+        print(
+            "New row number: {} does not match expected new row number: {}".format(
+                actual_new_row_num, expected_new_row_num
+            )
+        )
+        return 1
+
+    actual_row = (
+        config["db"]
+        .execute(f"SELECT * FROM `import` WHERE `row_number` = {actual_new_row_num}")
+        .fetchall()[0]
+    )
+    expected_row = (
+        10,
+        "BFO",
+        None,
+        "BFO:0000027",
+        None,
+        "zar",
+        None,
+        "owl:Class",
+        None,
+        "car",
+        None,
+    )
+    if actual_row != expected_row:
+        print(
+            "Actual result of insert_new_row() differs from expected.\n"
+            + "Actual:\n{}\n\nExpected:\n{}".format(
+                pformat(actual_row, width=500), pformat(expected_row, width=500)
+            )
+        )
+        return 1
+
+    return 0
+
+
 def test_validate_and_update_row(config):
     row = {
         "id": {"messages": [], "valid": True, "value": "ZOB:0000013"},
@@ -148,15 +217,15 @@ def test_validate_and_update_row(config):
     actual_row = validate_row(config, "import", row, True, row_number=2)
     if actual_row != expected_row:
         print(
-            "Actual result of validate_existing_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
-                pformat(actual_row), pformat(expected_row)
-            )
+            "Actual result of validate_row() differs from expected.\n"
+            + "Actual:\n{}\n\nExpected:\n{}".format(pformat(actual_row), pformat(expected_row))
         )
         return 1
 
-    # We happen to know that this is the 2nd row in the table. If we change the test data this may change.
+    # We happen to know that this is the 2nd row in the table. If we change the test data this may
+    # change.
     update_row(config, "import", row, 2)
-    actual_row = config["db"].execute("SELECT * FROM import WHERE row_number = 2").fetchall()[0]
+    actual_row = config["db"].execute("SELECT * FROM `import` WHERE `row_number` = 2").fetchall()[0]
     expected_row = (
         2,
         None,
@@ -172,7 +241,8 @@ def test_validate_and_update_row(config):
     )
     if actual_row != expected_row:
         print(
-            "Actual result of update_row() differs from expected.\nActual:\n{}\n\nExpected:\n{}".format(
+            "Actual result of update_row() differs from expected.\n"
+            + "Actual:\n{}\n\nExpected:\n{}".format(
                 pformat(actual_row, width=500), pformat(expected_row, width=500)
             )
         )
@@ -214,6 +284,7 @@ def main():
     ret += test_export(db_file)
     ret += test_messages(db_file)
     ret += test_validate_and_update_row(config)
+    ret += test_validate_and_insert_new_row(config)
     ret += test_auto_complete(config)
     sys.exit(ret)
 
