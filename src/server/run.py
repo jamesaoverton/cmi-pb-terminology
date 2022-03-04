@@ -259,6 +259,7 @@ def term(table_name, term_id):
                     row = {c: {} for c in cols if not c.endswith("_meta") and not c == "row_number"}
             return render_template(
                 "data_form.html",
+                include_back=True,
                 messages=messages,
                 row=row,
                 status=status,
@@ -271,8 +272,12 @@ def term(table_name, term_id):
         request_args["offset"] = str(row_number - 1)
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
-        html = render_database_table(conn, table_name, show_help=True, standalone=False)
-        return render_template("template.html", html=html, table_name=table_name, tables=tables)
+        html = render_database_table(
+            conn, table_name, show_help=True, show_options=False, standalone=False
+        )
+        return render_template(
+            "template.html", html=html, include_back=True, table_name=table_name, tables=tables
+        )
 
     # Redirect to main ontology table search, do not limit search results
     search_text = request.args.get("text")
@@ -614,9 +619,7 @@ def get_data_for_term(table_name, term_id, predicates=None):
         vals = []
         for row in rows:
             o = row2o(stanza, treedata, row)
-            nest = build_nested(
-                table_name, treedata, spv2annotation, term_id, row, [], href=href
-            )
+            nest = build_nested(table_name, treedata, spv2annotation, term_id, row, [], href=href)
             if nest:
                 o += nest
             vals.append(render([], o, href=href))
@@ -911,11 +914,7 @@ def render_tree(table_name, term_id: str = None):
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template(
-        "template.html",
-        html=html,
-        show_search=True,
-        table_name=table_name,
-        tables=tables,
+        "template.html", html=html, show_search=True, table_name=table_name, tables=tables,
     )
 
 
@@ -1050,4 +1049,5 @@ if __name__ == "__main__":
     # The SCRIPT_NAME specifies the prefix to be used for url_for - currently hardcoded
     os.environ["SCRIPT_NAME"] = f"/CMI-PB/branches/next/views/src/server/run.py"
     from wsgiref.handlers import CGIHandler
+
     CGIHandler().run(app)

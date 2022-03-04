@@ -459,7 +459,7 @@ def configure_db(config, write_sql_to_stdout=False, write_to_db=False):
             # Update columns
             defined_columns = config["table"][table_name]["column"]
             try:
-                actual_columns = list(next(rows))
+                actual_columns = next(rows)
             except StopIteration:
                 # Handle empty placeholder files - these only have the headers
                 try:
