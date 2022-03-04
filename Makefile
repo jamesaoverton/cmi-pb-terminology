@@ -19,16 +19,16 @@ update:
 TABLES := src/ontology/upper.tsv src/ontology/terminology.tsv build/proteins.tsv
 PREFIXES := --prefixes build/prefixes.json
 ROBOT := java -jar build/robot.jar $(PREFIXES)
-ROBOT_TREE := java -jar build/robot-tree.jar $(PREFIXES)
+LDTAB := java -jar build/ldtab.jar
 
 build:
 	mkdir -p $@
 
 build/robot.jar: | build
-	curl -L -o $@ https://build.obolibrary.io/job/ontodev/job/robot/job/master/lastSuccessfulBuild/artifact/bin/robot.jar
+	curl -L -o $@ "https://build.obolibrary.io/job/ontodev/job/robot/job/master/lastSuccessfulBuild/artifact/bin/robot.jar"
 
-build/robot-tree.jar: | build
-	curl -L -o $@ https://build.obolibrary.io/job/ontodev/job/robot/job/tree-view/lastSuccessfulBuild/artifact/bin/robot.jar
+build/ldtab.jar: | build
+	curl -L -o $@ "https://github.com/ontodev/ldtab.clj/releases/download/v2022-03-03/ldtab.jar"
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
@@ -70,19 +70,6 @@ cmi-pb.owl: build/prefixes.json $(TABLES) build/imports.owl | build/robot.jar
 	--include-annotations true \
 	--output $@
 
-build/cmi-pb-tree.html: cmi-pb.owl | build/robot-tree.jar
-	$(ROBOT_TREE) tree --input $< --tree $@
-
-build/prefixes.sql: src/ontology/prefixes.tsv | build
-	echo "CREATE TABLE IF NOT EXISTS prefix (" > $@
-	echo "  prefix TEXT PRIMARY KEY," >> $@
-	echo "  base TEXT NOT NULL" >> $@
-	echo ");" >> $@
-	echo "INSERT OR IGNORE INTO prefix VALUES" >> $@
-	tail -n+2 $< | $(SQL_SED) \
-	>> $@
-	echo '("CMI-PB", "http://example.com/cmi-pb/");' >> $@
-
 #build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
 #	rm -f $@
 #	sqlite3 $@ < $<
@@ -98,6 +85,10 @@ build/ontology.sql: build/ontology.db
 .PHONY: load_ontology
 load_ontology: build/cmi-pb.db build/ontology.sql
 	sqlite3 $< < $(word 2,$^)
+
+load_ontology_2: build/cmi-pb.db cmi-pb.owl | build/ldtab.jar
+	sqlite3 $< <<< "CREATE TABLE statement (assertion INT NOT NULL, retraction INT NOT NULL DEFAULT 0, graph TEXT NOT NULL, subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL, datatype TEXT NOT NULL, annotation TEXT);"
+	$(LDTAB) import $^
 
 
 ### Uniprot Proteins
