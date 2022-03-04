@@ -1,18 +1,20 @@
+#!/usr/bin/env python3.9
+
 import csv
 import io
 import json
 import logging
 import os
 import sqlite3
-from collections import defaultdict
+import traceback
 
-import gizmos.tree
-from flask import abort, Flask, redirect, request, render_template, Response
+from collections import defaultdict
+from flask import abort, Flask, redirect, request, render_template, Response, url_for
 from gizmos.export import export
 from gizmos.helpers import get_children, get_descendants, get_entity_type, get_ids
 from gizmos.hiccup import render
 from gizmos.search import get_search_results
-from gizmos.tree import get_labels, row2o, tree
+from gizmos.tree import build_nested, get_labels, get_nested_annotations, row2o, tree
 from lark import Lark, UnexpectedCharacters
 from sprocket import (
     get_sql_columns,
@@ -26,9 +28,10 @@ from sprocket.grammar import PARSER, SprocketTransformer
 from sqlalchemy import create_engine
 from sqlalchemy.sql.expression import text as sql_text
 from werkzeug.datastructures import ImmutableMultiDict
+from werkzeug.exceptions import HTTPException
 
 from src.script.cmi_pb_grammar import grammar, TreeToDict
-from src.script.load import create_db_and_write_sql, update_row, read_config_files
+from src.script.load import configure_db, read_config_files, update_row
 from src.script.validate import validate_row
 
 
@@ -49,17 +52,41 @@ FORM_ROW_ID = 0
 
 app = Flask(__name__)
 
+# Next line is required for running as CGI script - comment/uncomment as needed
+os.chdir("../..")
+
+# Set up logging to file
+logger = logging.getLogger("droid_logger")
+logger.setLevel(logging.DEBUG)
+fh = logging.FileHandler("app.log")
+fh.setLevel(logging.DEBUG)
+logger.addHandler(fh)
+
 # sqlite3 is required for executescript used in load
 setup_conn = sqlite3.connect("build/cmi-pb.db", check_same_thread=False)
 config = read_config_files("src/table.tsv", Lark(grammar, parser="lalr", transformer=TreeToDict()))
 config["db"] = setup_conn
-create_db_and_write_sql(config)
+configure_db(config)
 
 # SQLAlchemy connection required for sprocket/gizmos
 abspath = os.path.abspath("build/cmi-pb.db")
 db_url = "sqlite:///" + abspath + "?check_same_thread=False"
 engine = create_engine(db_url)
 conn = engine.connect()
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return e
+    return (
+        render_template(
+            "template.html",
+            tables=get_sql_tables(conn),
+            html="<code>" + "<br>".join(traceback.format_exc().split("\n")),
+        )
+        + "</code>"
+    )
 
 
 @app.route("/")
@@ -78,17 +105,6 @@ def index():
 #    if not table_name:
 #        return abort(406, "A 'table' is required")
 #    return get_sql_columns(conn, table_name)
-
-
-def get_description(table_name, column):
-    res = conn.execute(
-        sql_text('SELECT description FROM "column" WHERE "table" = :table AND "column" = :column'),
-        table=table_name,
-        column=column,
-    ).fetchone()
-    if res:
-        return res["description"]
-    return None
 
 
 @app.route("/<table_name>", methods=["GET", "POST"])
@@ -133,13 +149,16 @@ def table(table_name):
         return render_ontology_table(table_name, data, "Showing terms from " + table_name)
 
     # Otherwise render default sprocket table
-    if request.args.get("limit") == "1":
-        # Override for how sprocket handles vertical view - we want to treat row ID like term ID
-        row_id = int(request.args.get("offset")) + 1
-        return redirect(f"/{table_name}/{row_id}")
-    html = render_database_table(conn, table_name, display_messages=messages, show_help=True)
+    html = render_database_table(
+        conn,
+        table_name,
+        display_messages=messages,
+        hide_in_row=["row_number"],
+        show_help=True,
+        standalone=False,
+    )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
-    return render_template("template.html", html=html, tables=tables)
+    return render_template("template.html", html=html, table_name=table_name, tables=tables)
 
 
 @app.route("/<table_name>/<term_id>", methods=["GET", "POST"])
@@ -148,18 +167,36 @@ def term(table_name, term_id):
     if not is_ontology(table_name):
         row = None
         status = None
-        row_number = get_row_number(table_name, term_id)
+        row_number = None
+        try:
+            row_number = int(term_id)
+        except ValueError:
+            if term_id == "new" and request.args.get("view") != "form":
+                return abort(400, f"Term ID ({term_id}) for data table must be an integer")
+
+        view = request.args.get("view")
+
         if request.method == "POST":
+            # Get the row from the form and remove the hidden param
             new_row = dict(request.form)
             del new_row["action"]
+
+            # Manually override view, which is not included in request.args in CGI app
+            view = "form"
+
             if request.form["action"] == "validate":
-                validated_row = {"row_number": row_number}
-                validated_row.update(validate_table_row(table_name, row_number, new_row))
+                validated_row = validate_table_row(table_name, row_number, new_row)
+                if row_number:
+                    # Place row_number first
+                    validated_row_2 = {"row_number": row_number}
+                    validated_row_2.update(validated_row)
+                    validated_row = validated_row_2
                 row = get_form_row(table_name, validated_row)
                 status = "valid"
                 if "error" in get_messages(validated_row):
                     status = "invalid"
             else:
+                # Update or add new row
                 if term_id != "new":
                     row_number = int(term_id)
                     # First validate the row to get the meta columns
@@ -177,23 +214,24 @@ def term(table_name, term_id):
                 else:
                     # TODO: add new row
                     pass
+
         # Treat term ID as row ID
         try:
-            row_id = int(term_id)
+            row_number = int(term_id)
         except ValueError:
             if term_id != "new":
                 return abort(
                     418, f"ID ({term_id}) must be an integer (row ID) for non-ontology tables"
                 )
-            else:
-                row_id = "new"
         tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
-        if request.args.get("view") == "form":
+
+        if view == "form":
+            logger.info(f"Generating form view for row {row_number} from {table_name}")
             if not row and row_number != "new":
                 # Get the row
                 res = dict(
                     conn.execute(
-                        f"SELECT * FROM {table_name} WHERE row_number = {row_number}"
+                        f"SELECT * FROM {table_name}_view WHERE row_number = {row_number}"
                     ).fetchone()
                 )
                 row = get_form_row(table_name, res)
@@ -220,21 +258,31 @@ def term(table_name, term_id):
                 else:
                     row = {c: {} for c in cols if not c.endswith("_meta") and not c == "row_number"}
             return render_template(
-                "data_form.html", messages=messages, row=row, status=status, tables=tables
+                "data_form.html",
+                include_back=True,
+                messages=messages,
+                row=row,
+                status=status,
+                table_name=table_name,
+                tables=tables,
             )
 
         # Set the request.args to be in the format sprocket expects (like swagger)
         request_args = request.args.to_dict()
-        request_args["offset"] = str(row_id - 1)
+        request_args["offset"] = str(row_number - 1)
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
-        html = render_database_table(conn, table_name, show_help=True)
-        return render_template("template.html", html=html, tables=tables)
+        html = render_database_table(
+            conn, table_name, show_help=True, show_options=False, standalone=False
+        )
+        return render_template(
+            "template.html", html=html, include_back=True, table_name=table_name, tables=tables
+        )
 
     # Redirect to main ontology table search, do not limit search results
     search_text = request.args.get("text")
     if search_text:
-        return redirect(f"/{table_name}?text={search_text}")
+        return redirect(url_for("table", table_name=table_name, text=search_text))
 
     view = request.args.get("view")
     if view == "form":
@@ -267,16 +315,19 @@ def term(table_name, term_id):
             else:
                 return abort(400, "Unknown format: " + fmt)
             return Response(render_tsv_table([data], fmt=fmt), mimetype=mt)
+        base_url = url_for("term", table_name=table_name, term_id=term_id)
+        tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
         html = [
-            '<div class="row">',
-            f'<p>View in: <a href="/{table_name}/{term_id}?view=tree">tree</a> | <a href="/{table_name}/{term_id}?view=form">form</a></p>',
-            "</div>",
+            '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">',
+            f'<a href="{base_url}" class="btn btn-sm btn-outline-primary active">Table</a>',
+            f'<a href="{tree_url}" class="btn btn-sm btn-outline-primary">Tree</a>',
+            "</div></div></div>",
             render_html_table(
                 [data],
                 table_name,
                 [],
                 request.args,
-                base_url=f"/{table_name}/{term_id}",
+                base_url=base_url,
                 hidden=["search_text"],
                 include_expand=False,
                 show_options=False,
@@ -287,13 +338,25 @@ def term(table_name, term_id):
         return render_template(
             "template.html",
             html="\n".join(html),
-            base_path=table_name,
-            show_search=False,
+            show_search=is_ontology(table_name),
+            table_name=table_name,
             tables=tables,
         )
 
 
 # ----- DATA TABLE METHODS -----
+
+
+def get_description(table_name, column):
+    res = conn.execute(
+        sql_text('SELECT description FROM "column" WHERE "table" = :table AND "column" = :column'),
+        table=table_name,
+        column=column,
+    ).fetchone()
+    if res:
+        return res["description"]
+    return None
+
 
 def get_form_row(table_name, row):
     """Transform a row either from query results or validation into a row suitable for the Jinja
@@ -307,7 +370,7 @@ def get_form_row(table_name, row):
             # Check for meta row
             meta_row = row.get(header + "_meta")
             if meta_row:
-                meta = json.loads(meta_row[5:-1])
+                meta = json.loads(meta_row)
                 if meta.get("value"):
                     value = meta["value"]
             if not value:
@@ -352,15 +415,6 @@ def get_messages(row):
     return messages
 
 
-def get_row_number(table_name, row_id):
-    """Get the row number for a row. The row number may be different than the row ID."""
-    if "row_number" in get_sql_columns(conn, table_name):
-        res = conn.execute(f"SELECT row_number FROM {table_name} WHERE rowid = {row_id}").fetchone()
-        if res:
-            return int(res["row_number"])
-    return int(row_id)
-
-
 def validate_table_row(table_name, row_number, row):
     """Perform validation on a row"""
     # Transform row into dict expected for validate
@@ -390,24 +444,17 @@ def build_form_field(
     else:
         display = header
 
-    html = [f'<div class="row mb-3" id="{FORM_ROW_ID}">']
+    html = [f'<div class="row mb-3" id="{FORM_ROW_ID}">', '<label class="col-sm-3 col-form-label">']
     if allow_delete:
         html.extend(
             [
-                f'<div class="col-auto">',
-                f'<a class="btn btn-sm btn-danger" href="javascript:del(\'{FORM_ROW_ID}\')">x</a>'
-                "</div>",
-                f'<label class="col-sm-2 col-form-label">{display}</label>',
-                '<div class="col-sm-9">',
+                f"<a href=\"javascript:del('{FORM_ROW_ID}')\">",
+                f'<i class="bi-x-circle" style="font-size: 16px; color: #dc3545;"></i>' "</a>",
+                "&nbsp;",
             ]
         )
-    else:
-        html.extend(
-            [
-                f'<label class="col-sm-2 col-form-label">{display}</label>',
-                '<div class="col-sm-10">',
-            ]
-        )
+
+    html.extend([display, "</label>", '<div class="col-sm-9">'])
     FORM_ROW_ID += 1
 
     value_html = ""
@@ -556,10 +603,14 @@ def get_data_for_term(table_name, term_id, predicates=None):
     treedata = {"labels": labels}
 
     # Get nested annotations to display as lists under the annotation
-    spv2annotation = gizmos.tree.get_nested_annotations(stanza)
+    spv2annotation = get_nested_annotations(stanza)
 
     data = {}
-    href = "/" + table_name + "/{curie}"
+    href = (
+        url_for("term", table_name=table_name, term_id="{curie}")
+        .replace("%7B", "{")
+        .replace("%7D", "}")
+    )
     for predicate, rows in predicate_to_vals.items():
         if predicate in labels:
             pred_label = labels[predicate]
@@ -568,9 +619,7 @@ def get_data_for_term(table_name, term_id, predicates=None):
         vals = []
         for row in rows:
             o = row2o(stanza, treedata, row)
-            nest = gizmos.tree.build_nested(
-                table_name, treedata, spv2annotation, term_id, row, [], href=href
-            )
+            nest = build_nested(table_name, treedata, spv2annotation, term_id, row, [], href=href)
             if nest:
                 o += nest
             vals.append(render([], o, href=href))
@@ -619,8 +668,8 @@ def render_ontology_table(table_name, data, title, add_params=None):
     # get the columns we want and add links
     data = [
         {
-            "ID": f"<a href=\"/{table_name}/{itm['id']}\">{itm['id']}</a>",
-            "Label": f"<a href=\"/{table_name}/{itm['id']}\">{itm['label']}</a>",
+            "ID": f"<a href=\"{url_for('term', table_name=table_name, term_id=itm['id'])}\">{itm['id']}</a>",
+            "Label": f"<a href=\"{url_for('term', table_name=table_name, term_id=itm['id'])}\">{itm['label']}</a>",
             "Synonym": itm["synonym"] or "",
         }
         for itm in data
@@ -638,16 +687,16 @@ def render_ontology_table(table_name, data, title, add_params=None):
             table_name,
             [],
             request.args,
-            base_url="/" + table_name,
+            base_url=url_for("table", table_name=table_name),
             hidden=["search_text"],
             show_options=False,
             include_expand=False,
             standalone=False,
         ),
-        base_path=table_name,
         title=title,
         add_params=param_str,
         show_search=True,
+        table_name=table_name,
         tables=tables,
     )
 
@@ -655,7 +704,8 @@ def render_ontology_table(table_name, data, title, add_params=None):
 def render_subclass_of(table_name, param, arg):
     id_to_label = get_terms_from_arg(table_name, arg)
     hrefs = [
-        f"<a href='/{table_name}/{term_id}'>{label}</a>" for term_id, label in id_to_label.items()
+        f"<a href='/{url_for('term', table_name=table_name, term_id=term_id)}'>{label}</a>"
+        for term_id, label in id_to_label.items()
     ]
     title = "Showing children of " + ", ".join(hrefs)
 
@@ -757,7 +807,7 @@ def render_term_form(table_name, term_id):
         for v in vals:
             field = build_form_field(table_name, input_type, ap_label, header, None, False, value=v)
             if not field:
-                logging.warning("Could not build field for property: " + ap_label)
+                logger.warning("Could not build field for property: " + ap_label)
                 continue
             metadata_html.extend(field)
 
@@ -797,7 +847,7 @@ def render_term_form(table_name, term_id):
                 table_name, "search", predicate, header, None, False, value=value
             )
             if not field:
-                logging.warning("Could not build field for parent class")
+                logger.warning("Could not build field for parent class")
             else:
                 logic_html.extend(field)
 
@@ -810,6 +860,7 @@ def render_term_form(table_name, term_id):
     return render_template(
         "ontology_form.html",
         table_name=table_name,
+        tables=get_sql_tables(conn),
         term_id=term_id,
         title=f"Update " + label or term_id,
         annotation_properties=aps,
@@ -844,26 +895,33 @@ def render_tree(table_name, term_id: str = None):
     # nothing to search, just return the tree view
     html = ""
     if term_id:
-        html += f'<p>View in: <a href="/{table_name}/{term_id}">table</a> | <a href="/{table_name}/{term_id}?view=form">form</a></p>'
+        term_url = url_for("term", table_name=table_name, term_id=term_id)
+        tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
+        html += '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">'
+        html += f'<a href="{term_url}" class="btn btn-sm btn-outline-primary">Table</a>'
+        html += f'<a href="{tree_url}" class="btn btn-sm btn-outline-primary active">Tree</a>'
+        html += "</div></div></div>"
     html += tree(
         conn,
         "ontie",
         term_id,
-        href="/" + table_name + "/{curie}?view=tree",
+        href=url_for("term", table_name=table_name, term_id="{curie}", view="tree")
+        .replace("%7B", "{")
+        .replace("%7D", "}"),
         standalone=False,
-        max_children=2,
+        max_children=20,
         statements=table_name,
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template(
-        "template.html", html=html, base_path=table_name, show_search=True, tables=tables
+        "template.html", html=html, show_search=True, table_name=table_name, tables=tables,
     )
 
 
 def update_term(table_name, term_id):
     new_id = request.form.get("ID")
     if new_id != term_id:
-        logging.info(f"Updating {term_id} to new ID {new_id}")
+        logger.info(f"Updating {term_id} to new ID {new_id}")
         query = sql_text(f"UPDATE {table_name} SET stanza = :new WHERE stanza = :old")
         conn.execute(query, new=new_id, old=term_id)
         query = sql_text(f"UPDATE {table_name} SET subject = :new WHERE subject = :old")
@@ -951,7 +1009,7 @@ def update_term(table_name, term_id):
         new_obj_ids = get_ids(conn, new_objects)
         if len(new_objects) > len(new_obj_ids):
             # TODO: handle this case by getting IDs one by one?
-            logging.error(
+            logger.error(
                 "Cannot get IDs for one or more terms from term list: " + ", ".join(new_objects)
             )
         removed_objs = list(set(objs) - set(new_obj_ids))
@@ -985,4 +1043,11 @@ def update_term(table_name, term_id):
 
 
 if __name__ == "__main__":
-    app.run()
+    # Next line is used to run as a Flask app - comment/uncomment as needed
+    # app.run()
+    # Next lines are required for running as CGI script - comment/uncomment as needed
+    # The SCRIPT_NAME specifies the prefix to be used for url_for - currently hardcoded
+    os.environ["SCRIPT_NAME"] = f"/CMI-PB/branches/next/views/src/server/run.py"
+    from wsgiref.handlers import CGIHandler
+
+    CGIHandler().run(app)

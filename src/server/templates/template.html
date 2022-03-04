@@ -3,22 +3,185 @@
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
-	<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"></script>
+	<style>
+		.bg-debug {
+			background-color: #abc4ff !important;
+		}
+		.bg-error {
+			background-color: #ffabab !important;
+		}
+		.bg-info {
+			background-color: #fff8ab !important;
+		}
+		.bg-null {
+			background-color: #ededed !important;
+		}
+		.bg-warn {
+			background-color: #ffcdab !important;
+		}
+		.tooltip-inner {
+			white-space: pre-wrap;
+		}
+
+		.btn-xl-plus {
+			width: 50px;
+			height: 50px;
+			padding: 7px 7px;
+			border-radius: 35px;
+			font-size: 35px;
+			line-height: 1.33;
+		}
+		.btn-xl-pencil {
+			width: 50px;
+			height: 50px;
+			padding: 12px 12px;
+			border-radius: 35px;
+			font-size: 24px;
+			line-height: 1.33;
+		}
+
+		#annotations {
+		  padding-left: 1em;
+		  list-style-type: none !important;
+		}
+		#annotations ul {
+		  padding-left: 3em;
+		  list-style-type: circle !important;
+		}
+		#annotations ul ul {
+		  padding-left: 2em;
+		  list-style-type: none !important;
+		}
+		.hierarchy {
+		  padding-left: 0em;
+		  list-style-type: none !important;
+		}
+		.hierarchy ul {
+		  padding-left: 1em;
+		  list-style-type: none !important;
+		}
+		.hierarchy ul.multiple-children > li > ul {
+		  border-left: 1px dotted #ddd;
+		}
+		.hierarchy .children {
+		  border-left: none;
+		  margin-left: 2em;
+		  text-indent: -1em;
+		}
+		.hierarchy .children li::before {
+		  content: "\2022";
+		  color: #ddd;
+		  display: inline-block;
+		  width: 0em;
+		  margin-left: -1em;
+		}
+		.tt-dataset {
+		  max-height: 300px;
+		  overflow-y: scroll;
+		}
+		a {
+		  text-decoration: none;
+		}
+
+		.th {
+			white-space: nowrap;
+		}
+
+
+		span.twitter-typeahead .tt-menu {
+		  cursor: pointer;
+		}
+		.dropdown-menu, span.twitter-typeahead .tt-menu {
+		  position: absolute;
+		  top: 100%;
+		  left: 0;
+		  z-index: 1000;
+		  display: none;
+		  float: left;
+		  min-width: 160px;
+		  padding: 5px 0;
+		  margin: 2px 0 0;
+		  font-size: 1rem;
+		  color: #373a3c;
+		  text-align: left;
+		  list-style: none;
+		  background-color: #fff;
+		  background-clip: padding-box;
+		  border: 1px solid rgba(0, 0, 0, 0.15);
+		  border-radius: 0.25rem; }
+		span.twitter-typeahead .tt-suggestion {
+		  display: block;
+		  width: 100%;
+		  padding: 3px 20px;
+		  clear: both;
+		  font-weight: normal;
+		  line-height: 1.5;
+		  color: #373a3c;
+		  text-align: inherit;
+		  white-space: nowrap;
+		  background: none;
+		  border: 0; }
+		span.twitter-typeahead .tt-suggestion:focus,
+		.dropdown-item:hover,
+		span.twitter-typeahead .tt-suggestion:hover {
+			color: #2b2d2f;
+			text-decoration: none;
+			background-color: #f5f5f5; }
+		span.twitter-typeahead .active.tt-suggestion,
+		span.twitter-typeahead .tt-suggestion.tt-cursor,
+		span.twitter-typeahead .active.tt-suggestion:focus,
+		span.twitter-typeahead .tt-suggestion.tt-cursor:focus,
+		span.twitter-typeahead .active.tt-suggestion:hover,
+		span.twitter-typeahead .tt-suggestion.tt-cursor:hover {
+			color: #fff;
+			text-decoration: none;
+			background-color: #0275d8;
+			outline: 0; }
+		span.twitter-typeahead .disabled.tt-suggestion,
+		span.twitter-typeahead .disabled.tt-suggestion:focus,
+		span.twitter-typeahead .disabled.tt-suggestion:hover {
+			color: #818a91; }
+		span.twitter-typeahead .disabled.tt-suggestion:focus,
+		span.twitter-typeahead .disabled.tt-suggestion:hover {
+			text-decoration: none;
+			cursor: not-allowed;
+			background-color: transparent;
+			background-image: none;
+			filter: "progid:DXImageTransform.Microsoft.gradient(enabled = false)"; }
+		span.twitter-typeahead {
+		  width: 100%; }
+		  .input-group span.twitter-typeahead {
+			display: block !important; }
+			.input-group span.twitter-typeahead .tt-menu {
+			  top: 2.375rem !important; }
+	</style>
 </head>
 <body>
 	<nav class="navbar navbar-expand-lg navbar-light bg-light">
 		<div class="container-fluid">
 			<a class="navbar-brand">CMI-PB Terminology</a>
 			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
-				{% for t in tables %}
-				<li class="nav-item"><a class="nav-link" href="/{{ t }}">{{ t }}</a></li>
-				{% endfor %}
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+						Tables
+					</a>
+					<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+						{% for t in tables %}
+						<li><a class="dropdown-item" href="{{ url_for('table', table_name=t) }}">{{ t }}</a></li>
+						{% endfor %}
+					</ul>
+				</li>
 			</ul>
 		</div>
 	</nav>
-	<div class="container">
+	{% if include_back %}
+	<nav class="navbar navbar-expand navbar-light bg-light" style="margin-top: -10px;">
+		<div class="container-fluid">
+			<a class="nav-item" href="javascript:history.back()"><i class="bi-arrow-left-circle"></i> Back</a>
+		</div>
+	</nav>
+	{% endif %}
+	<div id="cmi-pb" class="px-5 py-1">
 		{% if show_search %}
 		<div class="row">
 			<form class="form-row mt-2 mb-2" method="get">
@@ -32,31 +195,26 @@
 				<h2>{{ title|safe }}</h2>
 			</div>
 			{% endif %}
+			<div class="row">
 			{{ html|safe }}
 			{% block content %}
             {% endblock %}
+			</div>
 		</div>
 	</div>
 </body>
 <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
-<script type="text/javascript" src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"></script>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.11.1/typeahead.bundle.min.js"></script>
 <script>
-	// Enable tooltips
-	var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-	var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-	  return new bootstrap.Tooltip(tooltipTriggerEl)
-	})
-
-	// Init headers
-	var headers = [];
-	{% for h in headers %}
-	headers.push('{{ h }}');
-	{% endfor %}
-
-	function condense(level, msg, rowNum, cellNum) {
-		document.getElementById(`expandedRow${rowNum}`).remove();
+	function collapse(level, msg, rowNum, cellNum) {
+		/**
+		 * Collapse violation messages for a cell at given location.
+		 */
+		// Remove the message from the value of the cell
+		var value = document.getElementById(`value${rowNum}-${cellNum}`);
+		value.innerText = value.innerText.replace(`\n${msg}`, "");
 
 		// Add tooltip
 		var td = document.getElementById(`td${rowNum}-${cellNum}`);
@@ -66,20 +224,18 @@
 		td.setAttribute("title", msg);
 
 		// Update btn
-		var btn = document.getElementById(`expand${rowNum}`);
+		var btn = document.getElementById(`expand${rowNum}-${cellNum}`);
 		btn.href = `javascript:expand('${level}', '${msg}', ${rowNum}, ${cellNum})`;
-		var txt = document.getElementById(`expandInner${rowNum}`);
-		txt.innerText = "+";
+		btn.innerHTML = '<i class="bi-plus"></i>';
 	}
 
 	function expand(level, msg, rowNum, cellNum) {
-		var row = document.getElementById(`row${rowNum}`);
-		var newHtml = `<tr id="expandedRow${rowNum}">`;
-		for (i=0; i < cellNum; i++) {
-			newHtml += "<td></td>";
-		}
-		newHtml += `<td>${level.toUpperCase()}: ${msg}</td>`
-		row.insertAdjacentHTML('afterend', newHtml);
+		/**
+		 * Expand violation messages for a cell at given location.
+		 */
+		// Get the current cell value & add the message below
+		var value = document.getElementById(`value${rowNum}-${cellNum}`);
+		value.innerHTML = value.innerText + `<br><small class="fst-italic">${msg}</small>`;
 
 		// Remove tooltip
 		var td = document.getElementById(`td${rowNum}-${cellNum}`);
@@ -95,18 +251,24 @@
 		}
 
 		// Update btn
-		var btn = document.getElementById(`expand${rowNum}`);
-		btn.href = `javascript:condense('${level}', '${msg}', ${rowNum}, ${cellNum})`;
-		var txt = document.getElementById(`expandInner${rowNum}`);
-		txt.innerText = "-";
+		var btn = document.getElementById(`expand${rowNum}-${cellNum}`);
+		btn.href = `javascript:collapse('${level}', '${msg}', ${rowNum}, ${cellNum})`;
+		btn.innerHTML = '<i class="bi-dash"></i>';
 	}
 
 	function reset() {
+		/**
+		 * Reset the query parameters.
+		 */
 		var url = window.location.href.split('?')[0];
 		window.location.href = url;
 	}
 
 	function sort(col, desc) {
+		/**
+		 * Sort query results. The actual sorting is done server-side,
+		 * but this bit of script creates the correct query parameters.
+		 */
 		// Get current parameters
 		var qString = window.location.search;
 		var params = new URLSearchParams(qString);
@@ -137,9 +299,11 @@
 		}
 	}
 
-	function submitForm(headers, hidden) {
+	function submitQueryForm(headers, hidden) {
+		/**
+		 * Submit the form to update query parameters and change search results. Include hidden form elements.
+		 */
 		var args = []
-		headers = headers.filter(e => e !== "rowid");
 		// Get the where options
 		for (var h of headers) {
 			var operator = document.getElementById(h + 'Operator').value;
@@ -190,25 +354,119 @@
 		}
 	}
 
-	function vertical(rowNum, offset) {
-		var qString = window.location.search;
-		var params = new URLSearchParams(qString);
-		var newParams = [];
-		for (var entry of params.entries()) {
-			if (entry[0] === "limit" || entry[0] === "offset") {
-				continue;
+	function show_children() {
+		/**
+		 * Redirect to sprocket table search results when clicking view all children.
+		 * This overrides gizmos default behavior.
+		 */
+		var curURL = window.location.href;
+		console.l
+		var tableURL = curURL.substr(0, curURL.lastIndexOf("/"));
+		var termId = curURL.substr(curURL.lastIndexOf("/") + 1);
+		if (termId.includes("?")) {
+			termId = termId.split("?")[0];
+		}
+		var url = new URL(tableURL);
+		url.searchParams.append("subClassOf", termId);
+		window.location = url;
+	}
+
+	function addBtns() {
+		/**
+		 * Add new and/or edit buttons. The ontology tree view gets both. Horizontal data tables get a 'new' button.
+		 * Vertical data tables get an 'edit' button.
+		 */
+		var includeEdit = true;
+		var includeNew = false;
+		var ele = document.getElementById("sqlTableVertical");
+		if (ele === null) {
+			ele = document.getElementById("sqlTableHorizontal");
+			if (ele === null) {
+				ele = document.getElementById("gizmosTree");
+				if (ele === null) {
+					// Not correct view
+					return;
+				}
+				// Include both edit & new buttons
+				includeNew = true;
 			} else {
-				newParams.push(`${entry[0]}=${entry[1]}`);
+				// Multiple rows, include only 'new' button
+				includeEdit = false;
+				includeNew = true;
 			}
 		}
-		console.log(newParams);
-		var newOS = rowNum + offset - 1;
-		newParams.push(`offset=${newOS}`);
-		newParams.push("limit=1");
-		if (newParams.length > 0) {
-			window.location.href = "?" + newParams.join("&");
+
+		// Create footer to hold new button
+		var footer = document.createElement("footer");
+		footer.setAttribute("class", "footer mt-auto py-3 fixed-bottom");
+		var container = document.createElement("div");
+		footer.appendChild(container);
+
+		if (includeNew) {
+			var newURL = new URL(window.location.origin + '{{ url_for("table", table_name=table_name, view="form") }}');
+			var newBtn = document.createElement("a");
+			newBtn.setAttribute("data-bs-toggle", "tooltip");
+			newBtn.setAttribute("data-bs-placement", "left");
+			newBtn.setAttribute("href", newURL.toString());
+			newBtn.setAttribute("class", "btn btn-primary btn-xl-plus");
+			newBtn.setAttribute("title", "New");
+			newBtn.innerHTML = '<i class="bi-plus"></i>';
+
+			var newRow = document.createElement("div");
+			newRow.setAttribute("class", "row justify-content-end");
+			newRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
+			var newCol = document.createElement("div");
+			newCol.setAttribute("class", "col-auto");
+			newRow.appendChild(newCol);
+			newCol.appendChild(newBtn);
+			container.appendChild(newRow);
 		}
+		if (includeEdit) {
+			// Get the URL and maybe remove current view
+			var url = new URL(window.location);
+			if (url.searchParams.get("view")) {
+				url.searchParams.delete("view");
+			}
+			url.searchParams.append("view", "form");
+			var editBtn = document.createElement("a");
+			editBtn.setAttribute("data-bs-toggle", "tooltip");
+			editBtn.setAttribute("data-bs-placement", "left");
+			editBtn.setAttribute("href", url.toString());
+			editBtn.setAttribute("class", "btn btn-primary btn-xl-pencil");
+			editBtn.setAttribute("title", "Edit");
+			editBtn.innerHTML = '<i class="bi-pencil"></i>';
+
+			var editRow = document.createElement("div");
+			editRow.setAttribute("class", "row justify-content-end");
+			editRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
+			var editCol = document.createElement("div");
+			editCol.setAttribute("class", "col-auto");
+			editRow.appendChild(editCol);
+			editCol.appendChild(editBtn);
+			container.appendChild(editRow);
+		}
+
+		var container = document.getElementById("cmi-pb");
+		container.parentElement.insertBefore(footer, container);
 	}
+
+	function showVertical(rowNum, offset) {
+		/**
+		 * Show the given row in vertical view. This overrides sprocket default behavior,
+		 * as we are redirecting to {table_name}/{row_number}.
+		 */
+		// Get the row_number for this row
+		var sqlRowNum = document.getElementById(`row_number${rowNum}`).innerText;
+		var newURL = "{{ url_for('table', table_name=table_name) }}";
+		newURL += "/" + sqlRowNum;
+		window.location.href = newURL;
+	}
+
+	// Init headers
+	var headers = [];
+	{% for h in headers %}
+	headers.push('{{ h }}');
+	{% endfor %}
 
 	// Configure typeahead for Parent labels
 	function configure_typeahead_form(node) {
@@ -223,7 +481,7 @@
 			return a.order - b.order;
 		  },
 		  remote: {
-			url: `/${table}?text=%QUERY&format=json`,
+			url: '{{ url_for("table", table_name=table_name) }}' + "?text=%QUERY&format=json",
 			wildcard: '%QUERY',
 			transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -247,6 +505,7 @@
 		});
 	}
 
+	// Configure typeahead for search
 	function configure_typeahead(node) {
 	  if (!node.id || !node.id.endsWith("-typeahead")) {
 		return;
@@ -259,7 +518,10 @@
 		  return a.order - b.order;
 		},
 		remote: {
-		  {% if search_param %} url: '?{{ search_param }}&text=%QUERY&format=json', {% else %} url: '?text=%QUERY&format=json', {% endif %}
+		  {% if search_param %}
+		  url: '{{ url_for("table", table_name=table_name) }}' + '?{{ search_param }}&text=%QUERY&format=json'
+		  {% else %}
+		  url: '{{ url_for("table", table_name=table_name) }}' + '?text=%QUERY&format=json', {% endif %}
 		  wildcard: '%QUERY',
 		  transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -311,93 +573,29 @@
 	  var str = [];
 	  for (var p in obj)
 		if (obj.hasOwnProperty(p)) {
-		  str.push("/{{ base_path }}/" + encodeURIComponent(obj[p]) + "");
+		  str.push("{{ url_for('table', table_name=table_name) }}/" + encodeURIComponent(obj[p]) + "");
 		}
 	  return str.join("&");
 	}
 
-	// redirect to the sprocket table when clicking view all children
-	function show_children() {
-		var curURL = window.location.href;
-		console.l
-		var tableURL = curURL.substr(0, curURL.lastIndexOf("/"));
-		var termId = curURL.substr(curURL.lastIndexOf("/") + 1);
-		if (termId.includes("?")) {
-			termId = termId.split("?")[0];
-		}
-		var url = new URL(tableURL);
-		url.searchParams.append("subClassOf", termId);
-		window.location = url;
+	// Icon change for hovering on ontology form delete buttons
+	var deletes = document.getElementsByClassName("bi-x-circle");
+	for (var i = 0; i < deletes.length; i++){
+		deletes[i].onmouseenter = (function(delBtn) {
+			return function() { delBtn.setAttribute("class", "bi-x-circle-fill"); }
+		})(deletes[i]);
+		deletes[i].onmouseleave = (function(delBtn) {
+			return function() { delBtn.setAttribute("class", "bi-x-circle"); }
+		})(deletes[i]);
 	}
 
-	// Add a 'new' button for horizontal view
-	function addNewRowBtn() {
-		var table = document.getElementById("sqlTableHorizontal");
-		if (table === null) {
-			// Not vertical view
-			return;
-		}
+	// Add new/edit buttons
+	addBtns();
 
-		// Create div to hold new button
-		var divRow = document.createElement("div");
-		divRow.setAttribute("class", "row justify-content-end");
-		divRow.setAttribute("style", "padding-bottom: 5px;");
-		var divCol = document.createElement("div");
-		divCol.setAttribute("class", "col-auto");
-
-		// Add the edit query param to URL
-		var url = new URL(location.protocol + "//" + location.host + location.pathname + "/new");
-		url.searchParams.append("view", "form");
-
-		// Create button with link to edit
-		var btn = document.createElement("a");
-		btn.setAttribute("class", "btn btn-primary");
-		btn.setAttribute("href", url.toString());
-		btn.innerHTML = "New Row";
-
-		// Add to page
-		divRow.appendChild(divCol);
-		divCol.appendChild(btn);
-		table.parentNode.insertBefore(divRow, table);
-	}
-	addNewRowBtn();
-
-	// Add an edit button for vertical row
-	function addEditBtn() {
-		var table = document.getElementById("sqlTableVertical");
-		if (table === null) {
-			// Not vertical view
-			return;
-		}
-		// Retrieve row ID
-		var rowId = document.getElementById("row-id");
-		if (rowId === null) {
-			// Not a data row
-			return;
-		}
-
-		// Create div to hold edit button
-		var divRow = document.createElement("div");
-		divRow.setAttribute("class", "row justify-content-end");
-		divRow.setAttribute("style", "padding-bottom: 5px;");
-		var divCol = document.createElement("div");
-		divCol.setAttribute("class", "col-auto");
-
-		// Add the edit query param to URL
-		var url = new URL(window.location);
-		url.searchParams.append("view", "form");
-
-		// Create button with link to edit
-		var btn = document.createElement("a");
-		btn.setAttribute("class", "btn btn-primary");
-		btn.setAttribute("href", url.toString());
-		btn.innerHTML = "Edit Row";
-
-		// Add to page
-		divRow.appendChild(divCol);
-		divCol.appendChild(btn);
-		table.parentNode.insertBefore(divRow, table);
-	}
-	addEditBtn();
+	// Enable tooltips
+	var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+	var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+	  return new bootstrap.Tooltip(tooltipTriggerEl)
+	})
 </script>
 </html>
