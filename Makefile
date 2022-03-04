@@ -6,6 +6,7 @@
 # - Download the [`cmi-pb.owl`](cmi-pb.owl) file
 # - Download the [`cmi-pb.db`](build/cmi-pb.db) database file
 
+MAKEFLAGS=--warn-undefined-variables
 
 .PHONY: all
 all: build/cmi-pb.db build/predicates.txt
@@ -177,13 +178,86 @@ clean-imports:
 
 refresh-imports: clean-imports build/imports.owl
 
+
+### Build Tables
+
+### Tables from Google Sheet
 GSTSV := "https://docs.google.com/spreadsheets/d/1KlG4KAuuHel8X3G3AGYraOio-8S9k7UkEdDr6avWnTM/export?format=tsv"
-update-tsv: | build
-	curl -L -o src/table.tsv "$(GSTSV)&gid=0"
-	curl -L -o src/column.tsv "$(GSTSV)&gid=1859463123"
-	curl -L -o src/datatype.tsv "$(GSTSV)&gid=1518754913"
-	curl -L -o src/prefix.tsv "$(GSTSV)&gid=1105305212"
-	curl -L -o src/ontology/import.tsv "$(GSTSV)&gid=1380652872"
+src/table.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=0"
+
+src/column.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1859463123"
+
+src/datatype.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1518754913"
+
+src/prefix.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1105305212"
+
+src/ontology/import.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1380652872"
+
+src/ontology/gate.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=2143856188"
+
+GS_TSVS := src/table.tsv src/column.tsv src/datatype.tsv src/ontology/import.tsv src/ontology/gate.tsv
+
+.PHONY: fetch-gs-tsv
+fetch-gs-tsv: $(GS_TSVS)
+
+.PHONY: update-gs-tsv
+update-gs-tsv:
+	rm -f $(GS_TSVS)
+	make fetch-gs-tsv
+
+### Tables from CMI-PB API
+API_TSVS := build/cell_type.tsv build/gene.tsv build/protein.tsv build/olink_prot_info.tsv build/transcript.tsv
+$(API_TSVS): | build
+	$(eval NAME := $(basename $(notdir $@)))
+	curl -L -o $@.csv -H 'accept: text/csv' "https://www.cmi-pb.org:443/api/v2/$(NAME)"
+	xsv fmt -t "	" -o $@ $@.csv
+	rm $@.csv
+
+.PHONY: fetch-api-tsv
+fetch-api-tsv: $(API_TSVS)
+
+.PHONY: update-api-tsv
+update-api-tsv:
+	rm -f $(API_TSVS)
+	make fetch-api-tsv
+
+### Tables from CMI-PB Download
+build/2021_cmipb_challenge.zip: | build/
+	curl -L -o $@ "https://www.cmi-pb.org/downloads/cmipb_challenge_datasets/2021_cmipb_challenge/2021_cmipb_challenge.zip"
+
+build/2021_cmipb_challenge/: build/2021_cmipb_challenge.zip
+	cd build && unzip -o 2021_cmipb_challenge.zip
+	touch $@
+
+ZIP_TABLES := subject specimen ab_titer live_cell_percentages olink_prot_exp rnaseq
+ZIP_TSVS := $(foreach x,$(ZIP_TABLES),build/$(x).tsv)
+
+$(ZIP_TSVS): build/2021_cmipb_challenge/
+	$(eval NAME := $(basename $(notdir $@)))
+	xsv cat rows $<2020LD_$(NAME).csv $<2021BD_$(NAME).csv \
+	| head -n35000 \
+	> $@.csv
+	xsv fixlengths --output $@ $@.csv
+	rm $@.csv
+
+.PHONY: fetch-zip-tsv
+fetch-zip-tsv: $(ZIP_TSVS)
+
+.PHONY: update-zip-tsv
+update-zip-tsv:
+	rm -f $(ZIP_TSVS)
+	make fetch-zip-tsv
+
+.PHONY: update-tsv
+update-tsv:
+	rm -f $(GS_TSVS) $(API_TSVS) $(ZIP_TSVS)
+	make update-gs-tsv update-api-tsv update-zip-tsv
 
 build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv src/script/validate.py | build
 	python3 $< $(word 2,$^) $| > $@
