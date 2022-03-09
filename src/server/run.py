@@ -1,5 +1,5 @@
 #!/usr/bin/env python3.9
-
+import atexit
 import csv
 import io
 import json
@@ -10,11 +10,11 @@ import traceback
 
 from collections import defaultdict
 from flask import abort, Flask, redirect, request, render_template, Response, url_for
-from gizmos.export import export
-from gizmos.helpers import get_children, get_descendants, get_entity_type, get_ids
-from gizmos.hiccup import render
-from gizmos.search import get_search_results
-from gizmos.tree import build_nested, get_labels, get_nested_annotations, row2o, tree
+from gizmos_export import export
+from gizmos_helpers import get_descendants, get_entity_type, get_labels
+from gizmos_search import get_search_results
+from gizmos.helpers import get_children, get_ids  # These still work with LDTab
+from gizmos_tree import tree
 from lark import Lark, UnexpectedCharacters
 from sprocket import (
     get_sql_columns,
@@ -91,11 +91,7 @@ def handle_exception(e):
 
 @app.route("/")
 def index():
-    tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
-    lines = []
-    for t in tables:
-        lines.append(t)
-    return "<br>".join(lines)
+    return render_template("template.html", html="<h3>Welcome</h3><p>Please select a table</p>")
 
 
 # @app.route("/column")
@@ -133,8 +129,10 @@ def table(table_name):
     # First check if table is an ontology table - if so, render term IDs + labels
     if is_ontology(table_name):
         # Get all terms from the ontology
-        res = conn.execute(f"SELECT DISTINCT stanza FROM {table_name} WHERE stanza NOT LIKE '_:%'")
-        terms = [x["stanza"] for x in res]
+        res = conn.execute(
+            f"SELECT DISTINCT subject FROM {table_name} WHERE subject NOT LIKE '_:%'"
+        )
+        terms = [x["subject"] for x in res]
         data = get_search_results(
             conn,
             request.args.get("text", ""),
@@ -156,6 +154,7 @@ def table(table_name):
         hide_in_row=["row_number"],
         show_help=True,
         standalone=False,
+        use_view=True
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template("template.html", html=html, table_name=table_name, tables=tables)
@@ -273,7 +272,7 @@ def term(table_name, term_id):
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
         html = render_database_table(
-            conn, table_name, show_help=True, show_options=False, standalone=False
+            conn, table_name, show_help=True, show_options=False, standalone=False, use_view=True
         )
         return render_template(
             "template.html", html=html, include_back=True, table_name=table_name, tables=tables
@@ -435,7 +434,7 @@ def validate_table_row(table_name, row_number, row):
 
 
 def build_form_field(
-    table_name, input_type, header, predicate, help_msg, required, value=None, allow_delete=True
+    table_name, input_type, header, predicate, help_msg, required, annotations=None, value=None, allow_delete=True
 ):
     global FORM_ROW_ID
     """Return an HTML form field for a template field."""
@@ -523,6 +522,17 @@ def build_form_field(
     if help_msg:
         html.append(f'<div class="form-text">{help_msg}</div>')
     html.append("</div>")
+
+    if annotations:
+        # TODO: support input types for annotations
+        for ann_pred, ann_values in annotations.items():
+            for av in ann_values:
+                # TODO: add delete button
+                html.append(f'<label class="col-sm-3 col-form-label">{ann_pred}</label>')
+                html.append('<div class="col-sm-9">')
+                av = av.replace('"', "&quot;")
+                html.append(f'<input type="text" value={av}></input>')
+                html.append("</div>")
     html.append("</div>")
     return html
 
@@ -551,14 +561,13 @@ def dump_search_results(table_name, search_arg=None):
 def get_annotation_properties(table_name):
     results = list(
         conn.execute(
-            f"""SELECT DISTINCT s2.stanza AS stanza FROM {table_name} s1
-            JOIN {table_name} s2 ON s1.predicate = s2.stanza
-            WHERE s1.value IS NOT NULL"""
+            f"""SELECT DISTINCT s2.subject AS subject FROM "{table_name}" s1
+            JOIN "{table_name}" s2 ON s1.predicate = s2.subject WHERE s1.object IS NOT NULL"""
         )
     )
     aps = {}
     for res in results:
-        ap_id = res["stanza"]
+        ap_id = res["subject"]
         # Skip some ontology-level APs, as well as label which we add later
         if (
             ap_id.startswith("dct:")
@@ -569,8 +578,8 @@ def get_annotation_properties(table_name):
         ):
             continue
         res = conn.execute(
-            f"""SELECT value FROM {table_name}
-                WHERE stanza = ? AND predicate = 'rdfs:label' ORDER BY value""",
+            f"""SELECT object FROM {table_name} WHERE subject = ? AND predicate = 'rdfs:label'
+            ORDER BY annotation""",
             (ap_id,),
         ).fetchone()
         if res:
@@ -581,48 +590,62 @@ def get_annotation_properties(table_name):
 
 
 def get_data_for_term(table_name, term_id, predicates=None):
-    # TODO: we need a renderer that doesn't only return HTML (row2o from gizmos)
+    # TODO: update to use LDTab
+    prefixes = {}
+    for row in conn.execute(f"SELECT DISTINCT prefix, base FROM prefix"):
+        prefixes[row["prefix"]] = row["base"]
+
     # First get all data about this term, the "stanza"
-    query = sql_text(f"SELECT * FROM {table_name} WHERE stanza = :term_id")
+    query = sql_text(f"SELECT * FROM {table_name} WHERE subject = :term_id")
     stanza = conn.execute(query, term_id=term_id).fetchall()
 
     curies = set()
     predicate_to_vals = defaultdict(list)
+    annotations = defaultdict(dict)
     for row in stanza:
         if row["subject"] == term_id:
             pred = row["predicate"]
             if predicates and pred not in predicates:
                 continue
             curies.add(pred)
-            if row["object"]:
+            if row["object"] and row["datatype"] == "_IRI":
                 curies.add(row["object"])
             predicate_to_vals[pred].append(dict(row))
+            if row["annotation"]:
+                if pred not in annotations:
+                    annotations[pred] = {}
+                annotations[pred][row["object"]] = json.loads(row["annotation"])
+                curies.update(annotations[pred][row["object"]] .keys())
 
-    # Get the labels of any predicate or object used so we can correctly render
+    # Get the labels of any predicate or object used
     labels = get_labels(conn, curies, statements=table_name)
-    treedata = {"labels": labels}
-
-    # Get nested annotations to display as lists under the annotation
-    spv2annotation = get_nested_annotations(stanza)
 
     data = {}
-    href = (
-        url_for("term", table_name=table_name, term_id="{curie}")
-        .replace("%7B", "{")
-        .replace("%7D", "}")
-    )
     for predicate, rows in predicate_to_vals.items():
+        # TODO: use wiring.rs to render instead
         if predicate in labels:
             pred_label = labels[predicate]
         else:
             pred_label = predicate
+        pred_annotations = annotations.get(predicate, {})
         vals = []
         for row in rows:
-            o = row2o(stanza, treedata, row)
-            nest = build_nested(table_name, treedata, spv2annotation, term_id, row, [], href=href)
-            if nest:
-                o += nest
-            vals.append(render([], o, href=href))
+            o = row["object"]
+            if row["datatype"] == "_IRI":
+                label = labels.get(o, o)
+                display = f'<a href="{url_for("term", table_name=table_name, term_id=o)}">{label}</a>'
+            else:
+                display = f"<span>{o}</span>"
+            value_annotations = pred_annotations.get(o)
+            if value_annotations:
+                display += "<ul>"
+                for pred_2, values in value_annotations.items():
+                    display += "<li>"
+                    display += f'<small><a href="{url_for("term", table_name=table_name, term_id=pred_2)}">{labels.get(pred_2, pred_2)}</a></small>'
+                    display += "<ul>" + "".join([f"<li><small>{v['object']}</small></li>" for v in values]) + "</ul>"
+                display += "</ul>"
+            vals.append(display)
+
         if len(vals) > 1:
             data[pred_label] = "<ul><li>" + "<li>".join(vals) + "</ul>"
         else:
@@ -645,7 +668,7 @@ def get_terms_from_arg(table_name, arg):
 
 def is_ontology(table_name):
     columns = get_sql_columns(conn, table_name)
-    return {"stanza", "subject", "predicate", "object", "value"}.issubset(set(columns))
+    return {"subject", "predicate", "object", "datatype", "annotation"}.issubset(set(columns))
 
 
 def render_ontology_table(table_name, data, title, add_params=None):
@@ -747,7 +770,6 @@ def render_term_form(table_name, term_id):
     # Get the term label
     labels = get_labels(conn, [term_id], statements=table_name)
     label = labels.get(term_id, term_id)
-
     entity_type = get_entity_type(conn, term_id, statements=table_name)
 
     # Get all annotation properties used in the ontology
@@ -768,6 +790,7 @@ def render_term_form(table_name, term_id):
     reader = csv.reader(io.StringIO(annotations), delimiter="\t")
     ann_headers = next(reader)
     ann_details = next(reader)
+    logger.error(json.dumps(ann_details, indent=2))
 
     # Build the metadata form elements
     metadata_html = []
@@ -859,6 +882,7 @@ def render_term_form(table_name, term_id):
     FORM_ROW_ID = 0
     return render_template(
         "ontology_form.html",
+        include_back=True,
         table_name=table_name,
         tables=get_sql_tables(conn),
         term_id=term_id,
@@ -919,6 +943,7 @@ def render_tree(table_name, term_id: str = None):
 
 
 def update_term(table_name, term_id):
+    # TODO: new LDTab structure
     new_id = request.form.get("ID")
     if new_id != term_id:
         logger.info(f"Updating {term_id} to new ID {new_id}")
@@ -932,14 +957,14 @@ def update_term(table_name, term_id):
 
     # Get current annotations for this term
     query = sql_text(
-        f"SELECT predicate, value FROM {table_name} WHERE subject = :s AND value IS NOT NULL"
+        f"SELECT predicate, object FROM {table_name} WHERE subject = :s AND object IS NOT NULL"
     )
     results = conn.execute(query, s=term_id)
     annotations = defaultdict(list)
     for res in results:
         if res["predicate"] not in annotations:
             annotations[res["predicate"]] = list()
-        annotations[res["predicate"]].append(res["value"])
+        annotations[res["predicate"]].append(res["object"])
 
     # Get current logic for this term
     logic = defaultdict(list)
@@ -982,7 +1007,7 @@ def update_term(table_name, term_id):
         added_objs = set(new_values) - set(values)
         for rv in removed_objs:
             query = sql_text(
-                f"DELETE FROM {table_name} WHERE subject = :s AND predicate = :p AND value = :v"
+                f"DELETE FROM {table_name} WHERE subject = :s AND predicate = :p AND object = :v"
             )
             conn.execute(query, s=term_id, p=predicate, v=rv)
         for av in added_objs:
@@ -1042,6 +1067,15 @@ def update_term(table_name, term_id):
     return term_id
 
 
+# This runs for each page in the CGI app, but for normal app it won't run until you shutdown app
+@atexit.register
+def clean_tables():
+    tmp = [x for x in get_sql_tables(conn) if x.startswith("tmp_")]
+    for t in tmp:
+        logger.error(t)
+        conn.execute(f'DROP TABLE "{t}"')
+
+
 if __name__ == "__main__":
     # Next line is used to run as a Flask app - comment/uncomment as needed
     # app.run()
@@ -1049,5 +1083,5 @@ if __name__ == "__main__":
     # The SCRIPT_NAME specifies the prefix to be used for url_for - currently hardcoded
     os.environ["SCRIPT_NAME"] = f"/CMI-PB/branches/next/views/src/server/run.py"
     from wsgiref.handlers import CGIHandler
-
     CGIHandler().run(app)
+
