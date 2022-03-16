@@ -1,15 +1,15 @@
 {% extends "template.html" %}
 {% block content %}
 
-<div class="row" style="padding-bottom:5px; padding-top:20px;">
+<div class="row py-3">
     <form method="post">
-        <div class="row">
+        <div class="row py-3">
             <div class="col-md-4">
-                <h3 style="padding-bottom:20px;">Term Metadata</h3>
+                <h3>Term Metadata</h3>
             </div>
             <div class="col-md-8">
-                <div class="row float-end">
-                    <div class="col-md-8">
+                <div class="row justify-content-end">
+                    <div class="col-auto">
                         <select class="form-select" id="metadata-select">
                             <option selected>Add new annotation</option>
                             {% for term_id, label in annotation_properties.items() %}
@@ -17,22 +17,20 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-auto">
                         <a class="btn btn-outline-primary" href="javascript:addField('annotation')">Add</a>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="row" id="term-metadata">
-            {{ metadata|safe }}
-        </div>
-        <div class="row">
+        {{ metadata|safe }}
+        <div class="row py-3" style="margin-top: 25px;">
             <div class="col-md-4">
-                <h3 style="padding-bottom:20px;">Logical Definition</h3>
+                <h3>Logical Definition</h3>
             </div>
             <div class="col-md-8">
-                <div class="row float-end">
-                    <div class="col-md-8">
+                <div class="row justify-content-end">
+                    <div class="col-auto">
                         <select class="form-select" id="logic-select">
                             <option selected>Add logic</option>
                             {% if entity_type == "owl:Class" %}
@@ -53,16 +51,16 @@
                             {% endif %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-auto">
                         <a class="btn btn-outline-primary" href="javascript:addField('logic')">Add</a>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="row" id="term-logic">
-            {{ logic|safe }}
+        {{ logic|safe }}
+        <div class="row py-5">
+            <button type="submit" class="col-md-2 btn btn-large btn-outline-primary">Submit</button>
         </div>
-        <button type="submit" class="btn btn-large btn-outline-primary">Submit</button>
     </form>
 </div>
 
@@ -86,15 +84,16 @@
             }
             rowId += 1;
         }
-        console.log(rowId);
 
         // Create a new input row for the form
         var inptRow = document.createElement("div");
-        inptRow.setAttribute("class", "row mb-3");
+        inptRow.setAttribute("class", "row g-3 align-items-center");
         inptRow.setAttribute("id", rowId);
-        var innerHTML = `<div class="col-auto"><a class="btn btn-sm btn-danger" href="javascript:del('${rowId}')">x</a></div>`
-        innerHTML += `<label class="col-sm-2 col-form-label">${predicate}</label>`
-        innerHTML += '<div class="col-sm-9">'
+        var innerHTML = `<div class="col-md-3">`
+        innerHTML += `<a href="javascript:del('${rowId}')"><i class="bi-x-circle" style="font-size: 16px; color: #dc3545"></i></a>`
+        innerHTML += " &nbsp;"
+        innerHTML += `<b>${predicate}</b></div>`
+        innerHTML += '<div class="col-md-9">'
         if (fieldType == 'annotation') {
         innerHTML += `<input type="text" class="form-control" name="${predicateId}">`
         } else {

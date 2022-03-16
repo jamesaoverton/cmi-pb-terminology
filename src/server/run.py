@@ -1,7 +1,4 @@
 #!/usr/bin/env python3.9
-import atexit
-import csv
-import io
 import json
 import logging
 import os
@@ -9,12 +6,16 @@ import sqlite3
 import traceback
 
 from collections import defaultdict
+from typing import Optional, Tuple
+
 from flask import abort, Flask, redirect, request, render_template, Response, url_for
-from gizmos_export import export
+from gizmos_export import export, LOGIC_PREDICATES
 from gizmos_helpers import get_descendants, get_entity_type, get_labels
 from gizmos_search import get_search_results
 from gizmos.helpers import get_children, get_ids  # These still work with LDTab
+from gizmos.hiccup import render
 from gizmos_tree import tree
+from html import escape as html_escape
 from lark import Lark, UnexpectedCharacters
 from sprocket import (
     get_sql_columns,
@@ -26,13 +27,14 @@ from sprocket import (
 )
 from sprocket.grammar import PARSER, SprocketTransformer
 from sqlalchemy import create_engine
+from sqlalchemy.sql.expression import bindparam
 from sqlalchemy.sql.expression import text as sql_text
 from werkzeug.datastructures import ImmutableMultiDict
 from werkzeug.exceptions import HTTPException
 
 from src.script.cmi_pb_grammar import grammar, TreeToDict
 from src.script.load import configure_db, read_config_files, update_row
-from src.script.validate import validate_row
+from src.script.validate import get_matching_values, validate_row
 
 
 BUILTIN_LABELS = {
@@ -56,10 +58,11 @@ app = Flask(__name__)
 os.chdir("../..")
 
 # Set up logging to file
-logger = logging.getLogger("droid_logger")
+logger = logging.getLogger("cmi_pb_logger")
 logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler("app.log")
 fh.setLevel(logging.DEBUG)
+fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
 logger.addHandler(fh)
 
 # sqlite3 is required for executescript used in load
@@ -91,16 +94,11 @@ def handle_exception(e):
 
 @app.route("/")
 def index():
-    return render_template("template.html", html="<h3>Welcome</h3><p>Please select a table</p>")
-
-
-# @app.route("/column")
-# def column():
-#    # TODO: how should this be displayed
-#    table_name = request.args.get("table")
-#    if not table_name:
-#        return abort(406, "A 'table' is required")
-#    return get_sql_columns(conn, table_name)
+    return render_template(
+        "template.html",
+        html="<h3>Welcome</h3><p>Please select a table</p>",
+        tables=get_sql_tables(conn),
+    )
 
 
 @app.route("/<table_name>", methods=["GET", "POST"])
@@ -114,7 +112,7 @@ def table(table_name):
     # Check for subclass of searches - these are automatically term table views
     subclass_of = request.args.get("subClassOf")
     subclass_of_self = request.args.get("subClassOf?")
-    descendants_of = request.args.get("subClassOfplus")  # TODO: does not work as param
+    descendants_of = request.args.get("subClassOfplus")  # '+' does not work in query params
     descendants_of_self = request.args.get("subClassOf*")
 
     if subclass_of:
@@ -126,25 +124,42 @@ def table(table_name):
     elif descendants_of_self:
         return render_subclass_of(table_name, "subClassOf*", descendants_of_self)
 
+    # TODO: view=form for tables to add new row/term
+
     # First check if table is an ontology table - if so, render term IDs + labels
     if is_ontology(table_name):
-        # Get all terms from the ontology
-        res = conn.execute(
-            f"SELECT DISTINCT subject FROM {table_name} WHERE subject NOT LIKE '_:%'"
-        )
-        terms = [x["subject"] for x in res]
-        data = get_search_results(
-            conn,
-            request.args.get("text", ""),
-            limit=None,
-            statements=table_name,
-            synonyms=["IAO:0000118", "CMI-PB:alternativeTerm"],
-            terms=terms,
-        )
         if request.args.get("format") == "json":
             # Support for typeahead search
+            data = get_search_results(
+                conn,
+                request.args.get("text", ""),
+                limit=None,
+                statements=table_name,
+                synonyms=[],
+            )
             return json.dumps(data)
-        return render_ontology_table(table_name, data, "Showing terms from " + table_name)
+
+        # Maybe get a set of predicates to restrict search results to
+        select = request.args.get("select")
+        predicates = ["rdfs:label", "IAO:0000118"]
+        if select:
+            # TODO: add form at top of page for user to select predicates to show?
+            pred_labels = select.split(",")
+            predicates = get_ids(conn, pred_labels)
+
+        # Get all terms from the ontology
+        res = conn.execute(
+            f"SELECT DISTINCT subject FROM \"{table_name}\""
+        )
+        terms = [x["subject"] for x in res]
+
+        # Export the data
+        data = export(conn, terms, predicates=predicates, statements=table_name)
+        return render_ontology_table(table_name, data, predicates, "Showing terms from " + table_name)
+
+    # Typeahead for autocomplete in data forms
+    if request.args.get("format") == "json":
+        return json.dumps(get_matching_values(config, table_name, request.args.get("column"), matching_string=request.args.get("text")))
 
     # Otherwise render default sprocket table
     html = render_database_table(
@@ -154,7 +169,7 @@ def table(table_name):
         hide_in_row=["row_number"],
         show_help=True,
         standalone=False,
-        use_view=True
+        use_view=True,
     )
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
     return render_template("template.html", html=html, table_name=table_name, tables=tables)
@@ -164,8 +179,6 @@ def table(table_name):
 def term(table_name, term_id):
     messages = {}
     if not is_ontology(table_name):
-        row = None
-        status = None
         row_number = None
         try:
             row_number = int(term_id)
@@ -175,6 +188,7 @@ def term(table_name, term_id):
 
         view = request.args.get("view")
 
+        form_html = None
         if request.method == "POST":
             # Get the row from the form and remove the hidden param
             new_row = dict(request.form)
@@ -190,10 +204,7 @@ def term(table_name, term_id):
                     validated_row_2 = {"row_number": row_number}
                     validated_row_2.update(validated_row)
                     validated_row = validated_row_2
-                row = get_form_row(table_name, validated_row)
-                status = "valid"
-                if "error" in get_messages(validated_row):
-                    status = "invalid"
+                form_html = get_row_as_form(table_name, validated_row)
             else:
                 # Update or add new row
                 if term_id != "new":
@@ -211,7 +222,7 @@ def term(table_name, term_id):
                     else:
                         messages["success"] = ["Row successfully updated!"]
                 else:
-                    # TODO: add new row
+                    # TODO: add new row from form
                     pass
 
         # Treat term ID as row ID
@@ -225,43 +236,26 @@ def term(table_name, term_id):
         tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
 
         if view == "form":
-            logger.info(f"Generating form view for row {row_number} from {table_name}")
-            if not row and row_number != "new":
+            if not form_html and row_number != "new":
                 # Get the row
                 res = dict(
                     conn.execute(
                         f"SELECT * FROM {table_name}_view WHERE row_number = {row_number}"
                     ).fetchone()
                 )
-                row = get_form_row(table_name, res)
-            elif not row:
-                # Empty row
-                cols = get_sql_columns(conn, table_name)
-                row = {}
-                if "column" in tables:
-                    for c in cols:
-                        if c.endswith("_meta") or c == "row_number":
-                            continue
-                        res = conn.execute(
-                            sql_text(
-                                """SELECT description FROM "column"
-                                WHERE "table" = :table AND "column" = :column"""
-                            ),
-                            table=table_name,
-                            column=c,
-                        ).fetchone()
-                        if res:
-                            row[c] = {"description": res["description"]}
-                        else:
-                            row[c] = {}
-                else:
-                    row = {c: {} for c in cols if not c.endswith("_meta") and not c == "row_number"}
+                form_html = get_row_as_form(table_name, res)
+            elif not form_html:
+                # Empty new row
+                form_html = get_new_row_form(table_name)
+
+            if not form_html:
+                return abort(500, "something went wrong")
+
             return render_template(
                 "data_form.html",
                 include_back=True,
                 messages=messages,
-                row=row,
-                status=status,
+                row_form=form_html,
                 table_name=table_name,
                 tables=tables,
             )
@@ -289,19 +283,16 @@ def term(table_name, term_id):
             term_id = update_term(table_name, term_id)
         # editable form that updates database
         return render_term_form(table_name, term_id)
-    elif view == "transposed":
-        # TODO: transpose columns and rows (isn't this vertical view?)
-        pass
     elif view == "tree":
         return render_tree(table_name, term_id=term_id)
     elif request.args.get("format") == "json":
         return dump_search_results(table_name)
     else:
-        # TODO: is this the same as transposed? Should this not be default?
         select = request.args.get("select")
         predicates = None
         if select:
-            # TODO: implement form selector?
+            # TODO: select=label,definition does not work
+            #       also, add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
             predicates = get_ids(conn, pred_labels)
         data = get_data_for_term(table_name, term_id, predicates=predicates)
@@ -316,6 +307,7 @@ def term(table_name, term_id):
             return Response(render_tsv_table([data], fmt=fmt), mimetype=mt)
         base_url = url_for("term", table_name=table_name, term_id=term_id)
         tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
+        # TODO: use hiccup here
         html = [
             '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">',
             f'<a href="{base_url}" class="btn btn-sm btn-outline-primary active">Table</a>',
@@ -346,25 +338,241 @@ def term(table_name, term_id):
 # ----- DATA TABLE METHODS -----
 
 
-def get_description(table_name, column):
+def get_hiccup_form_row(
+    header,
+    allow_delete=False,
+    allowed_values: Optional[list] = None,
+    annotations=None,
+    description=None,
+    display_header=None,
+    html_type="text",
+    message=None,
+    readonly=False,
+    valid=None,
+    value=None,
+):
+    # TODO: support other HTML types: dropdown, boolean, etc...
+    # TODO: handle datatypes for ontology forms (include_datatypes?)
+    global FORM_ROW_ID
+
+    if html_type in ["select", "radio", "checkbox"] and not allowed_values:
+        # TODO: error handling - allowed_values should always be included for these
+        raise Exception(f"A list of allowed values is required for HTML type '{html_type}'")
+
+    # Create the header label for this form row
+    header_col = ["div", {"class": "col-md-3", "id": FORM_ROW_ID}]
+    if allow_delete:
+        header_col.append(
+            [
+                "a",
+                {"href": f"javascript:del({FORM_ROW_ID})"},
+                ["i", {"class": "bi-x-circle", "style": "font-size: 16px; color: #dc3545;"}],
+                "&nbsp",
+            ]
+        )
+    FORM_ROW_ID += 1
+    if display_header:
+        header_col.append(["b", display_header])
+    else:
+        header_col.append(["b", header])
+    if description:
+        # Add a ? tooltip that displays description on hover
+        header_col.append(
+            [
+                "button",
+                {
+                    "class": "btn",
+                    "data-bs-toggle": "tooltip",
+                    "data-bs-placement": "right",
+                    "title": description,
+                },
+                ["i", {"class": "bi-question-circle"}],
+            ]
+        )
+
+    # Create the value input for this form row
+    classes = []
+    if valid:
+        classes.append("is-valid")
+    elif valid is not None:
+        classes.append("is-invalid")
+
+    input_attrs = {}
+    if readonly:
+        # No name so that it isn't passed through POST data
+        input_attrs["readonly"] = True
+    else:
+        # Everything else uses the header as the element name
+        input_attrs["name"] = header
+
+    value_col = ["div", {"class": "col-md-9"}]
+    if html_type == "textarea":
+        classes.insert(0, "form-control")
+        input_attrs["class"] = " ".join(classes)
+        textarea_element = ["textarea", input_attrs]
+        if value:
+            textarea_element.append(html_escape(value))
+        value_col.append(textarea_element)
+
+    elif html_type == "select":
+        # TODO: what if value is not in allowed_values?
+        classes.insert(0, "form-select")
+        input_attrs["class"] = " ".join(classes)
+        select_element = ["select", input_attrs]
+        has_selected = False
+        logger.error(value)
+        for av in allowed_values:
+            av_safe = html_escape(str(av))
+            if value and str(av) == str(value):
+                has_selected = True
+                select_element.append(["option", {"value": html_escape(av_safe), "selected": True}, av_safe])
+            else:
+                select_element.append(["option", {"value": html_escape(av_safe)}, av_safe])
+        # Add an empty string for no value at the start of the options
+        if has_selected:
+            select_element.insert(2, ["option", {"value": ""}])
+        else:
+            # If there is currently no value, make sure this one is selected
+            select_element.insert(2, ["option", {"value": "", "selected": True}])
+        value_col.append(select_element)
+
+    elif html_type in ["text", "number", "search"]:
+        # TODO: support a range restriction for 'number'
+        classes.insert(0, "form-control")
+        input_attrs["type"] = html_type
+        if html_type == "search":
+            classes.extend(["search", "typeahead"])
+            input_attrs["id"] = f"{header}-typeahead-form"
+        input_attrs["class"] = " ".join(classes)
+        if value:
+            input_attrs["value"] = html_escape(str(value))
+        value_col.append(["input", input_attrs])
+
+    elif html_type == "radio":
+        # TODO: what if value is not in allowed_values? Or what if there is no value?
+        classes.insert(0, "form-check")
+        input_attrs["type"] = html_type
+        for av in allowed_values:
+            av_safe = html_escape(str(av))
+            attrs_copy = input_attrs.copy()
+            attrs_copy["value"] = av_safe
+            if value and str(av) == str(value):
+                attrs_copy["checked"] = True
+            value_col.append(["div", ["input", attrs_copy], ["label", {"for": av_safe}, av_safe]])
+
+    else:
+        raise abort(500, f"'{html_type}' form field is not supported.")
+
+    if message:
+        cls = "invalid-feedback"
+        if valid:
+            cls = "valid-feedback"
+        value_col.append(["div", {"class": cls}, message])
+    if annotations:
+        # TODO: support input types for annotations - text, textarea, search...
+        ann_html = []
+        for ann_pred, ann_values in annotations.items():
+            for av in ann_values:
+                # TODO: add delete button FORM_ROW_ID-annotation-X
+                av = av["object"]
+                ann_html = [
+                    "div",
+                    {
+                        "class": "row justify-content-end",
+                        "style": "padding-right: 0px; padding-top: 5px;",
+                    },
+                    [
+                        "div",
+                        {"class": "col-sm-9"},
+                        [
+                            "div",
+                            {"class": "row"},
+                            [
+                                "label",
+                                {
+                                    "class": "col-sm-2 col-form-label",
+                                    "style": "padding-left: 20px !important;",
+                                },
+                                ann_pred,
+                            ],
+                            [
+                                "div",
+                                {"class": "col-sm-10", "style": "padding-right: 0px !important;"},
+                                [
+                                    "input",
+                                    {
+                                        "type": "text",
+                                        "class": "form-control",
+                                        "value": av.replace('"', "&quot;"),
+                                    },
+                                ],
+                            ],
+                        ],
+                    ],
+                ]
+        value_col.append(ann_html)
+
+    return ["div", {"class": "row py-1"}, header_col, value_col]
+
+
+def get_new_row_form(table_name):
+    # TODO: add validate/submit button
+    headers = get_sql_columns(conn, table_name)
+    html = ["form", {"method": "post"}]
+    for h in headers:
+        if h == "row_number" or h.endswith("_meta"):
+            continue
+        html.append(get_hiccup_form_row(h))
+    return html
+
+
+def get_html_type_and_values(datatype, values=None) -> Tuple[Optional[str], Optional[list]]:
     res = conn.execute(
-        sql_text('SELECT description FROM "column" WHERE "table" = :table AND "column" = :column'),
-        table=table_name,
-        column=column,
+        'SELECT parent, "HTML type", condition FROM datatype WHERE datatype = :datatype',
+        datatype=datatype,
     ).fetchone()
     if res:
-        return res["description"]
-    return None
+        if not values:
+            condition = res["condition"]
+            if condition and condition.startswith("in"):
+                parsed = config["parser"].parse(condition)[0]
+                # TODO: the in conditions are parsed with surrounding quotes
+                #       looks like there are always quotes? Maybe not with numbers?
+                values = [x["value"][1:-1] for x in parsed["args"]]
+        html_type = res["HTML type"]
+        if html_type:
+            return html_type, values
+        parent = res["parent"]
+        if parent:
+            return get_html_type_and_values(parent, values=values)
+    return None, None
 
 
-def get_form_row(table_name, row):
-    """Transform a row either from query results or validation into a row suitable for the Jinja
-    template. This is a dictionary of header -> details (value, valid, messages)."""
-    form_row = {}
+def get_row_as_form(table_name, row):
+    """Transform a row either from query results or validation into a hiccup-style HTML form."""
+    html = ["form", {"method": "post"}]
+    row_number = row.get("row_number")
+    if row_number:
+        html.append(get_hiccup_form_row("row_number", readonly=True, value=row_number))
+    row_valid = None
     for header, value in row.items():
-        if header.endswith("_meta"):
+        if header == "row_number" or header.endswith("_meta"):
             continue
-        if not value or isinstance(value, str) or isinstance(value, int):
+
+        # Get the details from the value,
+        # which is either a JSON object (from validation) or a literal
+        valid = None
+        message = None
+        if value and isinstance(value, dict):
+            # This row is coming from a validated row
+            message = "<br>".join({x["message"] for x in value["messages"]})
+            valid = value["valid"]
+            if valid and row_valid is None:
+                row_valid = True
+            elif not valid:
+                row_valid = False
+            value = value["value"]
+        else:
             # This row is coming from a query result
             # Check for meta row
             meta_row = row.get(header + "_meta")
@@ -375,20 +583,95 @@ def get_form_row(table_name, row):
             if not value:
                 # If value is still None, we couldn't find nulltype or invalid value
                 value = ""
-            details = {"value": value}
-        else:
-            # This row is coming from a validated row
-            details = {
-                "value": value["value"],
-                "valid": value["valid"],
-                "message": "<br>".join({x["message"] for x in value["messages"]}),
-            }
-        if "column" in get_sql_tables(conn):
-            desc = get_description(table_name, header)
-            if desc:
-                details["description"] = desc
-        form_row[header] = details
-    return form_row
+
+        desc = None
+        # Default HTML type is a simple text input
+        html_type = "text"
+        allowed_values = None
+        tables = get_sql_tables(conn)
+        if "column" in tables:
+            # Use column table to get description & datatype for this col
+            res = conn.execute(
+                sql_text(
+                    """SELECT description, datatype, structure FROM "column"
+                    WHERE "table" = :table AND "column" = :column"""
+                ),
+                table=table_name,
+                column=header,
+            ).fetchone()
+            if res:
+                desc = res["description"]
+                datatype = res["datatype"]
+                structure = res["structure"]
+                if structure and structure.startswith("from("):
+                    # Given the from structure, we always turn the input into a search
+                    html_type = "search"
+                elif datatype and "datatype" in tables:
+                    # Everything else uses an HTML type defined in the datatype table
+                    # If a datatype does not have an HTML type, search for first ancestor type
+                    html_type, allowed_values = get_html_type_and_values(datatype)
+        if allowed_values and not html_type:
+            # Default to search when allowed_values are provided
+            # This will still allow users to input invalid values
+            html_type = "search"
+
+        # Add the hiccup vector for this field as a Bootstrap row containing form elements
+        html.append(
+            get_hiccup_form_row(
+                header,
+                allowed_values=allowed_values,
+                description=desc,
+                html_type=html_type,
+                message=message,
+                valid=valid,
+                value=value,
+            )
+        )
+
+    if row_valid:
+        # All fields passed validation - display green button
+        submit_cls = "success"
+    elif row_valid is not None:
+        # One or more fields failed validation - display red button
+        submit_cls = "danger"
+    else:
+        # Row has not yet been validated - display gray button
+        submit_cls = "secondary"
+    html.append(
+        [
+            "div",
+            {"class": "row", "style": "padding-top: 10px;"},
+            [
+                "div",
+                {"class": "col-auto"},
+                [
+                    "button",
+                    {
+                        "type": "submit",
+                        "name": "action",
+                        "value": "validate",
+                        "class": "btn btn-large btn-outline-primary",
+                    },
+                    "Validate",
+                ],
+            ],
+            [
+                "div",
+                {"class": "col-auto"},
+                [
+                    "button",
+                    {
+                        "type": "submit",
+                        "name": "action",
+                        "value": "submit",
+                        "class": f"btn btn-large btn-outline-{submit_cls}",
+                    },
+                    "Submit",
+                ],
+            ],
+        ]
+    )
+    return render([], html)
 
 
 def get_messages(row):
@@ -433,110 +716,6 @@ def validate_table_row(table_name, row_number, row):
 # ----- ONTOLOGY TABLE METHODS -----
 
 
-def build_form_field(
-    table_name, input_type, header, predicate, help_msg, required, annotations=None, value=None, allow_delete=True
-):
-    global FORM_ROW_ID
-    """Return an HTML form field for a template field."""
-    if required:
-        display = header + " *"
-    else:
-        display = header
-
-    html = [f'<div class="row mb-3" id="{FORM_ROW_ID}">', '<label class="col-sm-3 col-form-label">']
-    if allow_delete:
-        html.extend(
-            [
-                f"<a href=\"javascript:del('{FORM_ROW_ID}')\">",
-                f'<i class="bi-x-circle" style="font-size: 16px; color: #dc3545;"></i>' "</a>",
-                "&nbsp;",
-            ]
-        )
-
-    html.extend([display, "</label>", '<div class="col-sm-9">'])
-    FORM_ROW_ID += 1
-
-    value_html = ""
-    if value:
-        value = value.replace('"', "&quot;")
-        value_html = f' value="{value}"'
-    if not value:
-        value = ""
-
-    if input_type == "text":
-        if required:
-            html.append(
-                f'<input type="text" class="form-control" name="{predicate}" required{value_html}>'
-            )
-            html.append('<div class="invalid-feedback">')
-            html.append(f"{header} is required")
-            html.append("</div>")
-        else:
-            html.append(f'<input type="text" class="form-control" name="{predicate}"{value_html}>')
-
-    elif input_type == "textarea":
-        if required:
-            html.extend(
-                [
-                    f'<textarea class="form-control" name="{predicate}" rows="3" required>',
-                    value,
-                    "</textarea>",
-                    '<div class="invalid-feedback">',
-                    f"{header} is required",
-                    "</div>",
-                ]
-            )
-        else:
-            html.append(
-                f'<textarea class="form-control" name="{predicate}" rows="3">{value}</textarea>'
-            )
-
-    elif input_type == "search":
-        if required:
-            html.append(
-                f'<input type="text" class="search form-control" name="{predicate}" '
-                + f'id="{table_name}-typeahead-form" required{value_html}>'
-            )
-            html.append('<div class="invalid-feedback">')
-            html.append(f"{header} is required")
-            html.append("</div>")
-        else:
-            html.append(
-                f'<input type="text" class="typeahead form-control" name="{predicate}" '
-                + f'id="{table_name}-typeahead-form"{value_html}>'
-            )
-
-    elif input_type.startswith("select"):
-        selects = input_type.split("(", 1)[1].rstrip(")").split(", ")
-        html.append(f'<select class="form-select" name="{predicate}">')
-        for s in selects:
-            if value and s == value:
-                html.append(f'<option value="{s}" selected>{s}</option>')
-            else:
-                html.append(f'<option value="{s}">{s}</option>')
-        html.append("</select>")
-
-    else:
-        return None
-
-    if help_msg:
-        html.append(f'<div class="form-text">{help_msg}</div>')
-    html.append("</div>")
-
-    if annotations:
-        # TODO: support input types for annotations
-        for ann_pred, ann_values in annotations.items():
-            for av in ann_values:
-                # TODO: add delete button
-                html.append(f'<label class="col-sm-3 col-form-label">{ann_pred}</label>')
-                html.append('<div class="col-sm-9">')
-                av = av.replace('"', "&quot;")
-                html.append(f'<input type="text" value={av}></input>')
-                html.append("</div>")
-    html.append("</div>")
-    return html
-
-
 def dump_search_results(table_name, search_arg=None):
     search_text = request.args.get("text")
     if not search_text:
@@ -556,37 +735,6 @@ def dump_search_results(table_name, search_arg=None):
             terms=terms,
         )
     )
-
-
-def get_annotation_properties(table_name):
-    results = list(
-        conn.execute(
-            f"""SELECT DISTINCT s2.subject AS subject FROM "{table_name}" s1
-            JOIN "{table_name}" s2 ON s1.predicate = s2.subject WHERE s1.object IS NOT NULL"""
-        )
-    )
-    aps = {}
-    for res in results:
-        ap_id = res["subject"]
-        # Skip some ontology-level APs, as well as label which we add later
-        if (
-            ap_id.startswith("dct:")
-            or ap_id.startswith("foaf:")
-            or ap_id.startswith("owl:")
-            or ap_id.startswith("<")
-            or ap_id == "rdfs:label"
-        ):
-            continue
-        res = conn.execute(
-            f"""SELECT object FROM {table_name} WHERE subject = ? AND predicate = 'rdfs:label'
-            ORDER BY annotation""",
-            (ap_id,),
-        ).fetchone()
-        if res:
-            aps[ap_id] = res[0]
-        else:
-            aps[ap_id] = ap_id
-    return aps
 
 
 def get_data_for_term(table_name, term_id, predicates=None):
@@ -615,10 +763,10 @@ def get_data_for_term(table_name, term_id, predicates=None):
                 if pred not in annotations:
                     annotations[pred] = {}
                 annotations[pred][row["object"]] = json.loads(row["annotation"])
-                curies.update(annotations[pred][row["object"]] .keys())
+                curies.update(annotations[pred][row["object"]].keys())
 
     # Get the labels of any predicate or object used
-    labels = get_labels(conn, curies, statements=table_name)
+    labels = get_labels(conn, curies, include_top=False, statements=table_name)
 
     data = {}
     for predicate, rows in predicate_to_vals.items():
@@ -633,7 +781,9 @@ def get_data_for_term(table_name, term_id, predicates=None):
             o = row["object"]
             if row["datatype"] == "_IRI":
                 label = labels.get(o, o)
-                display = f'<a href="{url_for("term", table_name=table_name, term_id=o)}">{label}</a>'
+                display = (
+                    f'<a href="{url_for("term", table_name=table_name, term_id=o)}">{label}</a>'
+                )
             else:
                 display = f"<span>{o}</span>"
             value_annotations = pred_annotations.get(o)
@@ -642,7 +792,11 @@ def get_data_for_term(table_name, term_id, predicates=None):
                 for pred_2, values in value_annotations.items():
                     display += "<li>"
                     display += f'<small><a href="{url_for("term", table_name=table_name, term_id=pred_2)}">{labels.get(pred_2, pred_2)}</a></small>'
-                    display += "<ul>" + "".join([f"<li><small>{v['object']}</small></li>" for v in values]) + "</ul>"
+                    display += (
+                        "<ul>"
+                        + "".join([f"<li><small>{v['object']}</small></li>" for v in values])
+                        + "</ul>"
+                    )
                 display += "</ul>"
             vals.append(display)
 
@@ -671,50 +825,80 @@ def is_ontology(table_name):
     return {"subject", "predicate", "object", "datatype", "annotation"}.issubset(set(columns))
 
 
-def render_ontology_table(table_name, data, title, add_params=None):
+def render_ontology_table(table_name, data, predicate_ids, title, add_params=None):
     """
     :param table_name: name of SQL table that contains terms
-    :param data: data to render
+    :param data: data to render - dict of term ID -> predicate ID -> list of JSON objects
     :param title: title to display at the top of table
     :param add_params: additional query parameter-arg pairs to include in search URL for typeahead
     """
+    # TODO: we want to render objects using wiring before doing any ordering
+    predicate_labels = get_labels(conn, predicate_ids, include_top=False, statements=table_name)
     if request.args.get("order"):
-        order_by = parse_order_by(request.args["order"].lower())
+        # Reverse the ID -> label dictionary to translate column names to IDs
+        label_to_id = {v: k for k, v in predicate_labels.items()}
+        order_by = parse_order_by(request.args["order"])
         for ob in order_by:
-            if ob["nulls"] == "first":
-                data = sorted(data, key=lambda d: d[ob["key"]])
-            else:
-                data = sorted(data, key=lambda d: (d[ob["key"]] == "", d[ob["key"]]))
+            reverse = False
             if ob["order"] == "desc":
-                data.reverse()
+                reverse = True
 
-    # get the columns we want and add links
-    data = [
-        {
-            "ID": f"<a href=\"{url_for('term', table_name=table_name, term_id=itm['id'])}\">{itm['id']}</a>",
-            "Label": f"<a href=\"{url_for('term', table_name=table_name, term_id=itm['id'])}\">{itm['label']}</a>",
-            "Synonym": itm["synonym"] or "",
-        }
-        for itm in data
-    ]
+            if ob["key"] == "ID":
+                # ID is never null
+                # sorted is more efficient here so we don't need to turn dict into list of tuples
+                data = {k: v for k, v in sorted(data.items(), reverse=reverse)}
+                continue
+
+            key = label_to_id.get(ob["key"], ob["key"])   # e.g., rdfs:label
+
+            # Separate out the items with no list entries for this predicate
+            nulls = {k: v for k, v in data.items() if not v[key]}
+            non_nulls = [[k, v] for k, v in data.items() if v[key]]
+
+            # Sort the items with entries for this predicate
+            non_nulls.sort(key=lambda itm: itm[1][key][0]["object"], reverse=reverse)
+
+            # ... then put the nulls in the correct spot
+            if ob["nulls"] == "first":
+                data = nulls
+                data.update({k: v for k, v in non_nulls})
+            else:
+                data = {k: v for k, v in non_nulls}
+                data.update(nulls)
+
+    # Create the HTML output of data
+    table_data = []
+    for term_id, predicates in data.items():
+        # We always display the ID, regardless of other columns
+        term_id = html_escape(term_id)
+        term_data = {"ID": render([], ["a", {"href": url_for("term", table_name=table_name, term_id=term_id)}, term_id])}
+        for pred_id, pred_label in predicate_labels.items():
+            # TODO: we will already have rendered objects once wiring is in
+            objects = predicates.get(pred_id, [])
+            term_data[pred_label] = "|".join([o["object"] for o in objects])
+        table_data.append(term_data)
 
     param_str = ""
     if add_params:
         param_str = "&".join([f"{x}={y}" for x, y in add_params.items()])
 
     tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
+    # Keep the order of the IDs that were passed in for the display columns
+    headers = [predicate_labels.get(x, x) for x in predicate_ids]
+    headers.insert(0, "ID")
     return render_template(
         "template.html",
         html=render_html_table(
-            data,
+            table_data,
             table_name,
-            [],
+            headers,
             request.args,
             base_url=url_for("table", table_name=table_name),
             hidden=["search_text"],
             show_options=False,
             include_expand=False,
             standalone=False,
+            use_cols_as_headers=True,
         ),
         title=title,
         add_params=param_str,
@@ -748,135 +932,132 @@ def render_subclass_of(table_name, param, arg):
         for p in id_to_label.keys():
             terms.update(get_descendants(conn, p, statements=table_name))
     else:
-        # TODO: error message
-        abort(400)
+        abort(400, "Unknown 'subClassOf' query parameter: " + param)
 
-    data = get_search_results(
-        conn,
-        limit=None,
-        search_text=request.args.get("text", ""),
-        statements=table_name,
-        terms=list(terms),
-    )
     if request.args.get("format") == "json":
         # Support for searching the subset of these terms
+        data = get_search_results(
+            conn,
+            limit=None,
+            search_text=request.args.get("text", ""),
+            statements=table_name,
+            terms=list(terms),
+        )
         return json.dumps(data)
-    # Show all terms
-    return render_ontology_table(table_name, data, title, add_params={param: arg})
+    # Maybe get a set of predicates to restrict search results to
+    select = request.args.get("select")
+    predicates = ["rdfs:label", "IAO:0000118"]
+    if select:
+        # TODO: add form at top of page for user to select predicates to show?
+        pred_labels = select.split(",")
+        predicates = get_ids(conn, pred_labels)
+    data = export(conn, list(terms), predicates=predicates, statements=table_name)
+    return render_ontology_table(table_name, data, predicates, title, add_params={param: arg})
 
 
 def render_term_form(table_name, term_id):
     global FORM_ROW_ID
-    # Get the term label
-    labels = get_labels(conn, [term_id], statements=table_name)
-    label = labels.get(term_id, term_id)
     entity_type = get_entity_type(conn, term_id, statements=table_name)
 
-    # Get all annotation properties used in the ontology
-    aps = get_annotation_properties(table_name)
-    if "rdfs:label" in aps:
-        del aps["rdfs:label"]
-
-    # Export annotations
-    # TODO: error handling
-    annotations = export(
-        conn,
-        [term_id],
-        sorted(aps.keys()),
-        "tsv",
-        default_value_format="label",
-        statements=table_name,
+    # Get all annotation properties
+    query = sql_text(
+        f'SELECT DISTINCT predicate FROM "{table_name}" WHERE predicate NOT IN :logic',
+    ).bindparams(bindparam("logic", expanding=True))
+    results = conn.execute(query, {"logic": LOGIC_PREDICATES}).fetchall()
+    aps = get_labels(
+        conn, [x["predicate"] for x in results], include_top=False, statements=table_name
     )
-    reader = csv.reader(io.StringIO(annotations), delimiter="\t")
-    ann_headers = next(reader)
-    ann_details = next(reader)
-    logger.error(json.dumps(ann_details, indent=2))
 
-    # Build the metadata form elements
-    metadata_html = []
-    # Add the ontology ID element
-    field = build_form_field(
-        table_name, "text", "ontology ID", "ID", None, True, value=term_id, allow_delete=False
-    )
-    if field:
-        metadata_html.extend(field)
-    # Add the label element
-    field = build_form_field(
-        table_name, "text", "label", "rdfs:label", None, True, value=label, allow_delete=False
-    )
-    if field:
-        metadata_html.extend(field)
-    # Add the rest of the annotations
-    i = 0
-    while i < len(ann_headers):
-        header = ann_headers[i]
-        detail = ann_details[i]
-        i += 1
-        if detail == "":
-            # This annotation doesn't exist for this term
-            continue
+    term_details = export(conn, [term_id], statements=table_name)
+    if not term_details:
+        return abort(400, f"Unable to find term {term_id} in '{table_name}' table")
+    term_details = term_details[term_id]
 
-        ap_label = aps[header]
-        input_type = "text"
-        if ap_label in ["definition", "comment"]:
-            input_type = "textarea"
+    # Separate details into metadata & logic
+    metadata = {k: v for k, v in term_details.items() if k not in LOGIC_PREDICATES}
+    logic = {k: v for k, v in term_details.items() if k in LOGIC_PREDICATES}
 
-        # Handle multi-value annotations (separated by pipes)
-        # TODO: this can cause issues if there's a pipe in the annotation
-        if "|" in detail:
-            vals = detail.split("|")
-        else:
-            vals = [detail]
-        for v in vals:
-            field = build_form_field(table_name, input_type, ap_label, header, None, False, value=v)
-            if not field:
-                logger.warning("Could not build field for property: " + ap_label)
-                continue
-            metadata_html.extend(field)
+    # Build the metadata form elements, starting with term ID (always displayed first)
+    metadata_html = [
+        get_hiccup_form_row("ID", display_header="ontology ID", html_type="text", readonly=True, value=term_id)
+    ]
 
-    # Export logic
-    if entity_type == "owl:Class":
-        predicates = ["rdfs:subClassOf", "owl:equivalentClass", "owl:disjointWith"]
-    elif entity_type == "owl:ObjectProperty" or entity_type == "owl:DatatypeProperty":
-        predicates = [
-            "rdfs:subPropertyOf",
-            "owl:equivalentProperty",
-            "owl:inverseOf",
-            "rdfs:domain",
-            "rdfs:range",
-        ]
-    elif entity_type == "owl:Individual":
-        predicates = ["rdf:type", "owl:sameAs", "owl:differentFrom"]
-    else:
-        # datatypes & annotation properties
-        predicates = None
-    if predicates:
-        logic = export(
-            conn, [term_id], predicates, "tsv", default_value_format="label", statements=table_name,
+    # Add the label element (always displayed second)
+    label_details = term_details.get("rdfs:label")
+    label = None
+    if label_details:
+        # TODO: handle multiple labels
+        label_details = label_details[0]
+        label_annotation = label_details.get("annotation")
+        if label_annotation:
+            label_annotation = json.loads(label_annotation)
+        label = label_details.get("object")
+        # TODO: get label label
+        metadata_html.append(
+            get_hiccup_form_row(
+                "rdfs:label",
+                annotations=label_annotation,
+                display_header="label",
+                html_type="text",
+                value=label,
+            )
         )
-    else:
-        logic = None
+
+    # Add the rest of the annotations
+    for predicate_id, detail in metadata.items():
+        if predicate_id == "rdfs:label":
+            continue
+        # TODO: support other HTML types (dropdown, boolean, etc.)
+        pred_label = aps.get(predicate_id, predicate_id)
+        html_type = "text"
+        logger.error(pred_label)
+        if pred_label in ["definition", "comment", "rdfs:comment"]:
+            html_type = "textarea"
+        logger.error(html_type)
+
+        for d in detail:
+            d_annotations = None
+            if d.get("annotation"):
+                d_annotations = json.loads(d.get("annotation"))
+            metadata_html.append(
+                get_hiccup_form_row(
+                    predicate_id,
+                    allow_delete=True,
+                    annotations=d_annotations,
+                    display_header=pred_label,
+                    html_type=html_type,
+                    value=d.get("object"),
+                )
+            )
 
     logic_html = []
-    if logic:
-        # TODO: these are not including anon classes, wait for thick triples?
-        reader = csv.DictReader(io.StringIO(logic), delimiter="\t")
-        logic_details = next(reader)
-        for header, value in logic_details.items():
-            if value == "":
-                continue
-            predicate = BUILTIN_LABELS[header]
-            field = build_form_field(
-                table_name, "search", predicate, header, None, False, value=value
+    # TODO: use wiring to render the object
+    for predicate_id, objects in logic.items():
+        pred_label = BUILTIN_LABELS.get(predicate_id, aps.get(predicate_id, predicate_id))
+        for o in objects:
+            o_annotations = None
+            if o.get("annotation"):
+                o_annotations = json.loads(o.get("annotation"))
+            logic_html.append(
+                get_hiccup_form_row(
+                    predicate_id,
+                    allow_delete=True,
+                    annotations=o_annotations,
+                    display_header=pred_label,
+                    html_type="search",
+                    value=o.get("object"),
+                )
             )
-            if not field:
-                logger.warning("Could not build field for parent class")
-            else:
-                logic_html.extend(field)
 
     if label and " " in label:
         # Encase in single quotes when label has a space
         label = f"'{label}'"
+
+    metadata_html.insert(0, {"class": "row", "id": "term-metadata"})
+    metadata_html.insert(0, "div")
+
+    logic_html.insert(0, {"class": "row", "id": "term-logic"})
+    logic_html.insert(0, "div")
 
     # Reset form row ID for next time
     FORM_ROW_ID = 0
@@ -888,8 +1069,8 @@ def render_term_form(table_name, term_id):
         term_id=term_id,
         title=f"Update " + label or term_id,
         annotation_properties=aps,
-        metadata="\n".join(metadata_html),
-        logic="\n".join(logic_html),
+        metadata=render([], metadata_html),
+        logic=render([], logic_html),
         entity_type=entity_type,
     )
 
@@ -898,23 +1079,24 @@ def render_tree(table_name, term_id: str = None):
     if not is_ontology(table_name):
         return abort(418, "Cannot show tree view for non-ontology table")
 
+    # TODO: add support for select
     search_text = request.args.get("text")
     if search_text:
         if term_id:
             terms = get_terms_from_arg(table_name, term_id).keys()
         else:
             terms = []
-        # show a table of search results
+        # Get matching terms (label or synonym - need to support other cols if select is provided)
         data = get_search_results(
             conn,
             search_text,
             terms=terms,
             limit=None,
-            synonyms=["IAO:0000118", "CMI-PB:alternativeTerm"],
             statements=table_name,
+            synonyms=["IAO:0000118"],
         )
-        title = f"Showing search results for '{search_text}'"
-        return render_ontology_table(table_name, data, title)
+        data = export(conn, [x["id"] for x in data], predicates=["rdfs:label", "IAO:0000118"], statements=table_name)
+        return render_ontology_table(table_name, data, [], f"Showing search results for '{search_text}'")
 
     # nothing to search, just return the tree view
     html = ""
@@ -944,48 +1126,39 @@ def render_tree(table_name, term_id: str = None):
 
 def update_term(table_name, term_id):
     # TODO: new LDTab structure
-    new_id = request.form.get("ID")
-    if new_id != term_id:
-        logger.info(f"Updating {term_id} to new ID {new_id}")
-        query = sql_text(f"UPDATE {table_name} SET stanza = :new WHERE stanza = :old")
-        conn.execute(query, new=new_id, old=term_id)
-        query = sql_text(f"UPDATE {table_name} SET subject = :new WHERE subject = :old")
-        conn.execute(query, new=new_id, old=term_id)
-        query = sql_text(f"UPDATE {table_name} SET object = :new WHERE object = :old")
-        conn.execute(query, new=new_id, old=term_id)
-        term_id = new_id
-
     # Get current annotations for this term
     query = sql_text(
-        f"SELECT predicate, object FROM {table_name} WHERE subject = :s AND object IS NOT NULL"
-    )
-    results = conn.execute(query, s=term_id)
+        f"""SELECT predicate, object, datatype, annotation FROM "{table_name}"
+        WHERE subject = :s AND object IS NOT NULL AND predicate NOT IN :logic"""
+    ).bindparams(bindparam("s"), bindparam("logic", expanding=True))
+    results = conn.execute(query, s=term_id, logic=LOGIC_PREDICATES)
     annotations = defaultdict(list)
     for res in results:
         if res["predicate"] not in annotations:
             annotations[res["predicate"]] = list()
-        annotations[res["predicate"]].append(res["object"])
+        annotations[res["predicate"]].append(res)
 
     # Get current logic for this term
     logic = defaultdict(list)
     query = sql_text(
-        f"SELECT predicate, object FROM {table_name} WHERE subject = :s AND object IS NOT NULL"
-    )
-    results = conn.execute(query, s=term_id)
+        f"""SELECT predicate, object, datatype, annotation FROM {table_name}
+        WHERE subject = :s AND object IS NOT NULL AND predicate IN :logic"""
+    ).bindparams(bindparam("s"), bindparam("logic", expanding=True))
+    results = conn.execute(query, s=term_id, logic=LOGIC_PREDICATES)
     for res in results:
         if res["predicate"] not in logic:
             logic[res["predicate"]] = list()
-        logic[res["predicate"]].append(res["object"])
+        logic[res["predicate"]].append(res)
 
     # Get all annotation properties so we know where to put predicates
-    aps = get_annotation_properties(table_name)
+    # aps = get_annotation_properties(table_name)
 
     form_annotations = defaultdict(list)
     form_logic = defaultdict(list)
     for predicate, value in request.form.items():
         if predicate == "ID":
             continue
-        if predicate in aps or predicate == "rdfs:label":
+        if predicate not in LOGIC_PREDICATES:
             if predicate in annotations:
                 # Predicate is already used on term, so it will be checked
                 continue
@@ -1001,78 +1174,85 @@ def update_term(table_name, term_id):
             form_logic[predicate].append(value)
 
     # Look for changes to existing annotation predicates on this term
-    for predicate, values in annotations.items():
+    for predicate, value_objects in annotations.items():
         new_values = request.form.getlist(predicate)
-        removed_objs = set(values) - set(new_values)
-        added_objs = set(new_values) - set(values)
-        for rv in removed_objs:
+        # Removed objects
+        removed = [vo for vo in value_objects if vo["object"] not in new_values]
+        # Added values
+        added = [nv for nv in new_values if nv not in [vo["object"] for vo in value_objects]]
+        for r in removed:
             query = sql_text(
-                f"DELETE FROM {table_name} WHERE subject = :s AND predicate = :p AND object = :v"
+                f'DELETE FROM "{table_name}" WHERE subject = :s AND predicate = :p AND object = :v'
             )
-            conn.execute(query, s=term_id, p=predicate, v=rv)
-        for av in added_objs:
-            query = sql_text(f"INSERT INTO {table_name} VALUES (:s, :s, :p, NULL, :v, NULL, NULL)")
-            conn.execute(query, s=term_id, p=predicate, v=av)
+            conn.execute(query, s=term_id, p=predicate, v=r)
+        for a in added:
+            # TODO: set datatype (need it on form first) & annotation,
+            #       defaulting to xsd:string for everything for now
+            query = sql_text(
+                f"""INSERT INTO "{table_name}" (subject, predicate, object, datatype)
+                VALUES (:s, :p, :v, 'xsd:string')""")
+            conn.execute(query, s=term_id, p=predicate, v=a)
 
-    # Add new annotation predicates + values
+    # Add new annotation predicates + values (predicates that have not been used on this term)
     for predicate, values in form_annotations.items():
         for v in values:
-            query = sql_text(f"INSERT INTO {table_name} VALUES (:s, :s, :p, NULL, :v, NULL, NULL)")
+            query = sql_text(
+                f"""INSERT INTO "{table_name}" (subject, predicate, object, datatype)
+                VALUES (:s, :p, :v, 'xsd:string')""")
             conn.execute(query, s=term_id, p=predicate, v=v)
 
     # Look for changes to existing logic predicates on this term
-    for predicate, objs in logic.items():
-        if predicate == "rdf:type" and objs[0] in [
-            "owl:Class",
-            "owl:AnnotationProperty",
-            "owl:DataProperty",
-            "owl:ObjectProperty",
-        ]:
+    for predicate, logic_objects in logic.items():
+        if predicate == "rdf:type" and any(
+                [o for o in [lo["object"] for lo in logic_objects] if o in ["owl:Class", "owl:AnnotationProperty", "owl:DataProperty", "owl:ObjectProperty", "owl:Datatype"]]):
             # Only look at type for individuals
             continue
+
         new_objects = request.form.getlist(predicate)
+        # TODO: instead of getting IDs, use wiring to translate manchester into JSON object
         new_obj_ids = get_ids(conn, new_objects)
         if len(new_objects) > len(new_obj_ids):
-            # TODO: handle this case by getting IDs one by one?
             logger.error(
                 "Cannot get IDs for one or more terms from term list: " + ", ".join(new_objects)
             )
-        removed_objs = list(set(objs) - set(new_obj_ids))
-        added_objs = list(set(new_obj_ids) - set(objs))
-        if (
-            predicate == "rdfs:subClassOf"
-            and len(removed_objs) == 1
-            and removed_objs[0] == "owl:Thing"
-            and not added_objs
-        ):
-            # Do not delete owl:Thing, even though it doesn't show up on the form
-            continue
-        for rv in removed_objs:
+
+        # TODO: Compare JSON objects for _json datatypes, IRIs for everything else
+        removed = [lo for lo in logic_objects if lo["object"] not in new_objects]
+        added = [no for no in new_objects if no not in [vo["object"] for vo in logic_objects]]
+
+        # TODO: Do not remove owl:Thing
+        for r in removed:
+            # TODO: this will not work for the JSON objects
             query = sql_text(
                 f"""DELETE FROM {table_name}
                     WHERE subject = :s AND predicate = :p AND object = :v"""
             )
-            conn.execute(query, s=term_id, p=predicate, v=rv)
-        for av in added_objs:
-            query = sql_text(f"INSERT INTO {table_name} VALUES (:s, :s, :p, :v, NULL, NULL, NULL)")
-            conn.execute(query, s=term_id, p=predicate, v=av)
+            conn.execute(query, s=term_id, p=predicate, v=r)
+        for a in added:
+            # TODO: support adding annotations
+            query = sql_text(
+                f"""INSERT INTO "{table_name}" (subject, predicate, object, datatype)
+                VALUES (:s, :p, :o, '_IRI')"""
+            )
+            conn.execute(query, s=term_id, p=predicate, o=a)
 
     # Add new logic predicates + objects
     for predicate, objects in form_logic.items():
         # All new predicates
         for o in objects:
-            query = sql_text(f"INSERT INTO {table_name} VALUES (:s, :s, :p, :o, NULL, NULL, NULL)")
+            query = sql_text(
+                f"""INSERT INTO "{table_name}" (subject, predicate, object, datatype)
+                            VALUES (:s, :p, :o, '_IRI')"""
+            )
             conn.execute(query, s=term_id, p=predicate, o=o)
-
     return term_id
 
 
 # This runs for each page in the CGI app, but for normal app it won't run until you shutdown app
-@atexit.register
+# @atexit.register
 def clean_tables():
     tmp = [x for x in get_sql_tables(conn) if x.startswith("tmp_")]
     for t in tmp:
-        logger.error(t)
         conn.execute(f'DROP TABLE "{t}"')
 
 
@@ -1083,5 +1263,5 @@ if __name__ == "__main__":
     # The SCRIPT_NAME specifies the prefix to be used for url_for - currently hardcoded
     os.environ["SCRIPT_NAME"] = f"/CMI-PB/branches/next/views/src/server/run.py"
     from wsgiref.handlers import CGIHandler
-    CGIHandler().run(app)
 
+    CGIHandler().run(app)

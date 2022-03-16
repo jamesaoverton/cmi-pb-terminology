@@ -468,12 +468,12 @@
 	headers.push('{{ h }}');
 	{% endfor %}
 
-	// Configure typeahead for Parent labels
+	// Configure typeahead for data table autocomplete
 	function configure_typeahead_form(node) {
 		if (!node.id || !node.id.endsWith("-typeahead-form")) {
 		  return;
 		}
-		table = node.id.split("-")[0];
+		var col = node.id.split("-")[0];
 		var bloodhound = new Bloodhound({
 		  datumTokenizer: Bloodhound.tokenizers.obj.nonword('label'),
 		  queryTokenizer: Bloodhound.tokenizers.nonword,
@@ -481,7 +481,7 @@
 			return a.order - b.order;
 		  },
 		  remote: {
-			url: '{{ url_for("table", table_name=table_name) }}' + "?text=%QUERY&format=json",
+			url: '{{ url_for("table", table_name=table_name) }}' + `?text=%QUERY&column=${col}&format=json`,
 			wildcard: '%QUERY',
 			transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -493,7 +493,7 @@
 		  hint: false,
 		  highlight: true
 		}, {
-		  name: table,
+		  name: "{{ table_name }}",
 		  source: bloodhound,
 		  display: function(item) {
 			return item.label;
@@ -561,6 +561,7 @@
 	  });
 	}
 	$('.typeahead').each(function() { configure_typeahead(this); });
+	$('.typeahead').each(function() { configure_typeahead_form(this); });
 
 	function go(table, value) {
 	  q = {}
