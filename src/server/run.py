@@ -33,7 +33,7 @@ from werkzeug.datastructures import ImmutableMultiDict
 from werkzeug.exceptions import HTTPException
 
 from src.script.cmi_pb_grammar import grammar, TreeToDict
-from src.script.load import configure_db, read_config_files, update_row
+from src.script.load import configure_db, insert_new_row, read_config_files, update_row
 from src.script.validate import get_matching_values, validate_row
 
 
@@ -124,7 +124,7 @@ def table(table_name):
     elif descendants_of_self:
         return render_subclass_of(table_name, "subClassOf*", descendants_of_self)
 
-    # TODO: view=form for tables to add new row/term
+    # TODO: view=form for tables to add new ontology term
 
     # First check if table is an ontology table - if so, render term IDs + labels
     if is_ontology(table_name):
@@ -161,6 +161,32 @@ def table(table_name):
     if request.args.get("format") == "json":
         return json.dumps(get_matching_values(config, table_name, request.args.get("column"), matching_string=request.args.get("text")))
 
+    form_html = None
+    if request.method == "POST":
+        # Override view, which isn't passed in POST
+        view = "form"
+        new_row = dict(request.form)
+        del new_row["action"]
+        validated_row = validate_table_row(table_name, new_row)
+        if request.form["action"] == "validate":
+            form_html = get_row_as_form(table_name, validated_row)
+        elif request.form["action"] == "submit":
+            row_number = insert_new_row(config, table_name, validated_row)
+            return redirect(url_for("term", table_name=table_name, term_id=row_number))
+
+    if view == "form":
+        if not form_html:
+            row = {c: None for c in get_sql_columns(conn, table_name) if c != "row_number"}
+            form_html = get_row_as_form(table_name, row)
+        return render_template(
+            "data_form.html",
+            include_back=True,
+            messages=messages,
+            row_form=form_html,
+            table_name=table_name,
+            tables=get_sql_tables(conn),
+        )
+
     # Otherwise render default sprocket table
     html = render_database_table(
         conn,
@@ -179,12 +205,10 @@ def table(table_name):
 def term(table_name, term_id):
     messages = {}
     if not is_ontology(table_name):
-        row_number = None
         try:
             row_number = int(term_id)
         except ValueError:
-            if term_id == "new" and request.args.get("view") != "form":
-                return abort(400, f"Term ID ({term_id}) for data table must be an integer")
+            return abort(400, f"Term ID ({term_id}) for data table must be an integer")
 
         view = request.args.get("view")
 
@@ -198,32 +222,27 @@ def term(table_name, term_id):
             view = "form"
 
             if request.form["action"] == "validate":
-                validated_row = validate_table_row(table_name, row_number, new_row)
-                if row_number:
-                    # Place row_number first
-                    validated_row_2 = {"row_number": row_number}
-                    validated_row_2.update(validated_row)
-                    validated_row = validated_row_2
+                validated_row = validate_table_row(table_name, new_row, row_number=row_number)
+                # Place row_number first
+                validated_row_2 = {"row_number": row_number}
+                validated_row_2.update(validated_row)
+                validated_row = validated_row_2
                 form_html = get_row_as_form(table_name, validated_row)
-            else:
+            elif request.form["action"] == "submit":
                 # Update or add new row
-                if term_id != "new":
-                    row_number = int(term_id)
-                    # First validate the row to get the meta columns
-                    validated_row = validate_table_row(table_name, row_number, new_row)
-                    # Update the row regardless of results
-                    # Row ID may be different than row number, if exists
-                    update_row(config, table_name, validated_row, row_number)
-                    messages = get_messages(validated_row)
-                    if messages.get("error"):
-                        warn = messages.get("warn", [])
-                        warn.append(f"Row updated with {len(messages['error'])} errors")
-                        messages["warn"] = warn
-                    else:
-                        messages["success"] = ["Row successfully updated!"]
+                row_number = int(term_id)
+                # First validate the row to get the meta columns
+                validated_row = validate_table_row(table_name, new_row, row_number=row_number)
+                # Update the row regardless of results
+                # Row ID may be different than row number, if exists
+                update_row(config, table_name, validated_row, row_number)
+                messages = get_messages(validated_row)
+                if messages.get("error"):
+                    warn = messages.get("warn", [])
+                    warn.append(f"Row updated with {len(messages['error'])} errors")
+                    messages["warn"] = warn
                 else:
-                    # TODO: add new row from form
-                    pass
+                    messages["success"] = ["Row successfully updated!"]
 
         # Treat term ID as row ID
         try:
@@ -420,7 +439,6 @@ def get_hiccup_form_row(
         input_attrs["class"] = " ".join(classes)
         select_element = ["select", input_attrs]
         has_selected = False
-        logger.error(value)
         for av in allowed_values:
             av_safe = html_escape(str(av))
             if value and str(av) == str(value):
@@ -517,13 +535,43 @@ def get_hiccup_form_row(
 
 def get_new_row_form(table_name):
     # TODO: add validate/submit button
+    tables = get_sql_tables(conn)
     headers = get_sql_columns(conn, table_name)
     html = ["form", {"method": "post"}]
     for h in headers:
         if h == "row_number" or h.endswith("_meta"):
             continue
-        html.append(get_hiccup_form_row(h))
-    return html
+        allowed_values = None
+        desc = None
+        html_type = "text"
+        if "column" in tables:
+            # Use column table to get description & datatype for this col
+            res = conn.execute(
+                sql_text(
+                    """SELECT description, datatype, structure FROM "column"
+                    WHERE "table" = :table AND "column" = :column"""
+                ),
+                table=table_name,
+                column=h,
+            ).fetchone()
+            if res:
+                desc = res["description"]
+                datatype = res["datatype"]
+                structure = res["structure"]
+                if structure and structure.startswith("from("):
+                    # Given the from structure, we always turn the input into a search
+                    html_type = "search"
+                elif datatype and "datatype" in tables:
+                    # Everything else uses an HTML type defined in the datatype table
+                    # If a datatype does not have an HTML type, search for first ancestor type
+                    html_type, allowed_values = get_html_type_and_values(datatype)
+        html.append(
+            get_hiccup_form_row(
+                h,
+                allowed_values=allowed_values,
+                description=desc,
+                html_type=html_type))
+    return render_template("data_form.html", include_back=True, row_form=render([], html), table_name=table_name, tables=tables, title=f"New '{table_name}' row")
 
 
 def get_html_type_and_values(datatype, values=None) -> Tuple[Optional[str], Optional[list]]:
@@ -697,20 +745,21 @@ def get_messages(row):
     return messages
 
 
-def validate_table_row(table_name, row_number, row):
+def validate_table_row(table_name, row, row_number=None):
     """Perform validation on a row"""
     # Transform row into dict expected for validate
-    result_row = {}
-    for column, value in row.items():
-        result_row[column] = {
-            "value": value,
-            "valid": True,
-            "messages": [],
-        }
-    if row_number != "new":
+    if row_number:
+        result_row = {}
+        for column, value in row.items():
+            result_row[column] = {
+                "value": value,
+                "valid": True,
+                "messages": [],
+            }
         # Row number may be different than row ID, if this column is used
         return validate_row(config, table_name, result_row, row_number=row_number)
-    return validate_row(config, table_name, result_row, existing_row=False)
+    else:
+        return validate_row(config, table_name, row, existing_row=False)
 
 
 # ----- ONTOLOGY TABLE METHODS -----
@@ -1010,10 +1059,8 @@ def render_term_form(table_name, term_id):
         # TODO: support other HTML types (dropdown, boolean, etc.)
         pred_label = aps.get(predicate_id, predicate_id)
         html_type = "text"
-        logger.error(pred_label)
         if pred_label in ["definition", "comment", "rdfs:comment"]:
             html_type = "textarea"
-        logger.error(html_type)
 
         for d in detail:
             d_annotations = None
