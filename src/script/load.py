@@ -789,6 +789,51 @@ def update_row(config, table_name, row, row_number):
     config["db"].commit()
 
 
+def insert_new_row(config, table_name, row):
+    """Given a config map, a table name, and a row (a dict from column names to column values),
+    assign a new row number to the row and insert it to the database. Returns the new row number."""
+
+    new_row_number = (
+        config["db"].execute(f"SELECT MAX(`row_number`) FROM `{table_name}`").fetchall()[0][0]
+    )
+    new_row_number = 1 if new_row_number is None else new_row_number + 1
+
+    insert_columns = ["`row_number`"]
+    insert_values = [":row_number"]
+    insert_params = {"row_number": new_row_number}
+    for column, cell in row.items():
+        variable = column.replace(" ", "_")
+        value = None
+        if "nulltype" in cell and cell["nulltype"]:
+            value = None
+        elif cell["valid"]:
+            value = cell["value"]
+            cell.pop("value")
+        insert_columns += [f"`{column}`", f"`{column}_meta`"]
+        insert_values += [f":{variable}", f"JSON(:{variable}_meta)"]
+        insert_params[variable] = value
+        # If the cell value is valid and there is no extra information (e.g., nulltype), then
+        # just set the metadata to None, which can be taken to represent a "plain" valid cell:
+        if cell["valid"] and all([k in ["value", "valid", "messages"] for k in cell]):
+            insert_params[variable + "_meta"] = None
+        else:
+            insert_params[variable + "_meta"] = "{}".format(json.dumps(cell))
+
+    insert_stmt = safe_sql(
+        f"INSERT INTO `{table_name}` "
+        + "("
+        + ", ".join(insert_columns)
+        + ") "
+        + "VALUES ("
+        + ", ".join(insert_values)
+        + ")",
+        insert_params,
+    )
+    config["db"].execute(insert_stmt).fetchall()
+    config["db"].commit()
+    return new_row_number
+
+
 if __name__ == "__main__":
     try:
         p = ArgumentParser()
