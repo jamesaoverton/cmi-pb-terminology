@@ -28,7 +28,7 @@ build/robot.jar: | build
 	curl -L -o $@ "https://build.obolibrary.io/job/ontodev/job/robot/job/master/lastSuccessfulBuild/artifact/bin/robot.jar"
 
 build/ldtab.jar: | build
-	curl -L -o $@ "https://github.com/ontodev/ldtab.clj/releases/download/v2022-03-03/ldtab.jar"
+	curl -L -o $@ "https://github.com/ontodev/ldtab.clj/releases/download/v2022-03-17/ldtab.jar"
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
@@ -86,9 +86,18 @@ build/ontology.sql: build/ontology.db
 load_ontology: build/cmi-pb.db build/ontology.sql
 	sqlite3 $< < $(word 2,$^)
 
+.PHONY: load_ontology_2
 load_ontology_2: build/cmi-pb.db cmi-pb.owl | build/ldtab.jar
 	sqlite3 $< <<< "CREATE TABLE statement (assertion INT NOT NULL, retraction INT NOT NULL DEFAULT 0, graph TEXT NOT NULL, subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL, datatype TEXT NOT NULL, annotation TEXT);"
 	$(LDTAB) import $^
+
+build/obi.owl: | build
+	curl -L -o $@ "http://purl.obolibrary.org/obo/obi.owl"
+
+.PHONY: load_obi
+load_obi: build/cmi-pb.db build/obi.owl | build/ldtab.jar
+	sqlite3 $< <<< "CREATE TABLE obi (assertion INT NOT NULL, retraction INT NOT NULL DEFAULT 0, graph TEXT NOT NULL, subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL, datatype TEXT NOT NULL, annotation TEXT);"
+	$(LDTAB) import --table obi $^
 
 
 ### Uniprot Proteins
