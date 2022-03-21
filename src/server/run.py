@@ -6,11 +6,28 @@ import sqlite3
 import traceback
 
 from collections import defaultdict
-from flask import abort, Flask, redirect, request, render_template, Response, url_for
-from gizmos_export import export, LOGIC_PREDICATES
-from gizmos_helpers import get_descendants, get_entity_type, get_labels
+from flask import (
+    abort,
+    Flask,
+    redirect,
+    request,
+    render_template,
+    Response,
+    url_for,
+    send_from_directory,
+)
+from gizmos_helpers import (
+    flatten,
+    get_descendants,
+    get_entity_type,
+    get_ids,
+    get_labels,
+    get_term_attributes,
+    LOGIC_PREDICATES,
+    objects_to_hiccup,
+)
 from gizmos_search import get_search_results
-from gizmos.helpers import get_children, get_ids  # These still work with LDTab
+from gizmos.helpers import get_children  # These still work with LDTab
 from gizmos.hiccup import render
 from gizmos_tree import tree
 from html import escape as html_escape
@@ -18,7 +35,6 @@ from lark import Lark, UnexpectedCharacters
 from sprocket import (
     get_sql_columns,
     get_sql_tables,
-    parse_order_by,
     render_database_table,
     render_html_table,
     render_tsv_table,
@@ -100,6 +116,13 @@ def index():
     )
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        os.path.join(app.root_path, "templates"), "favicon.ico", mimetype="image/vnd.microsoft.icon"
+    )
+
+
 @app.route("/<table_name>", methods=["GET", "POST"])
 def table(table_name):
     messages = defaultdict(list)
@@ -140,16 +163,18 @@ def table(table_name):
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
-            predicates = get_ids(conn, pred_labels)
-
-        # Get all terms from the ontology
-        res = conn.execute(f'SELECT DISTINCT subject FROM "{table_name}"')
-        terms = [x["subject"] for x in res]
+            predicates = get_ids(conn, pred_labels, raise_exc=False, statement=table_name)
 
         # Export the data
-        data = export(conn, terms, predicates=predicates, statements=table_name)
-        return render_ontology_table(
-            table_name, data, predicates, "Showing terms from " + table_name
+        data = get_term_attributes(conn, predicates=predicates, statement=table_name)
+        html = render_ontology_table(table_name, data)
+        return render_template(
+            "template.html",
+            html=html,
+            title="Showing terms from " + table_name,
+            show_search=True,
+            table_name=table_name,
+            tables=get_sql_tables(conn),
         )
 
     # Typeahead for autocomplete in data forms
@@ -306,11 +331,19 @@ def term(table_name, term_id):
         select = request.args.get("select")
         predicates = None
         if select:
-            # TODO: select=label,definition does not work
-            #       also, add form at top of page for user to select predicates to show?
+            # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
-            predicates = get_ids(conn, pred_labels)
-        data = get_data_for_term(table_name, term_id, predicates=predicates)
+            predicates = get_ids(conn, pred_labels, raise_exc=False, statement=table_name)
+
+        data = get_term_attributes(
+            conn,
+            terms=[term_id],
+            include_all_predicates=False,
+            predicates=predicates,
+            statement=table_name,
+        )
+
+        # TODO: export formats
         fmt = request.args.get("format")
         if fmt:
             if fmt == "tsv":
@@ -320,30 +353,45 @@ def term(table_name, term_id):
             else:
                 return abort(400, "Unknown format: " + fmt)
             return Response(render_tsv_table([data], fmt=fmt), mimetype=mt)
+
+        html = render_ontology_table(table_name, data)
         base_url = url_for("term", table_name=table_name, term_id=term_id)
         tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
-        # TODO: use hiccup here
-        html = [
-            '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">',
-            f'<a href="{base_url}" class="btn btn-sm btn-outline-primary active">Table</a>',
-            f'<a href="{tree_url}" class="btn btn-sm btn-outline-primary">Tree</a>',
-            "</div></div></div>",
-            render_html_table(
-                [data],
-                table_name,
+        html = (
+            render(
                 [],
-                request.args,
-                base_url=base_url,
-                hidden=["search_text"],
-                include_expand=False,
-                show_options=False,
-                standalone=False,
-            ),
-        ]
+                [
+                    "div",
+                    {"class": "row justify-content-end"},
+                    [
+                        "div",
+                        {"class": "col-auto"},
+                        [
+                            "div",
+                            {"class": "btn-group"},
+                            [
+                                "a",
+                                {
+                                    "href": base_url,
+                                    "class": "btn btn-sm btn-outline-primary active",
+                                },
+                                "Table",
+                            ],
+                            [
+                                "a",
+                                {"href": tree_url, "class": "btn btn-sm btn-outline-primary"},
+                                "Tree",
+                            ],
+                        ],
+                    ],
+                ],
+            )
+            + html
+        )
         tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
         return render_template(
             "template.html",
-            html="\n".join(html),
+            html=html,
             show_search=is_ontology(table_name),
             table_name=table_name,
             tables=tables,
@@ -743,76 +791,6 @@ def dump_search_results(table_name, search_arg=None):
     )
 
 
-def get_data_for_term(table_name, term_id, predicates=None):
-    # TODO: update to use LDTab
-    prefixes = {}
-    for row in conn.execute(f"SELECT DISTINCT prefix, base FROM prefix"):
-        prefixes[row["prefix"]] = row["base"]
-
-    # First get all data about this term, the "stanza"
-    query = sql_text(f"SELECT * FROM {table_name} WHERE subject = :term_id")
-    stanza = conn.execute(query, term_id=term_id).fetchall()
-
-    curies = set()
-    predicate_to_vals = defaultdict(list)
-    annotations = defaultdict(dict)
-    for row in stanza:
-        if row["subject"] == term_id:
-            pred = row["predicate"]
-            if predicates and pred not in predicates:
-                continue
-            curies.add(pred)
-            if row["object"] and row["datatype"] == "_IRI":
-                curies.add(row["object"])
-            predicate_to_vals[pred].append(dict(row))
-            if row["annotation"]:
-                if pred not in annotations:
-                    annotations[pred] = {}
-                annotations[pred][row["object"]] = json.loads(row["annotation"])
-                curies.update(annotations[pred][row["object"]].keys())
-
-    # Get the labels of any predicate or object used
-    labels = get_labels(conn, curies, include_top=False, statements=table_name)
-
-    data = {}
-    for predicate, rows in predicate_to_vals.items():
-        # TODO: use wiring.rs to render instead
-        if predicate in labels:
-            pred_label = labels[predicate]
-        else:
-            pred_label = predicate
-        pred_annotations = annotations.get(predicate, {})
-        vals = []
-        for row in rows:
-            o = row["object"]
-            if row["datatype"] == "_IRI":
-                label = labels.get(o, o)
-                display = (
-                    f'<a href="{url_for("term", table_name=table_name, term_id=o)}">{label}</a>'
-                )
-            else:
-                display = f"<span>{o}</span>"
-            value_annotations = pred_annotations.get(o)
-            if value_annotations:
-                display += "<ul>"
-                for pred_2, values in value_annotations.items():
-                    display += "<li>"
-                    display += f'<small><a href="{url_for("term", table_name=table_name, term_id=pred_2)}">{labels.get(pred_2, pred_2)}</a></small>'
-                    display += (
-                        "<ul>"
-                        + "".join([f"<li><small>{v['object']}</small></li>" for v in values])
-                        + "</ul>"
-                    )
-                display += "</ul>"
-            vals.append(display)
-
-        if len(vals) > 1:
-            data[pred_label] = "<ul><li>" + "<li>".join(vals) + "</ul>"
-        else:
-            data[pred_label] = vals[0]
-    return data
-
-
 def get_terms_from_arg(table_name, arg):
     try:
         parsed = PARSER.parse(arg)
@@ -823,7 +801,7 @@ def get_terms_from_arg(table_name, arg):
     except UnexpectedCharacters:
         parent_terms = [arg]
     # We don't know if we were passed ID or label, so get both for all terms
-    return get_labels(conn, parent_terms, include_top=False, statements=table_name)
+    return get_labels(conn, parent_terms, statement=table_name)
 
 
 def is_ontology(table_name):
@@ -831,51 +809,58 @@ def is_ontology(table_name):
     return {"subject", "predicate", "object", "datatype", "annotation"}.issubset(set(columns))
 
 
-def render_ontology_table(table_name, data, predicate_ids, title, add_params=None):
+def merge_dicts(d1, d2):
+    d_copy = d1.copy()
+    for k, v in d_copy.items():
+        if k in d2:
+            v.update(d2[k])
+        else:
+            d_copy[k] = d2[k]
+    return d_copy
+
+
+def render_ontology_table(table_name, data):
     """
     :param table_name: name of SQL table that contains terms
     :param data: data to render - dict of term ID -> predicate ID -> list of JSON objects
-    :param title: title to display at the top of table
-    :param add_params: additional query parameter-arg pairs to include in search URL for typeahead
     """
-    # TODO: we want to render objects using wiring before doing any ordering
-    predicate_labels = get_labels(conn, predicate_ids, include_top=False, statements=table_name)
-    if request.args.get("order"):
-        # Reverse the ID -> label dictionary to translate column names to IDs
-        label_to_id = {v: k for k, v in predicate_labels.items()}
-        order_by = parse_order_by(request.args["order"])
-        for ob in order_by:
-            reverse = False
-            if ob["order"] == "desc":
-                reverse = True
+    # TODO: do we care about displaying annotations in this table view? Or only on term view?
+    results = conn.execute("SELECT prefix, base FROM prefix;").fetchall()
+    prefixes = [(res["prefix"], res["base"]) for res in results]
 
-            if ob["key"] == "ID":
-                # ID is never null
-                # sorted is more efficient here so we don't need to turn dict into list of tuples
-                data = {k: v for k, v in sorted(data.items(), reverse=reverse)}
-                continue
+    # Offset and limit used to determine which terms to render
+    # Rendering objects for all terms is very slow
+    offset = int(request.args.get("offset", "0"))
+    limit = int(request.args.get("limit", "100")) + offset
 
-            key = label_to_id.get(ob["key"], ob["key"])  # e.g., rdfs:label
+    # TODO: issue with ordering, we can't order without having everything rendered
+    #       but rendering takes too long on everything...
+    # TODO: make sure this is efficient
+    data = [[k, v] for k, v in data.items()]
+    data_subset = {k: v for k, v in data[offset:limit]}
+    post_subset = {k: v for k, v in data[limit:]}
+    data = {k: v for k, v in data[:offset]}
 
-            # Separate out the items with no list entries for this predicate
-            nulls = {k: v for k, v in data.items() if not v[key]}
-            non_nulls = [[k, v] for k, v in data.items() if v[key]]
-
-            # Sort the items with entries for this predicate
-            non_nulls.sort(key=lambda itm: itm[1][key][0]["object"], reverse=reverse)
-
-            # ... then put the nulls in the correct spot
-            if ob["nulls"] == "first":
-                data = nulls
-                data.update({k: v for k, v in non_nulls})
+    rendered = objects_to_hiccup(conn, data_subset, include_annotations=True, statement=table_name)
+    for term_id, predicate_objects in rendered.items():
+        # Render using hiccup module
+        rendered_term = {}
+        for predicate_id, hiccup in predicate_objects.items():
+            if hiccup:
+                rendered_term[predicate_id] = render(prefixes, hiccup)
             else:
-                data = {k: v for k, v in non_nulls}
-                data.update(nulls)
+                rendered_term[predicate_id] = None
+        data[term_id] = rendered_term
+    data.update(post_subset)
+
+    predicates = set(flatten([list(x.keys()) for x in rendered.values()]))
+    predicate_labels = get_labels(conn, predicates, statement=table_name)
 
     # Create the HTML output of data
     table_data = []
-    for term_id, predicates in data.items():
-        # We always display the ID, regardless of other columns
+    for term_id, predicate_objects in data.items():
+        # TODO: ID not being displayed
+        #       We always display the ID, regardless of other columns
         term_id = html_escape(term_id)
         term_data = {
             "ID": render(
@@ -883,39 +868,19 @@ def render_ontology_table(table_name, data, predicate_ids, title, add_params=Non
                 ["a", {"href": url_for("term", table_name=table_name, term_id=term_id)}, term_id],
             )
         }
-        for pred_id, pred_label in predicate_labels.items():
-            # TODO: we will already have rendered objects once wiring is in
-            objects = predicates.get(pred_id, [])
-            term_data[pred_label] = "|".join([o["object"] for o in objects])
+        for predicate, objs in predicate_objects.items():
+            term_data[predicate_labels.get(predicate, predicate)] = objs
         table_data.append(term_data)
-
-    param_str = ""
-    if add_params:
-        param_str = "&".join([f"{x}={y}" for x, y in add_params.items()])
-
-    tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
-    # Keep the order of the IDs that were passed in for the display columns
-    headers = [predicate_labels.get(x, x) for x in predicate_ids]
-    headers.insert(0, "ID")
-    return render_template(
-        "template.html",
-        html=render_html_table(
-            table_data,
-            table_name,
-            headers,
-            request.args,
-            base_url=url_for("table", table_name=table_name),
-            hidden=["search_text"],
-            show_options=False,
-            include_expand=False,
-            standalone=False,
-            use_cols_as_headers=True,
-        ),
-        title=title,
-        add_params=param_str,
-        show_search=True,
-        table_name=table_name,
-        tables=tables,
+    return render_html_table(
+        table_data,
+        table_name,
+        [],
+        request.args,
+        base_url=url_for("table", table_name=table_name),
+        hidden=["search_text"],
+        show_options=False,
+        include_expand=False,
+        standalone=False,
     )
 
 
@@ -961,9 +926,19 @@ def render_subclass_of(table_name, param, arg):
     if select:
         # TODO: add form at top of page for user to select predicates to show?
         pred_labels = select.split(",")
-        predicates = get_ids(conn, pred_labels)
-    data = export(conn, list(terms), predicates=predicates, statements=table_name)
-    return render_ontology_table(table_name, data, predicates, title, add_params={param: arg})
+        predicates = get_ids(conn, pred_labels, raise_exc=False, statement=table_name)
+
+    data = get_term_attributes(conn, terms=list(terms), predicates=predicates, statement=table_name)
+    html = render_ontology_table(table_name, data)
+    return render_template(
+        "template.html",
+        html=html,
+        title=title,
+        add_params=f"{param}={arg}",
+        show_search=True,
+        table_name=table_name,
+        tables=get_sql_tables(conn),
+    )
 
 
 def render_term_form(table_name, term_id):
@@ -975,11 +950,9 @@ def render_term_form(table_name, term_id):
         f'SELECT DISTINCT predicate FROM "{table_name}" WHERE predicate NOT IN :logic',
     ).bindparams(bindparam("logic", expanding=True))
     results = conn.execute(query, {"logic": LOGIC_PREDICATES}).fetchall()
-    aps = get_labels(
-        conn, [x["predicate"] for x in results], include_top=False, statements=table_name
-    )
+    aps = get_labels(conn, [x["predicate"] for x in results], statement=table_name)
 
-    term_details = export(conn, [term_id], statements=table_name)
+    term_details = get_term_attributes(conn, terms=[term_id], statement=table_name)
     if not term_details:
         return abort(400, f"Unable to find term {term_id} in '{table_name}' table")
     term_details = term_details[term_id]
@@ -1106,14 +1079,20 @@ def render_tree(table_name, term_id: str = None):
             statements=table_name,
             synonyms=["IAO:0000118"],
         )
-        data = export(
+        data = get_term_attributes(
             conn,
-            [x["id"] for x in data],
+            terms=[x["id"] for x in data],
             predicates=["rdfs:label", "IAO:0000118"],
-            statements=table_name,
+            statement=table_name,
         )
-        return render_ontology_table(
-            table_name, data, [], f"Showing search results for '{search_text}'"
+        html = render_ontology_table(table_name, data)
+        return render_template(
+            "template.html",
+            html=html,
+            title=f"Showing search results for '{search_text}'",
+            show_search=True,
+            table_name=table_name,
+            tables=get_sql_tables(conn),
         )
 
     # nothing to search, just return the tree view
@@ -1242,7 +1221,7 @@ def update_term(table_name, term_id):
 
         new_objects = request.form.getlist(predicate)
         # TODO: instead of getting IDs, use wiring to translate manchester into JSON object
-        new_obj_ids = get_ids(conn, new_objects)
+        new_obj_ids = get_ids(conn, new_objects, statement=table_name)
         if len(new_objects) > len(new_obj_ids):
             logger.error(
                 "Cannot get IDs for one or more terms from term list: " + ", ".join(new_objects)

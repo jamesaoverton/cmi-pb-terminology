@@ -1,7 +1,7 @@
 import json
 
 from collections import defaultdict
-from gizmos_helpers import get_entity_type, get_iri, get_labels, get_parent_child_pairs
+from gizmos_helpers import get_entity_type, get_html_label, get_iri, get_labels, get_parent_child_pairs, objects_to_hiccup
 from gizmos.helpers import TOP_LEVELS
 from gizmos.hiccup import render
 from gizmos.tree import bootstrap_css, bootstrap_js, parent2tree, PLUS, popper_js, typeahead_js
@@ -108,8 +108,7 @@ def get_hierarchy(
     if entity_type == "owl:Individual":
         query = sql_text(
             f"""SELECT DISTINCT object AS parent, subject AS child FROM {statements}
-                WHERE stanza = :term_id
-                 AND subject = :term_id
+                WHERE subject = :term_id
                  AND predicate = 'rdf:type'
                  AND object NOT IN ('owl:Individual', 'owl:NamedIndividual')
                  AND object NOT LIKE '_:%%'
@@ -189,9 +188,7 @@ def get_ontology(conn: Connection, prefixes: dict, statements: str = "statements
     for prefix, base in prefixes.items():
         if base == "http://purl.org/dc/terms/":
             dct = f"{prefix}:title"
-    query = sql_text(
-        f'SELECT object FROM "{statements}" WHERE subject = :iri AND predicate = :dct'
-    )
+    query = sql_text(f'SELECT object FROM "{statements}" WHERE subject = :iri AND predicate = :dct')
     res = conn.execute(query, iri=iri, dct=dct).fetchone()
     if not res:
         return iri, None
@@ -339,7 +336,9 @@ def term2rdfa(
 
     # Get all of the rdfs:labels corresponding to all of the compact URIs, in the form of a map
     # from compact URIs to labels:
-    labels = get_labels(conn, curies, ontology_iri=ontology_iri, ontology_title=ontology_title, statements=statements)
+    labels = get_labels(
+        conn, curies, ontology_iri=ontology_iri, ontology_title=ontology_title, statement=statements
+    )
 
     obsolete = []
     query = sql_text(
@@ -435,6 +434,7 @@ def term2rdfa(
             term.append(["div", {"class": "row"}, ["a", {"href": si}, si]])
         term.append(["div", {"class": "row", "style": "padding-top: 10px;"}, rdfa_tree, items])
     else:
+        items = objects_to_hiccup(conn, data, include_annotations=True, statement=statements)
         items = annotations2rdfa(treename, data, predicate_ids, subject, stanza, href=href)
         term = [
             "div",

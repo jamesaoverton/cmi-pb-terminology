@@ -4,6 +4,20 @@
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
 	<style>
+		.float {
+			position:fixed;
+			bottom:25px;
+			right:25px;
+			border-radius:50px;
+			box-shadow: 2px 2px 3px #999;
+		}
+		.float-above {
+			position:fixed;
+			bottom:80px;
+			right:25px;
+			border-radius:50px;
+			box-shadow: 2px 2px 3px #999;
+		}
 		.bg-debug {
 			background-color: #abc4ff !important;
 		}
@@ -44,11 +58,11 @@
 		  padding-left: 1em;
 		  list-style-type: none !important;
 		}
-		#annotations ul {
+		#annotations ul, .annotations ul {
 		  padding-left: 3em;
 		  list-style-type: circle !important;
 		}
-		#annotations ul ul {
+		#annotations ul ul, .annotations ul ul {
 		  padding-left: 2em;
 		  list-style-type: none !important;
 		}
@@ -408,30 +422,17 @@
 			}
 		}
 
-		// Create footer to hold new button
-		var footer = document.createElement("footer");
-		footer.setAttribute("class", "footer mt-auto py-3 fixed-bottom");
-		var container = document.createElement("div");
-		footer.appendChild(container);
-
+		var container = document.getElementById("cmi-pb");
 		if (includeNew) {
 			var newURL = new URL(window.location.origin + '{{ url_for("table", table_name=table_name, view="form") }}');
 			var newBtn = document.createElement("a");
 			newBtn.setAttribute("data-bs-toggle", "tooltip");
 			newBtn.setAttribute("data-bs-placement", "left");
 			newBtn.setAttribute("href", newURL.toString());
-			newBtn.setAttribute("class", "btn btn-primary btn-xl-plus");
+			newBtn.setAttribute("class", "btn btn-primary float btn-xl-plus");
 			newBtn.setAttribute("title", "New");
 			newBtn.innerHTML = '<i class="bi-plus"></i>';
-
-			var newRow = document.createElement("div");
-			newRow.setAttribute("class", "row justify-content-end");
-			newRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
-			var newCol = document.createElement("div");
-			newCol.setAttribute("class", "col-auto");
-			newRow.appendChild(newCol);
-			newCol.appendChild(newBtn);
-			container.appendChild(newRow);
+			container.parentElement.insertBefore(newBtn, container);
 		}
 		if (includeEdit) {
 			// Get the URL and maybe remove current view
@@ -444,22 +445,15 @@
 			editBtn.setAttribute("data-bs-toggle", "tooltip");
 			editBtn.setAttribute("data-bs-placement", "left");
 			editBtn.setAttribute("href", url.toString());
-			editBtn.setAttribute("class", "btn btn-primary btn-xl-pencil");
+			if (includeNew) {
+				editBtn.setAttribute("class", "btn btn-primary float-above btn-xl-pencil");
+			} else {
+				editBtn.setAttribute("class", "btn btn-primary float btn-xl-pencil");
+			}
 			editBtn.setAttribute("title", "Edit");
 			editBtn.innerHTML = '<i class="bi-pencil"></i>';
-
-			var editRow = document.createElement("div");
-			editRow.setAttribute("class", "row justify-content-end");
-			editRow.setAttribute("style", "padding-bottom: 5px; padding-right: 15px;");
-			var editCol = document.createElement("div");
-			editCol.setAttribute("class", "col-auto");
-			editRow.appendChild(editCol);
-			editCol.appendChild(editBtn);
-			container.appendChild(editRow);
+			container.parentElement.insertBefore(editBtn, container);
 		}
-
-		var container = document.getElementById("cmi-pb");
-		container.parentElement.insertBefore(footer, container);
 	}
 
 	function showVertical(rowNum, offset) {
