@@ -1,7 +1,16 @@
 import json
 
 from collections import defaultdict
-from gizmos_helpers import get_entity_type, get_html_label, get_iri, get_labels, get_parent_child_pairs, objects_to_hiccup
+from gizmos_helpers import (
+    get_entity_type,
+    get_html_label,
+    get_iri,
+    get_labels,
+    get_parent_child_pairs,
+    get_predicate_ids,
+    get_term_attributes,
+    objects_to_hiccup,
+)
 from gizmos.helpers import TOP_LEVELS
 from gizmos.hiccup import render
 from gizmos.tree import bootstrap_css, bootstrap_js, parent2tree, PLUS, popper_js, typeahead_js
@@ -101,13 +110,13 @@ def get_hierarchy(
     term_id: str,
     entity_type: str,
     add_children: list = None,
-    statements: str = "statements",
+    statement: str = "statement",
 ) -> (dict, set):
     """Return a hierarchy dictionary for a term and all its ancestors and descendants."""
     # Build the hierarchy
     if entity_type == "owl:Individual":
         query = sql_text(
-            f"""SELECT DISTINCT object AS parent, subject AS child FROM {statements}
+            f"""SELECT DISTINCT object AS parent, subject AS child FROM {statement}
                 WHERE subject = :term_id
                  AND predicate = 'rdf:type'
                  AND object NOT IN ('owl:Individual', 'owl:NamedIndividual')
@@ -116,7 +125,7 @@ def get_hierarchy(
         )
         results = [[x["parent"], x["child"]] for x in conn.execute(query, term_id=term_id)]
     else:
-        results = get_parent_child_pairs(conn, term_id, statements=statements)
+        results = get_parent_child_pairs(conn, term_id, statements=statement)
     if add_children:
         results.extend([[term_id, child] for child in add_children])
 
@@ -246,7 +255,7 @@ def term2rdfa(
         # Get a hierarchy under the entity type
         entity_type = get_entity_type(conn, term_id, statements=statements)
         hierarchy, curies = get_hierarchy(
-            conn, term_id, entity_type, add_children=add_children, statements=statements
+            conn, term_id, entity_type, add_children=add_children, statement=statements
         )
     else:
         # Get the top-level for this entity type
@@ -326,14 +335,6 @@ def term2rdfa(
     curies.discard("")
     curies.discard(None)
 
-    # Get all the prefixes that are referred to by the compact URIs:
-    ps = set()
-    for curie in curies:
-        if not isinstance(curie, str) or len(curie) == 0 or curie[0] in ("_", "<"):
-            continue
-        prefix, local = curie.split(":")
-        ps.add(prefix)
-
     # Get all of the rdfs:labels corresponding to all of the compact URIs, in the form of a map
     # from compact URIs to labels:
     labels = get_labels(
@@ -343,7 +344,7 @@ def term2rdfa(
     obsolete = []
     query = sql_text(
         f"""SELECT DISTINCT subject FROM {statements}
-            WHERE subject in :ids AND predicate='owl:deprecated' AND lower(object)='true'"""
+            WHERE predicate='owl:deprecated' AND lower(object)='true' AND subject IN :ids"""
     ).bindparams(bindparam("ids", expanding=True))
     results = conn.execute(query, {"ids": list(curies)})
     for res in results:
@@ -380,7 +381,7 @@ def term2rdfa(
     subject_label = None
     if term_id == "ontology" and ontology_iri:
         subject = ontology_iri
-        subject_label = data["labels"].get(ontology_iri, ontology_iri)
+        subject_label = labels.get(ontology_iri, ontology_iri)
         si = get_iri(prefixes, subject)
     elif term_id != "ontology":
         subject = term_id
@@ -434,16 +435,30 @@ def term2rdfa(
             term.append(["div", {"class": "row"}, ["a", {"href": si}, si]])
         term.append(["div", {"class": "row", "style": "padding-top: 10px;"}, rdfa_tree, items])
     else:
-        items = objects_to_hiccup(conn, data, include_annotations=True, statement=statements)
-        items = annotations2rdfa(treename, data, predicate_ids, subject, stanza, href=href)
+        # TODO: order annotations?
+        term_data = get_term_attributes(
+            conn, include_all_predicates=False, statement=statements, terms=[term_id]
+        )
+        hiccup = objects_to_hiccup(conn, term_data, include_annotations=True, statement=statements)[
+            term_id
+        ]
+        predicate_labels = get_labels(conn, hiccup.keys(), statement=statements)
+        attrs = ["ul", {"id": "annotations", "class": "col-md"}]
+        for predicate, objs in hiccup.items():
+            if predicate == "rdfs:label":
+                # Label is already on the left side
+                continue
+            pred_label = get_html_label(predicate, predicate_labels)
+            attrs.append(["li", pred_label, ["ul", objs]])
+
         term = [
             "div",
             {"resource": subject},
             ["div", {"class": "row"}, ["h2", subject_label]],
             ["div", {"class": "row"}, ["a", {"href": si}, si]],
-            ["div", {"class": "row", "style": "padding-top: 10px;"}, rdfa_tree, items],
+            ["div", {"class": "row", "style": "padding-top: 10px;"}, rdfa_tree, attrs],
         ]
-    return ps, term
+    return term
 
 
 def term2tree(
@@ -547,10 +562,9 @@ def tree(
     results = conn.execute("SELECT * FROM prefix ORDER BY length(base) DESC")
     prefixes = {res["prefix"]: res["base"] for res in results}
 
-    ps = set()
     body = []
     if not term_id:
-        p, t = term2rdfa(
+        t = term2rdfa(
             conn,
             prefixes,
             treename,
@@ -562,7 +576,6 @@ def tree(
             max_children=max_children,
             statements=statements,
         )
-        ps.update(p)
         body.append(t)
 
     # Maybe find a * in the IDs that represents all remaining predicates
@@ -604,7 +617,7 @@ def tree(
         for res in results:
             stanza.append(dict(res))
 
-        p, t = term2rdfa(
+        t = term2rdfa(
             conn,
             prefixes,
             treename,
@@ -616,7 +629,6 @@ def tree(
             max_children=max_children,
             statements=statements,
         )
-        ps.update(p)
         body.append(t)
 
     if not title:

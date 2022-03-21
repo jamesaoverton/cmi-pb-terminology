@@ -177,6 +177,8 @@ def get_html_label(iri, labels, predicate=None):
     html_label = ["a"]
     if predicate:
         html_label.append({"property": predicate, "resource": iri})
+    else:
+        html_label.append({"resource": iri})
     html_label.append(labels.get(iri, html_escape(iri_label)))
     return html_label
 
@@ -295,11 +297,21 @@ def get_term_attributes(
         prefixes[row["prefix"]] = row["base"]
 
     # Get the term details
-    return get_objects(conn, term_ids, predicate_ids, include_all_predicates=include_all_predicates, statement=statement)
+    return get_objects(
+        conn,
+        term_ids,
+        predicate_ids,
+        include_all_predicates=include_all_predicates,
+        statement=statement,
+    )
 
 
 def get_objects(
-    conn: Connection, term_ids: list, predicate_ids: dict, include_all_predicates: bool = True, statement: str = "statement"
+    conn: Connection,
+    term_ids: list,
+    predicate_ids: dict,
+    include_all_predicates: bool = True,
+    statement: str = "statement",
 ) -> dict:
     """Get a dict of predicate ID -> objects."""
     term_objects = defaultdict(defaultdict)
@@ -398,15 +410,9 @@ def objects_to_hiccup(conn, data, include_annotations=False, statement="statemen
     for term_id, predicate_objects in pre_render.items():
         rendered_term = defaultdict()
         for predicate, objs in predicate_objects.items():
-            rendered_po = []
-            if len(objs) > 1:
-                rendered_po.append("ul")
-                rendered_po.append({"class": "annotations"})
+            rendered_po = ["ul", {"class": "annotations"}]
             for obj in objs:
-                if len(objs) > 1:
-                    ele = ["li"]
-                else:
-                    ele = ["p"]
+                ele = ["li"]
                 if obj["datatype"].lower() == "_json":
                     # TODO: change to RDFa rendering here when ready (returns hiccup)
                     typed = wiring_rs.ofn_typing(json.dumps(obj["object"]), entity_types)
@@ -425,7 +431,9 @@ def objects_to_hiccup(conn, data, include_annotations=False, statement="statemen
                         for ao in ann_objects:
                             # TODO: support _json?
                             if ao["datatype"].lower() == "_iri":
-                                ao_label = get_html_label(ao["object"], labels, predicate=ann_predicate)
+                                ao_label = get_html_label(
+                                    ao["object"], labels, predicate=ann_predicate
+                                )
                                 pred_ele.append(["li", ["small", ao_label]])
                             else:
                                 # TODO: render datatype/lang tags
@@ -435,10 +443,7 @@ def objects_to_hiccup(conn, data, include_annotations=False, statement="statemen
                     ele.append(ann_ele)
                 rendered_po.append(ele)
             # predicate ID -> list of hiccup lists
-            if len(objs) == 1:
-                rendered_term[predicate] = rendered_po[0]
-            else:
-                rendered_term[predicate] = rendered_po
+            rendered_term[predicate] = rendered_po
         # term ID -> predicate IDs -> hiccup lists
         rendered[term_id] = rendered_term
     return rendered
@@ -482,6 +487,7 @@ def get_parent_child_pairs(
         FROM "{statements}"
         WHERE predicate IN ('rdfs:subClassOf', 'rdfs:subPropertyOf')
           AND object = :term_id
+          AND datatype = '_IRI'
         UNION
         --- Children of the children of the given term
         SELECT object AS parent, subject AS child
@@ -490,13 +496,14 @@ def get_parent_child_pairs(
                          WHERE predicate IN ('rdfs:subClassOf', 'rdfs:subPropertyOf')
                          AND object = :term_id)
           AND predicate IN ('rdfs:subClassOf', 'rdfs:subPropertyOf')
+          AND datatype = '_IRI'
         UNION
         -- The non-blank parents of all of the parent terms extracted so far:
         SELECT object AS parent, subject AS child
         FROM "{statements}", ancestors
         WHERE ancestors.parent = "{statements}".subject
           AND "{statements}".predicate IN ('rdfs:subClassOf', 'rdfs:subPropertyOf')
-          AND "{statements}".object NOT LIKE '_:%%'
+          AND "{statements}".object NOT LIKE '_:%%' AND "{statements}".datatype = '_IRI'
       )
       SELECT * FROM ancestors"""
     )
