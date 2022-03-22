@@ -7,7 +7,6 @@ from gizmos_helpers import (
     get_iri,
     get_labels,
     get_parent_child_pairs,
-    get_predicate_ids,
     get_term_attributes,
     objects_to_hiccup,
 )
@@ -338,7 +337,11 @@ def term2rdfa(
     # Get all of the rdfs:labels corresponding to all of the compact URIs, in the form of a map
     # from compact URIs to labels:
     labels = get_labels(
-        conn, curies, ontology_iri=ontology_iri, ontology_title=ontology_title, statement=statements
+        conn,
+        list(curies),
+        ontology_iri=ontology_iri,
+        ontology_title=ontology_title,
+        statement=statements,
     )
 
     obsolete = []
@@ -439,17 +442,17 @@ def term2rdfa(
         term_data = get_term_attributes(
             conn, include_all_predicates=False, statement=statements, terms=[term_id]
         )
-        hiccup = objects_to_hiccup(conn, term_data, include_annotations=True, statement=statements)[
-            term_id
-        ]
-        predicate_labels = get_labels(conn, hiccup.keys(), statement=statements)
+        hiccup = objects_to_hiccup(
+            conn, term_data, include_annotations=True, single_item_list=True, statement=statements
+        )[term_id]
+        predicate_labels = get_labels(conn, list(hiccup.keys()), statement=statements)
         attrs = ["ul", {"id": "annotations", "class": "col-md"}]
         for predicate, objs in hiccup.items():
             if predicate == "rdfs:label":
                 # Label is already on the left side
                 continue
             pred_label = get_html_label(predicate, predicate_labels)
-            attrs.append(["li", pred_label, ["ul", objs]])
+            attrs.append(["li", pred_label, objs])
 
         term = [
             "div",

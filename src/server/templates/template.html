@@ -54,7 +54,7 @@
 			line-height: 1.33;
 		}
 
-		#annotations, .annotations {
+		#annotations {
 		  padding-left: 1em;
 		  list-style-type: none !important;
 		}
@@ -335,7 +335,7 @@
 			var operator = document.getElementById(h + 'Operator').value;
 			var constraint = document.getElementById(h + 'Constraint').value;
 			if (operator && constraint) {
-				args.push(h + "=" + operator + "." + constraint);
+				args.push(h + "=" + operator + "." + encodeURIComponent(constraint));
 			}
 		}
 

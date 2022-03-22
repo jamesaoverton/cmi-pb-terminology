@@ -220,6 +220,7 @@ def table(table_name):
         table_name,
         display_messages=messages,
         hide_in_row=["row_number"],
+        ignore_params=["project-name", "branch-name", "view-path"],
         show_help=True,
         standalone=False,
         use_view=True,
@@ -305,8 +306,16 @@ def term(table_name, term_id):
         request_args["offset"] = str(row_number - 1)
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
+        # export_fmt = request.args.get("format")
+
         html = render_database_table(
-            conn, table_name, show_help=True, show_options=False, standalone=False, use_view=True
+            conn,
+            table_name,
+            ignore_params=["project-name", "branch-name", "view-path"],
+            show_help=True,
+            show_options=False,
+            standalone=False,
+            use_view=True,
         )
         return render_template(
             "template.html", html=html, include_back=True, table_name=table_name, tables=tables
@@ -343,7 +352,7 @@ def term(table_name, term_id):
             statement=table_name,
         )
 
-        # TODO: export formats
+        # TODO: export formats - this does not currently work
         fmt = request.args.get("format")
         if fmt:
             if fmt == "tsv":
@@ -791,6 +800,14 @@ def dump_search_results(table_name, search_arg=None):
     )
 
 
+def get_href_pattern(table_name, view=None):
+    return (
+        url_for("term", table_name=table_name, view=view, term_id="{curie}")
+        .replace("%7B", "{")
+        .replace("%7D", "}")
+    )
+
+
 def get_terms_from_arg(table_name, arg):
     try:
         parsed = PARSER.parse(arg)
@@ -830,30 +847,32 @@ def render_ontology_table(table_name, data):
 
     # Offset and limit used to determine which terms to render
     # Rendering objects for all terms is very slow
-    offset = int(request.args.get("offset", "0"))
-    limit = int(request.args.get("limit", "100")) + offset
+    # offset = int(request.args.get("offset", "0"))
+    # limit = int(request.args.get("limit", "100")) + offset
 
     # TODO: issue with ordering, we can't order without having everything rendered
     #       but rendering takes too long on everything...
     # TODO: make sure this is efficient
-    data = [[k, v] for k, v in data.items()]
-    data_subset = {k: v for k, v in data[offset:limit]}
-    post_subset = {k: v for k, v in data[limit:]}
-    data = {k: v for k, v in data[:offset]}
+    # data = [[k, v] for k, v in data.items()]
+    # data_subset = {k: v for k, v in data[offset:limit]}
+    # post_subset = {k: v for k, v in data[limit:]}
+    # data = {k: v for k, v in data[:offset]}
 
-    rendered = objects_to_hiccup(conn, data_subset, include_annotations=True, statement=table_name)
+    rendered = objects_to_hiccup(conn, data, include_annotations=True, statement=table_name)
     for term_id, predicate_objects in rendered.items():
         # Render using hiccup module
         rendered_term = {}
         for predicate_id, hiccup in predicate_objects.items():
             if hiccup:
-                rendered_term[predicate_id] = render(prefixes, hiccup)
+                rendered_term[predicate_id] = render(
+                    prefixes, hiccup, href=get_href_pattern(table_name)
+                )
             else:
                 rendered_term[predicate_id] = None
         data[term_id] = rendered_term
-    data.update(post_subset)
+    # data.update(post_subset)
 
-    predicates = set(flatten([list(x.keys()) for x in rendered.values()]))
+    predicates = list(set(flatten([list(x.keys()) for x in rendered.values()])))
     predicate_labels = get_labels(conn, predicates, statement=table_name)
 
     # Create the HTML output of data
@@ -878,6 +897,7 @@ def render_ontology_table(table_name, data):
         request.args,
         base_url=url_for("table", table_name=table_name),
         hidden=["search_text"],
+        ignore_params=["project-name", "branch-name", "view-path"],
         show_options=False,
         include_expand=False,
         standalone=False,
@@ -1108,9 +1128,7 @@ def render_tree(table_name, term_id: str = None):
         conn,
         "ontie",
         term_id,
-        href=url_for("term", table_name=table_name, term_id="{curie}", view="tree")
-        .replace("%7B", "{")
-        .replace("%7D", "}"),
+        href=get_href_pattern(table_name, view="tree"),
         standalone=False,
         max_children=20,
         statements=table_name,

@@ -10,7 +10,7 @@ from html import escape as html_escape
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.sql.expression import bindparam
 from sqlalchemy.sql.expression import text as sql_text
-from typing import Dict, Optional
+from typing import Dict, Optional, Iterable
 
 LOGIC_PREDICATES = [
     "rdfs:subClassOf",
@@ -23,43 +23,40 @@ LOGIC_PREDICATES = [
 ]
 
 
-def add_labels(conn: Connection, statement="statement"):
-    """Create a temporary labels table. If a term does not have a label, the label is the ID."""
-    # Create a tmp labels table
-    with conn.begin():
-        conn.execute("CREATE TABLE tmp_labels(term TEXT PRIMARY KEY, label TEXT)")
-        if str(conn.engine.url).startswith("sqlite"):
-            # Add all terms with label
-            conn.execute(
-                f"""INSERT OR IGNORE INTO tmp_labels SELECT subject, object
-                    FROM "{statement}" WHERE predicate = 'rdfs:label'"""
-            )
-            # Update remaining with their ID as their label
-            conn.execute(
-                f"""INSERT OR IGNORE INTO tmp_labels
-                    SELECT DISTINCT subject, subject FROM "{statement}";"""
-            )
-            conn.execute(
-                f"""INSERT OR IGNORE INTO tmp_labels
-                    SELECT DISTINCT predicate, predicate FROM "{statement}";"""
-            )
-        else:
-            # Do the same for a psycopg2 Cursor
-            conn.execute(
-                f"""INSERT INTO tmp_labels
-                    SELECT subject, object FROM "{statement}" WHERE predicate = 'rdfs:label'
-                    ON CONFLICT (term) DO NOTHING"""
-            )
-            conn.execute(
-                f"""INSERT INTO tmp_labels
-                    SELECT DISTINCT subject, subject FROM "{statement}"
-                    ON CONFLICT (term) DO NOTHING"""
-            )
-            conn.execute(
-                f"""INSERT INTO tmp_labels
-                    SELECT DISTINCT predicate, predicate FROM "{statement}"
-                    ON CONFLICT (term) DO NOTHING"""
-            )
+def create_html_element(
+    predicate, obj, labels, entity_types, as_list=False, include_annotations=False
+) -> list:
+    if as_list:
+        ele = ["li"]
+    else:
+        ele = ["p"]
+    if obj["datatype"].lower() == "_json":
+        # TODO: change to RDFa rendering here when ready (returns hiccup)
+        typed = wiring_rs.ofn_typing(json.dumps(obj["object"]), entity_types)
+        labeled = wiring_rs.ofn_labeling(typed, labels)
+        ele.append(wiring_rs.ofn_2_man(labeled))
+    elif obj["datatype"].lower() == "_iri":
+        obj_label = get_html_label(obj["object"], labels, predicate=predicate)
+        ele.append(obj_label)
+    else:
+        # TODO: render datatype/lang tags
+        ele.append(obj["object"])
+    if obj["annotation"] and include_annotations:
+        ann_ele = ["ul"]
+        for ann_predicate, ann_objects in obj["annotation"].items():
+            pred_ele = ["ul"]
+            for ao in ann_objects:
+                # TODO: support _json?
+                if ao["datatype"].lower() == "_iri":
+                    ao_label = get_html_label(ao["object"], labels, predicate=ann_predicate)
+                    pred_ele.append(["li", ["small", ao_label]])
+                else:
+                    # TODO: render datatype/lang tags
+                    pred_ele.append(["li", ["small", html_escape(ao["object"])]])
+            ann_pred_label = get_html_label(ann_predicate, labels)
+            ann_ele.append(["li", ["small", ann_pred_label], pred_ele])
+        ele.append(ann_ele)
+    return ele
 
 
 def flatten(lst):
@@ -107,7 +104,6 @@ def get_entity_types(conn: Connection, term_ids: list, statement="statement") ->
 
     entity_types = {}
     for term_id, e_types in all_types.items():
-
         if len(e_types) >= 1:
             entity_types[term_id] = set(e_types)
         else:
@@ -135,7 +131,8 @@ def get_entity_types(conn: Connection, term_ids: list, statement="statement") ->
 
 
 def get_entity_type(conn: Connection, term_id: str, statements="statements") -> str:
-    """Get the OWL entity type for a term."""
+    """Get a single OWL entity type for a term. This will not include the types of named inviduals,
+    rather a named individual will have the type owl:Individual."""
     query = sql_text(
         f"SELECT object FROM \"{statements}\" WHERE subject = :term_id AND predicate = 'rdf:type'"
     )
@@ -151,6 +148,7 @@ def get_entity_type(conn: Connection, term_id: str, statements="statements") -> 
             entity_type = "owl:Individual"
         return entity_type
     else:
+        # Check if this is used as a subClass or subProperty
         entity_type = None
         query = sql_text(f'SELECT predicate FROM "{statements}" WHERE subject = :term_id')
         results = conn.execute(query, term_id=term_id)
@@ -160,6 +158,7 @@ def get_entity_type(conn: Connection, term_id: str, statements="statements") -> 
         elif "rdfs:subPropertyOf" in preds:
             return "owl:AnnotationProperty"
         if not entity_type:
+            # Check if this is used as a parent property or parent class
             query = sql_text(f"SELECT predicate FROM {statements} WHERE object = :term_id")
             results = conn.execute(query, term_id=term_id)
             preds = [row["predicate"] for row in results]
@@ -336,7 +335,9 @@ def get_objects(
     return term_objects
 
 
-def objects_to_hiccup(conn, data, include_annotations=False, statement="statement"):
+def objects_to_hiccup(
+    conn, data, include_annotations=False, single_item_list=False, statement="statement"
+):
     """
     :param conn:
     :param data:
@@ -378,7 +379,7 @@ def objects_to_hiccup(conn, data, include_annotations=False, statement="statemen
                             "annotation": pre_render_annotation,
                         }
                     )
-                    object_ids.update([x for x in flatten(ofn)])
+                    object_ids.update(wiring_rs.get_signature(ofn))
                 elif obj["datatype"].lower() == "_iri":
                     pre_render_po.append(
                         {
@@ -402,48 +403,41 @@ def objects_to_hiccup(conn, data, include_annotations=False, statement="statemen
         pre_render[term_id] = pre_render_term
 
     # Get labels and entity types for Manchester rendering
+    object_ids = list(object_ids)
     labels = get_labels(conn, object_ids, statement=statement)
-    entity_types = get_entity_types(conn, list(object_ids), statement=statement)
+    entity_types = get_entity_types(conn, object_ids, statement=statement)
 
     # Second pass to render the OFN as Manchester with labels
     rendered = {}
     for term_id, predicate_objects in pre_render.items():
         rendered_term = defaultdict()
         for predicate, objs in predicate_objects.items():
-            rendered_po = ["ul", {"class": "annotations"}]
-            for obj in objs:
-                ele = ["li"]
-                if obj["datatype"].lower() == "_json":
-                    # TODO: change to RDFa rendering here when ready (returns hiccup)
-                    typed = wiring_rs.ofn_typing(json.dumps(obj["object"]), entity_types)
-                    labeled = wiring_rs.ofn_labeling(typed, labels)
-                    ele.append(wiring_rs.ofn_2_man(labeled))
-                elif obj["datatype"].lower() == "_iri":
-                    obj_label = get_html_label(obj["object"], labels, predicate=predicate)
-                    ele.append(obj_label)
-                else:
-                    # TODO: render datatype/lang tags
-                    ele.append(obj["object"])
-                if obj["annotation"] and include_annotations:
-                    ann_ele = ["ul"]
-                    for ann_predicate, ann_objects in obj["annotation"].items():
-                        pred_ele = ["ul"]
-                        for ao in ann_objects:
-                            # TODO: support _json?
-                            if ao["datatype"].lower() == "_iri":
-                                ao_label = get_html_label(
-                                    ao["object"], labels, predicate=ann_predicate
-                                )
-                                pred_ele.append(["li", ["small", ao_label]])
-                            else:
-                                # TODO: render datatype/lang tags
-                                pred_ele.append(["li", ["small", html_escape(ao["object"])]])
-                        ann_pred_label = get_html_label(ann_predicate, labels)
-                        ann_ele.append(["li", ["small", ann_pred_label], pred_ele])
-                    ele.append(ann_ele)
-                rendered_po.append(ele)
-            # predicate ID -> list of hiccup lists
-            rendered_term[predicate] = rendered_po
+            if len(objs) > 1 or single_item_list:
+                rendered_term[predicate] = [
+                    "ul",
+                    {"class": "annotations"},
+                    [
+                        create_html_element(
+                            predicate,
+                            x,
+                            labels,
+                            entity_types,
+                            as_list=True,
+                            include_annotations=include_annotations,
+                        )
+                        for x in objs
+                    ],
+                ]
+            elif len(objs) == 1:
+                rendered_term[predicate] = create_html_element(
+                    predicate,
+                    objs[0],
+                    labels,
+                    entity_types,
+                    include_annotations=include_annotations,
+                )
+            else:
+                rendered_term[predicate] = []
         # term ID -> predicate IDs -> hiccup lists
         rendered[term_id] = rendered_term
     return rendered
@@ -461,13 +455,13 @@ def get_iri(prefixes: dict, term: str) -> str:
     return namespace + local_id
 
 
-def get_labels(conn, curies, ontology_iri=None, ontology_title=None, statement="statement"):
+def get_labels(conn, curies: list, ontology_iri=None, ontology_title=None, statement="statement"):
     labels = {}
     query = sql_text(
         f"""SELECT subject, object FROM "{statement}"
             WHERE subject IN :ids AND predicate = 'rdfs:label' AND object IS NOT NULL"""
     ).bindparams(bindparam("ids", expanding=True))
-    results = conn.execute(query, {"ids": list(curies)})
+    results = conn.execute(query, {"ids": curies})
     for res in results:
         labels[res["subject"]] = res["object"]
     if ontology_iri and ontology_title:
