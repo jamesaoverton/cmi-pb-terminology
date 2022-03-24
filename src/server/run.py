@@ -1,4 +1,5 @@
 #!/usr/bin/env python3.9
+import csv
 import json
 import logging
 import os
@@ -25,16 +26,19 @@ from gizmos_helpers import (
     get_term_attributes,
     LOGIC_PREDICATES,
     objects_to_hiccup,
+    terms_to_dict,
 )
 from gizmos_search import get_search_results
 from gizmos.helpers import get_children  # These still work with LDTab
 from gizmos.hiccup import render
 from gizmos_tree import tree
 from html import escape as html_escape
+from io import StringIO
 from lark import Lark, UnexpectedCharacters
 from sprocket import (
     get_sql_columns,
     get_sql_tables,
+    parse_order_by,
     render_database_table,
     render_html_table,
     render_tsv_table,
@@ -165,13 +169,18 @@ def table(table_name):
             pred_labels = select.split(",")
             predicates = get_ids(conn, pred_labels, raise_exc=False, statement=table_name)
 
-        # Export the data
-        data = get_term_attributes(conn, predicates=predicates, statement=table_name)
-        html = render_ontology_table(table_name, data)
+        # Export the data - excluding anon objects
+        data = get_term_attributes(
+            conn, exclude_json=True, predicates=predicates, statement=table_name
+        )
+        response = render_ontology_table(table_name, data)
+        if isinstance(response, Response):
+            return response
         return render_template(
             "template.html",
-            html=html,
+            html=response,
             title="Showing terms from " + table_name,
+            subtitle=f'<a href="{url_for("table", table_name=table_name, view="tree")}">View as tree</a>',
             show_search=True,
             table_name=table_name,
             tables=get_sql_tables(conn),
@@ -215,7 +224,7 @@ def table(table_name):
         )
 
     # Otherwise render default sprocket table
-    html = render_database_table(
+    response = render_database_table(
         conn,
         table_name,
         display_messages=messages,
@@ -225,8 +234,11 @@ def table(table_name):
         standalone=False,
         use_view=True,
     )
-    tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
-    return render_template("template.html", html=html, table_name=table_name, tables=tables)
+    if isinstance(response, Response):
+        return response
+    return render_template(
+        "template.html", html=response, table_name=table_name, tables=get_sql_tables(conn)
+    )
 
 
 @app.route("/<table_name>/<term_id>", methods=["GET", "POST"])
@@ -306,9 +318,8 @@ def term(table_name, term_id):
         request_args["offset"] = str(row_number - 1)
         request_args["limit"] = "1"
         request.args = ImmutableMultiDict(request_args)
-        # export_fmt = request.args.get("format")
 
-        html = render_database_table(
+        response = render_database_table(
             conn,
             table_name,
             ignore_params=["project-name", "branch-name", "view-path"],
@@ -317,8 +328,10 @@ def term(table_name, term_id):
             standalone=False,
             use_view=True,
         )
+        if isinstance(response, Response):
+            return response
         return render_template(
-            "template.html", html=html, include_back=True, table_name=table_name, tables=tables
+            "template.html", html=response, include_back=True, table_name=table_name, tables=tables
         )
 
     # Redirect to main ontology table search, do not limit search results
@@ -351,19 +364,12 @@ def term(table_name, term_id):
             predicates=predicates,
             statement=table_name,
         )
+        # logger.error(json.dumps(data))
 
-        # TODO: export formats - this does not currently work
-        fmt = request.args.get("format")
-        if fmt:
-            if fmt == "tsv":
-                mt = "text/tab-separated-values"
-            elif fmt == "csv":
-                mt = "text/comma-separated-values"
-            else:
-                return abort(400, "Unknown format: " + fmt)
-            return Response(render_tsv_table([data], fmt=fmt), mimetype=mt)
-
-        html = render_ontology_table(table_name, data)
+        response = render_ontology_table(table_name, data)
+        if isinstance(response, Response):
+            logger.error(response.headers)
+            return response
         base_url = url_for("term", table_name=table_name, term_id=term_id)
         tree_url = url_for("term", table_name=table_name, term_id=term_id, view="tree")
         html = (
@@ -395,7 +401,7 @@ def term(table_name, term_id):
                     ],
                 ],
             )
-            + html
+            + response
         )
         tables = [x for x in get_sql_tables(conn) if not x.startswith("tmp_")]
         return render_template(
@@ -836,7 +842,7 @@ def merge_dicts(d1, d2):
     return d_copy
 
 
-def render_ontology_table(table_name, data):
+def render_ontology_table(table_name, data, term_id=None):
     """
     :param table_name: name of SQL table that contains terms
     :param data: data to render - dict of term ID -> predicate ID -> list of JSON objects
@@ -845,63 +851,133 @@ def render_ontology_table(table_name, data):
     results = conn.execute("SELECT prefix, base FROM prefix;").fetchall()
     prefixes = [(res["prefix"], res["base"]) for res in results]
 
+    # Order based on raw value of 'object', don't worry about rendering
+    if request.args.get("order"):
+        # Reverse the ID -> label dictionary to translate column names to IDs
+        import time
+
+        start = time.time()
+        predicates = set(flatten([list(x.keys()) for x in data.values()]))
+        predicate_labels = get_labels(conn, list(predicates), statement=table_name)
+        label_to_id = {v: k for k, v in predicate_labels.items()}
+        end = time.time()
+        logger.error(f"Got pred labels in {end - start}s")
+        order_by = parse_order_by(request.args["order"])
+        for ob in order_by:
+            reverse = False
+            if ob["order"] == "desc":
+                reverse = True
+
+            if ob["key"] == "ID":
+                # ID is never null
+                # sorted is more efficient here so we don't need to turn dict into list of tuples
+                data = {k: v for k, v in sorted(data.items(), reverse=reverse)}
+                continue
+
+            key = label_to_id.get(ob["key"], ob["key"])  # e.g., rdfs:label
+
+            # Separate out the items with no list entries for this predicate
+            nulls = {k: v for k, v in data.items() if not v[key]}
+            non_nulls = [[k, v] for k, v in data.items() if v[key]]
+
+            # Sort the items with entries for this predicate
+            non_nulls.sort(key=lambda itm: itm[1][key][0]["object"], reverse=reverse)
+
+            # ... then put the nulls in the correct spot
+            if ob["nulls"] == "first":
+                data = nulls
+                data.update({k: v for k, v in non_nulls})
+            else:
+                data = {k: v for k, v in non_nulls}
+                data.update(nulls)
+
     # Offset and limit used to determine which terms to render
     # Rendering objects for all terms is very slow
-    # offset = int(request.args.get("offset", "0"))
-    # limit = int(request.args.get("limit", "100")) + offset
+    offset = int(request.args.get("offset", "0"))
+    limit = int(request.args.get("limit", "100")) + offset
 
     # TODO: issue with ordering, we can't order without having everything rendered
     #       but rendering takes too long on everything...
     # TODO: make sure this is efficient
-    # data = [[k, v] for k, v in data.items()]
-    # data_subset = {k: v for k, v in data[offset:limit]}
-    # post_subset = {k: v for k, v in data[limit:]}
-    # data = {k: v for k, v in data[:offset]}
+    data = [[k, v] for k, v in data.items()]
+    data_subset = {k: v for k, v in data[offset:limit]}
+    post_subset = {k: v for k, v in data[limit:]}
+    data = {k: v for k, v in data[:offset]}
 
-    rendered = objects_to_hiccup(conn, data, include_annotations=True, statement=table_name)
-    for term_id, predicate_objects in rendered.items():
-        # Render using hiccup module
-        rendered_term = {}
-        for predicate_id, hiccup in predicate_objects.items():
-            if hiccup:
-                rendered_term[predicate_id] = render(
-                    prefixes, hiccup, href=get_href_pattern(table_name)
+    fmt = request.args.get("format")
+
+    if not fmt:
+        # Convert objects to hiccup with ofn
+        rendered = objects_to_hiccup(
+            conn, data_subset, include_annotations=True, statement=table_name
+        )
+        for term_id, predicate_objects in rendered.items():
+            # Render using hiccup module
+            rendered_term = {}
+            for predicate_id, hiccup in predicate_objects.items():
+                if hiccup:
+                    rendered_term[predicate_id] = render(
+                        prefixes, hiccup, href=get_href_pattern(table_name)
+                    )
+                else:
+                    rendered_term[predicate_id] = None
+            data[term_id] = rendered_term
+        data.update(post_subset)
+
+        predicates = list(set(flatten([list(x.keys()) for x in rendered.values()])))
+        predicate_labels = get_labels(conn, predicates, statement=table_name)
+
+        # Create the HTML output of data
+        table_data = []
+        for term_id, predicate_objects in data.items():
+            # We always display the ID, regardless of other columns
+            term_id = html_escape(term_id)
+            term_data = {
+                "ID": render(
+                    [],
+                    [
+                        "a",
+                        {"href": url_for("term", table_name=table_name, term_id=term_id)},
+                        term_id,
+                    ],
                 )
-            else:
-                rendered_term[predicate_id] = None
-        data[term_id] = rendered_term
-    # data.update(post_subset)
-
-    predicates = list(set(flatten([list(x.keys()) for x in rendered.values()])))
-    predicate_labels = get_labels(conn, predicates, statement=table_name)
-
-    # Create the HTML output of data
-    table_data = []
-    for term_id, predicate_objects in data.items():
-        # TODO: ID not being displayed
-        #       We always display the ID, regardless of other columns
-        term_id = html_escape(term_id)
-        term_data = {
-            "ID": render(
-                [],
-                ["a", {"href": url_for("term", table_name=table_name, term_id=term_id)}, term_id],
-            )
-        }
-        for predicate, objs in predicate_objects.items():
-            term_data[predicate_labels.get(predicate, predicate)] = objs
-        table_data.append(term_data)
-    return render_html_table(
-        table_data,
-        table_name,
-        [],
-        request.args,
-        base_url=url_for("table", table_name=table_name),
-        hidden=["search_text"],
-        ignore_params=["project-name", "branch-name", "view-path"],
-        show_options=False,
-        include_expand=False,
-        standalone=False,
-    )
+            }
+            for predicate, objs in predicate_objects.items():
+                term_data[predicate_labels.get(predicate, predicate)] = objs
+            table_data.append(term_data)
+        if term_id:
+            base_url = url_for("term", table_name=table_name, term_id=term_id)
+        else:
+            base_url = url_for("table", table_name=table_name)
+        return render_html_table(
+            table_data,
+            table_name,
+            [],
+            request.args,
+            base_url=base_url,
+            hidden=["search_text"],
+            ignore_params=["project-name", "branch-name", "view-path"],
+            show_options=False,
+            include_expand=False,
+            standalone=False,
+        )
+    elif fmt.lower() in ["tsv", "csv"]:
+        # Create TSV or CSV export of data
+        field_sep = request.args.get("sep", "|")
+        term_dict = terms_to_dict(conn, data_subset, sep=field_sep, statement=table_name)
+        headers = term_dict[0].keys()
+        sep = "\t"
+        mt = "text/tab-separated-values"
+        if fmt.lower() == "csv":
+            sep = ","
+            mt = "text/comma-separated-values"
+        output = StringIO()
+        writer = csv.DictWriter(output, delimiter=sep, fieldnames=headers, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(term_dict)
+        return Response(output.getvalue(), mimetype=mt)
+    else:
+        return abort(400, "Unknown export format: " + fmt)
 
 
 def render_subclass_of(table_name, param, arg):
@@ -948,11 +1024,15 @@ def render_subclass_of(table_name, param, arg):
         pred_labels = select.split(",")
         predicates = get_ids(conn, pred_labels, raise_exc=False, statement=table_name)
 
-    data = get_term_attributes(conn, terms=list(terms), predicates=predicates, statement=table_name)
-    html = render_ontology_table(table_name, data)
+    data = get_term_attributes(
+        conn, exclude_json=True, terms=list(terms), predicates=predicates, statement=table_name
+    )
+    response = render_ontology_table(table_name, data)
+    if isinstance(response, Response):
+        return response
     return render_template(
         "template.html",
-        html=html,
+        html=response,
         title=title,
         add_params=f"{param}={arg}",
         show_search=True,
@@ -1105,10 +1185,12 @@ def render_tree(table_name, term_id: str = None):
             predicates=["rdfs:label", "IAO:0000118"],
             statement=table_name,
         )
-        html = render_ontology_table(table_name, data)
+        response = render_ontology_table(table_name, data)
+        if isinstance(response, Response):
+            return response
         return render_template(
             "template.html",
-            html=html,
+            html=response,
             title=f"Showing search results for '{search_text}'",
             show_search=True,
             table_name=table_name,

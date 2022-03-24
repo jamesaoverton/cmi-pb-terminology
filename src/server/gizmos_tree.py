@@ -440,10 +440,14 @@ def term2rdfa(
     else:
         # TODO: order annotations?
         term_data = get_term_attributes(
-            conn, include_all_predicates=False, statement=statements, terms=[term_id]
+            conn,
+            include_all_predicates=False,
+            predicates=predicate_ids,
+            statement=statements,
+            terms=[term_id],
         )
         hiccup = objects_to_hiccup(
-            conn, term_data, include_annotations=True, single_item_list=True, statement=statements
+            conn, term_data, include_annotations=True, single_item_list=True, statement=statements,
         )[term_id]
         predicate_labels = get_labels(conn, list(hiccup.keys()), statement=statements)
         attrs = ["ul", {"id": "annotations", "class": "col-md"}]

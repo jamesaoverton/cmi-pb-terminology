@@ -23,42 +23,6 @@ LOGIC_PREDICATES = [
 ]
 
 
-def create_html_element(
-    predicate, obj, labels, entity_types, as_list=False, include_annotations=False
-) -> list:
-    if as_list:
-        ele = ["li"]
-    else:
-        ele = ["p"]
-    if obj["datatype"].lower() == "_json":
-        # TODO: change to RDFa rendering here when ready (returns hiccup)
-        typed = wiring_rs.ofn_typing(json.dumps(obj["object"]), entity_types)
-        labeled = wiring_rs.ofn_labeling(typed, labels)
-        ele.append(wiring_rs.ofn_2_man(labeled))
-    elif obj["datatype"].lower() == "_iri":
-        obj_label = get_html_label(obj["object"], labels, predicate=predicate)
-        ele.append(obj_label)
-    else:
-        # TODO: render datatype/lang tags
-        ele.append(obj["object"])
-    if obj["annotation"] and include_annotations:
-        ann_ele = ["ul"]
-        for ann_predicate, ann_objects in obj["annotation"].items():
-            pred_ele = ["ul"]
-            for ao in ann_objects:
-                # TODO: support _json?
-                if ao["datatype"].lower() == "_iri":
-                    ao_label = get_html_label(ao["object"], labels, predicate=ann_predicate)
-                    pred_ele.append(["li", ["small", ao_label]])
-                else:
-                    # TODO: render datatype/lang tags
-                    pred_ele.append(["li", ["small", html_escape(ao["object"])]])
-            ann_pred_label = get_html_label(ann_predicate, labels)
-            ann_ele.append(["li", ["small", ann_pred_label], pred_ele])
-        ele.append(ann_ele)
-    return ele
-
-
 def flatten(lst):
     for el in lst:
         if isinstance(el, list) and not isinstance(el, (str, bytes)):
@@ -259,6 +223,7 @@ def get_predicate_ids(conn: Connection, id_or_labels, statement: str = "statemen
 
 def get_term_attributes(
     conn: Connection,
+    exclude_json: bool = False,
     include_all_predicates: bool = True,
     predicates: list = None,
     statement: str = "statement",
@@ -270,6 +235,7 @@ def get_term_attributes(
     list of object dictionaries (object, datatype, annotation).
 
     :param conn: SQLAlchemy database connection
+    :param exclude_json: if True, do not include objects with the _JSON datatype (anonymous)
     :param include_all_predicates: if True, include predicates in the return dicts even if they
                                    have no values for a given term.
     :param predicates: list of properties to include in export
@@ -300,6 +266,7 @@ def get_term_attributes(
         conn,
         term_ids,
         predicate_ids,
+        exclude_json=exclude_json,
         include_all_predicates=include_all_predicates,
         statement=statement,
     )
@@ -309,6 +276,7 @@ def get_objects(
     conn: Connection,
     term_ids: list,
     predicate_ids: dict,
+    exclude_json: bool = False,
     include_all_predicates: bool = True,
     statement: str = "statement",
 ) -> dict:
@@ -319,10 +287,13 @@ def get_objects(
             term_objects[term_id] = defaultdict(list)
             for p in predicate_ids.keys():
                 term_objects[term_id][p] = list()
-    query = sql_text(
-        f"""SELECT DISTINCT subject, predicate, object, datatype, annotation
+    query = f"""SELECT DISTINCT subject, predicate, object, datatype, annotation
             FROM "{statement}" WHERE subject IN :terms AND predicate IN :predicates"""
-    ).bindparams(bindparam("terms", expanding=True), bindparam("predicates", expanding=True))
+    if exclude_json:
+        query += " AND datatype IS NOT '_JSON'"
+    query = sql_text(query).bindparams(
+        bindparam("terms", expanding=True), bindparam("predicates", expanding=True)
+    )
     results = conn.execute(query, {"terms": term_ids, "predicates": list(predicate_ids.keys())})
     for res in results:
         s = res["subject"]
@@ -333,114 +304,6 @@ def get_objects(
             {"object": res["object"], "datatype": res["datatype"], "annotation": res["annotation"]}
         )
     return term_objects
-
-
-def objects_to_hiccup(
-    conn, data, include_annotations=False, single_item_list=False, statement="statement"
-):
-    """
-    :param conn:
-    :param data:
-    :param include_annotations: if True, include axiom annotations as sub-lists
-    :param statement:
-    """
-    # First pass to render as OFN list and get all the needed term IDs for labeling
-    pre_render = {}
-    object_ids = set()
-    for term_id, predicate_objects in data.items():
-        object_ids.add(term_id)
-        pre_render_term = defaultdict()
-        for predicate, objs in predicate_objects.items():
-            object_ids.add(predicate)
-            pre_render_po = []
-            for obj in objs:
-                annotation = obj["annotation"]
-                pre_render_annotation = defaultdict(list)
-                if annotation:
-                    # TODO: do we need to support more levels of annotations?
-                    annotation = json.loads(obj["annotation"])
-                    for ann_predicate, anns in annotation.items():
-                        object_ids.add(ann_predicate)
-                        pre_render_annotation[ann_predicate] = list()
-                        for ann in anns:
-                            # TODO: support _json?
-                            if ann["datatype"].lower() == "_iri":
-                                object_ids.add(ann["object"])
-                            pre_render_annotation[ann_predicate].append(
-                                {"object": ann["object"], "datatype": ann["datatype"]}
-                            )
-
-                if obj["datatype"].lower() == "_json":
-                    ofn = json.loads(wiring_rs.object_2_ofn(obj["object"]))
-                    pre_render_po.append(
-                        {
-                            "object": ofn,
-                            "datatype": obj["datatype"],
-                            "annotation": pre_render_annotation,
-                        }
-                    )
-                    object_ids.update(wiring_rs.get_signature(ofn))
-                elif obj["datatype"].lower() == "_iri":
-                    pre_render_po.append(
-                        {
-                            "object": obj["object"],
-                            "datatype": obj["datatype"],
-                            "annotation": pre_render_annotation,
-                        }
-                    )
-                    object_ids.add(obj["object"])
-                    pass
-                else:
-                    pre_render_po.append(
-                        {
-                            "object": obj["object"],
-                            "datatype": obj["datatype"],
-                            "annotation": pre_render_annotation,
-                        }
-                    )
-                    pass
-            pre_render_term[predicate] = pre_render_po
-        pre_render[term_id] = pre_render_term
-
-    # Get labels and entity types for Manchester rendering
-    object_ids = list(object_ids)
-    labels = get_labels(conn, object_ids, statement=statement)
-    entity_types = get_entity_types(conn, object_ids, statement=statement)
-
-    # Second pass to render the OFN as Manchester with labels
-    rendered = {}
-    for term_id, predicate_objects in pre_render.items():
-        rendered_term = defaultdict()
-        for predicate, objs in predicate_objects.items():
-            if len(objs) > 1 or single_item_list:
-                rendered_term[predicate] = [
-                    "ul",
-                    {"class": "annotations"},
-                    [
-                        create_html_element(
-                            predicate,
-                            x,
-                            labels,
-                            entity_types,
-                            as_list=True,
-                            include_annotations=include_annotations,
-                        )
-                        for x in objs
-                    ],
-                ]
-            elif len(objs) == 1:
-                rendered_term[predicate] = create_html_element(
-                    predicate,
-                    objs[0],
-                    labels,
-                    entity_types,
-                    include_annotations=include_annotations,
-                )
-            else:
-                rendered_term[predicate] = []
-        # term ID -> predicate IDs -> hiccup lists
-        rendered[term_id] = rendered_term
-    return rendered
 
 
 def get_iri(prefixes: dict, term: str) -> str:
@@ -503,3 +366,190 @@ def get_parent_child_pairs(
     )
     results = conn.execute(query, term_id=term_id).fetchall()
     return [[x["parent"], x["child"]] for x in results]
+
+
+def object_to_hiccup(
+    predicate, obj, labels, entity_types, as_list=False, include_annotations=False,
+) -> list:
+    if as_list:
+        ele = ["li"]
+    else:
+        ele = ["p"]
+    dt = obj["datatype"]
+    if dt.lower() == "_json":
+        # TODO: change to RDFa rendering here when ready (returns hiccup)
+        typed = wiring_rs.ofn_typing(json.dumps(obj["object"]), entity_types)
+        labeled = wiring_rs.ofn_labeling(typed, labels)
+        ele.append(json.loads(wiring_rs.object_2_rdfa(labeled)))
+    elif dt.lower() == "_iri":
+        obj_label = get_html_label(obj["object"], labels, predicate=predicate)
+        ele.append(obj_label)
+    else:
+        if dt.startswith("@"):
+            dt_display = dt
+        else:
+            dt_display = ["a", {"resource": dt}, dt]
+        ele.append(obj["object"])
+        ele.append(["sup", {"class": "text-black-50"}, dt_display])
+    if obj["annotation"] and include_annotations:
+        ann_ele = ["ul"]
+        for ann_predicate, ann_objects in obj["annotation"].items():
+            pred_ele = ["ul"]
+            for ao in ann_objects:
+                # TODO: support _json?
+                if ao["datatype"].lower() == "_iri":
+                    ao_label = get_html_label(ao["object"], labels, predicate=ann_predicate)
+                    pred_ele.append(["li", ["small", ao_label]])
+                else:
+                    # TODO: render datatype/lang tags
+                    pred_ele.append(["li", ["small", html_escape(ao["object"])]])
+            ann_pred_label = get_html_label(ann_predicate, labels)
+            ann_ele.append(["li", ["small", ann_pred_label], pred_ele])
+        ele.append(ann_ele)
+    return ele
+
+
+def object_to_str(obj, labels, entity_types):
+    dt = obj["datatype"]
+    if dt.lower() == "_json":
+        typed = wiring_rs.ofn_typing(json.dumps(obj["object"]), entity_types)
+        labeled = wiring_rs.ofn_labeling(typed, labels)
+        return wiring_rs.ofn_2_man(labeled)
+    elif dt.lower() == "_iri":
+        return labels.get(obj["object"], obj["object"])
+    else:
+        # TODO: datatypes?
+        return obj["object"]
+
+
+def objects_to_hiccup(
+    conn, data, include_annotations=False, single_item_list=False, statement="statement",
+):
+    """
+    :param conn:
+    :param data:
+    :param include_annotations: if True, include axiom annotations as sub-lists
+    :param statement:
+    """
+    # First pass to render as OFN list and get all the needed term IDs for labeling
+    pre_render, object_ids = pre_render_objects(data)
+
+    # Get labels and entity types for Manchester rendering
+    object_ids = list(object_ids)
+    labels = get_labels(conn, object_ids, statement=statement)
+    entity_types = get_entity_types(conn, object_ids, statement=statement)
+
+    # Second pass to render the OFN as Manchester with labels
+    rendered = {}
+    for term_id, predicate_objects in pre_render.items():
+        rendered_term = defaultdict()
+        for predicate, objs in predicate_objects.items():
+            if len(objs) > 1 or single_item_list:
+                lst = ["ul", {"class": "annotations"}]
+                lst.extend(
+                    [
+                        object_to_hiccup(
+                            predicate,
+                            x,
+                            labels,
+                            entity_types,
+                            as_list=True,
+                            include_annotations=include_annotations,
+                        )
+                        for x in objs
+                    ]
+                )
+                rendered_term[predicate] = lst
+            elif len(objs) == 1:
+                rendered_term[predicate] = object_to_hiccup(
+                    predicate,
+                    objs[0],
+                    labels,
+                    entity_types,
+                    include_annotations=include_annotations,
+                )
+            else:
+                rendered_term[predicate] = []
+        # term ID -> predicate IDs -> hiccup lists
+        rendered[term_id] = rendered_term
+    return rendered
+
+
+def pre_render_objects(data):
+    pre_render = {}
+    object_ids = set()
+    for term_id, predicate_objects in data.items():
+        object_ids.add(term_id)
+        pre_render_term = defaultdict()
+        for predicate, objs in predicate_objects.items():
+            object_ids.add(predicate)
+            pre_render_po = []
+            for obj in objs:
+                annotation = obj["annotation"]
+                pre_render_annotation = defaultdict(list)
+                if annotation:
+                    # TODO: do we need to support more levels of annotations?
+                    annotation = json.loads(obj["annotation"])
+                    for ann_predicate, anns in annotation.items():
+                        object_ids.add(ann_predicate)
+                        pre_render_annotation[ann_predicate] = list()
+                        for ann in anns:
+                            # TODO: support _json?
+                            if ann["datatype"].lower() == "_iri":
+                                object_ids.add(ann["object"])
+                            pre_render_annotation[ann_predicate].append(
+                                {"object": ann["object"], "datatype": ann["datatype"]}
+                            )
+
+                if obj["datatype"].lower() == "_json":
+                    ofn = wiring_rs.object_2_ofn(obj["object"])
+                    pre_render_po.append(
+                        {
+                            "object": json.loads(ofn),
+                            "datatype": obj["datatype"],
+                            "annotation": pre_render_annotation,
+                        }
+                    )
+                    object_ids.update(wiring_rs.get_signature(ofn))
+                elif obj["datatype"].lower() == "_iri":
+                    pre_render_po.append(
+                        {
+                            "object": obj["object"],
+                            "datatype": obj["datatype"],
+                            "annotation": pre_render_annotation,
+                        }
+                    )
+                    object_ids.add(obj["object"])
+                else:
+                    pre_render_po.append(
+                        {
+                            "object": obj["object"],
+                            "datatype": obj["datatype"],
+                            "annotation": pre_render_annotation,
+                        }
+                    )
+            pre_render_term[predicate] = pre_render_po
+        pre_render[term_id] = pre_render_term
+    return pre_render, object_ids
+
+
+def terms_to_dict(conn, data, sep="|", statement="statement"):
+    """Transform data from SQLite database to a list of dicts suitable for DictWriters."""
+    # First pass to render as OFN list and get all the needed term IDs for labeling
+    pre_render, object_ids = pre_render_objects(data)
+
+    # Get labels and entity types for Manchester rendering
+    object_ids = list(object_ids)
+    labels = get_labels(conn, object_ids, statement=statement)
+    entity_types = get_entity_types(conn, object_ids, statement=statement)
+
+    # Second pass to render the OFN as Manchester with labels (term
+    rendered = []
+    for term_id, predicate_objects in pre_render.items():
+        rendered_term = {"ID": term_id}
+        for predicate, objs in predicate_objects.items():
+            pred_label = labels.get(predicate, predicate)
+            strs = [object_to_str(o, labels, entity_types) for o in objs]
+            rendered_term[pred_label] = sep.join(strs)
+        rendered.append(rendered_term)
+    return rendered

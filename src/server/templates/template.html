@@ -54,6 +54,10 @@
 			line-height: 1.33;
 		}
 
+		#sqlTableHorizontal, #sqlTableVertical {
+			vertical-align: inherit !important;
+		}
+
 		#annotations {
 		  padding-left: 1em;
 		  list-style-type: none !important;
@@ -95,6 +99,18 @@
 		}
 		a {
 		  text-decoration: none;
+		}
+
+		sup {
+		  vertical-align: top;
+		  position: relative;
+		  top: 0.5em;
+		}
+		sup a {
+		  color: #85b6ff;
+		}
+		sup a:hover {
+		  color: #0066ff;
 		}
 
 		.th {
@@ -207,6 +223,9 @@
 			{% if title %}
 			<div class="row">
 				<h2>{{ title|safe }}</h2>
+				{% if subtitle %}
+				<br><p class="lead">{{ subtitle|safe }}</p>
+				{% endif %}
 			</div>
 			{% endif %}
 			<div class="row">
@@ -408,13 +427,15 @@
 		if (ele === null) {
 			ele = document.getElementById("sqlTableHorizontal");
 			if (ele === null) {
-				ele = document.getElementById("gizmosTree");
-				if (ele === null) {
+				// We are currently ignoring ontology editing
+				includeEdit = false;
+				// ele = document.getElementById("gizmosTree");
+				// if (ele === null) {
 					// Not correct view
-					return;
-				}
+					// return;
+				// }
 				// Include both edit & new buttons
-				includeNew = true;
+				// includeNew = true;
 			} else {
 				// Multiple rows, include only 'new' button
 				includeEdit = false;
