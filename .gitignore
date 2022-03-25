@@ -4,3 +4,5 @@ junk/
 .venv/
 __pycache__/
 .git-credentials
+.DS_Store
+*.egg-info

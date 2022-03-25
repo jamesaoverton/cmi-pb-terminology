@@ -1,9 +1,6 @@
 import json
 
-try:
-    from sql_utils import safe_sql
-except ModuleNotFoundError:
-    from src.script.sql_utils import safe_sql
+from .sql_utils import safe_sql
 
 
 class ValidationException(Exception):

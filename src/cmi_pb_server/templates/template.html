@@ -102,9 +102,9 @@
 		}
 
 		sup {
-		  vertical-align: top;
-		  position: relative;
-		  top: 0.5em;
+		  position: static !important;
+		  line-height: 1 !important;
+		  vertical-align: super !important;
 		}
 		sup a {
 		  color: #85b6ff;
@@ -197,7 +197,7 @@
 					</a>
 					<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
 						{% for t in tables %}
-						<li><a class="dropdown-item" href="{{ url_for('table', table_name=t) }}">{{ t }}</a></li>
+						<li><a class="dropdown-item" href="{{ url_for('cmi-pb.table', table_name=t) }}">{{ t }}</a></li>
 						{% endfor %}
 					</ul>
 				</li>
@@ -445,7 +445,7 @@
 
 		var container = document.getElementById("cmi-pb");
 		if (includeNew) {
-			var newURL = new URL(window.location.origin + '{{ url_for("table", table_name=table_name, view="form") }}');
+			var newURL = new URL(window.location.origin + '{{ url_for("cmi-pb.table", table_name=table_name, view="form") }}');
 			var newBtn = document.createElement("a");
 			newBtn.setAttribute("data-bs-toggle", "tooltip");
 			newBtn.setAttribute("data-bs-placement", "left");
@@ -484,7 +484,7 @@
 		 */
 		// Get the row_number for this row
 		var sqlRowNum = document.getElementById(`row_number${rowNum}`).innerText;
-		var newURL = "{{ url_for('table', table_name=table_name) }}";
+		var newURL = "{{ url_for('cmi-pb.table', table_name=table_name) }}";
 		newURL += "/" + sqlRowNum;
 		window.location.href = newURL;
 	}
@@ -508,7 +508,7 @@
 			return a.order - b.order;
 		  },
 		  remote: {
-			url: '{{ url_for("table", table_name=table_name) }}' + `?text=%QUERY&column=${col}&format=json`,
+			url: '{{ url_for("cmi-pb.table", table_name=table_name) }}' + `?text=%QUERY&column=${col}&format=json`,
 			wildcard: '%QUERY',
 			transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -546,9 +546,9 @@
 		},
 		remote: {
 		  {% if search_param %}
-		  url: '{{ url_for("table", table_name=table_name) }}' + '?{{ search_param }}&text=%QUERY&format=json'
+		  url: '{{ url_for("cmi-pb.table", table_name=table_name) }}' + '?{{ search_param }}&text=%QUERY&format=json'
 		  {% else %}
-		  url: '{{ url_for("table", table_name=table_name) }}' + '?text=%QUERY&format=json', {% endif %}
+		  url: '{{ url_for("cmi-pb.table", table_name=table_name) }}' + '?text=%QUERY&format=json', {% endif %}
 		  wildcard: '%QUERY',
 		  transform : function(response) {
 			  return bloodhound.sorter(response);
@@ -601,7 +601,7 @@
 	  var str = [];
 	  for (var p in obj)
 		if (obj.hasOwnProperty(p)) {
-		  str.push("{{ url_for('table', table_name=table_name) }}/" + encodeURIComponent(obj[p]) + "");
+		  str.push("{{ url_for('cmi-pb.table', table_name=table_name) }}/" + encodeURIComponent(obj[p]) + "");
 		}
 	  return str.join("&");
 	}

@@ -1,5 +1,4 @@
 import json
-import logging
 import re
 
 import wiring_rs
@@ -369,7 +368,7 @@ def get_parent_child_pairs(
 
 
 def object_to_hiccup(
-    predicate, obj, labels, entity_types, as_list=False, include_annotations=False,
+    predicate, obj, labels, entity_types, as_list=False, include_annotations=False
 ) -> list:
     if as_list:
         ele = ["li"]
@@ -423,7 +422,7 @@ def object_to_str(obj, labels, entity_types):
 
 
 def objects_to_hiccup(
-    conn, data, include_annotations=False, single_item_list=False, statement="statement",
+    conn, data, include_annotations=False, single_item_list=False, statement="statement"
 ):
     """
     :param conn:

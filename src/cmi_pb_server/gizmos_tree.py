@@ -1,7 +1,7 @@
 import json
 
 from collections import defaultdict
-from gizmos_helpers import (
+from .gizmos_helpers import (
     get_entity_type,
     get_html_label,
     get_iri,
@@ -671,7 +671,7 @@ def tree(
     if standalone:
         body.append(
             [
-                "script",
+                "cmi_pb_script",
                 {
                     "src": "https://code.jquery.com/jquery-3.5.1.min.js",
                     "integrity": "sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=",
@@ -682,9 +682,9 @@ def tree(
 
         if include_search:
             # Add JS imports for running search
-            body.append(["script", {"type": "text/javascript", "src": popper_js}])
-            body.append(["script", {"type": "text/javascript", "src": bootstrap_js}])
-            body.append(["script", {"type": "text/javascript", "src": typeahead_js}])
+            body.append(["cmi_pb_script", {"type": "text/javascript", "src": popper_js}])
+            body.append(["cmi_pb_script", {"type": "text/javascript", "src": bootstrap_js}])
+            body.append(["cmi_pb_script", {"type": "text/javascript", "src": typeahead_js}])
 
         # Custom JS for show more children
         js = """function show_children() {
@@ -805,7 +805,7 @@ def tree(
         }"""
             )
 
-        body.append(["script", {"type": "text/javascript"}, js])
+        body.append(["cmi_pb_script", {"type": "text/javascript"}, js])
 
         # HTML Headers & CSS
         head = [

@@ -14,26 +14,15 @@ from lark import Lark
 from lark.exceptions import VisitError
 from multiprocessing import cpu_count, Manager, Process
 
-try:
-    from sql_utils import safe_sql
-    from cmi_pb_grammar import grammar, TreeToDict, reverse_parse
-    from validate import (
-        validate_rows_intra,
-        validate_rows_trees,
-        validate_rows_constraints,
-        validate_tree_foreign_keys,
-        validate_under,
-    )
-except ModuleNotFoundError:
-    from src.script.sql_utils import safe_sql
-    from src.script.cmi_pb_grammar import grammar, TreeToDict
-    from src.script.validate import (
-        validate_rows_intra,
-        validate_rows_trees,
-        validate_rows_constraints,
-        validate_tree_foreign_keys,
-        validate_under,
-    )
+from .sql_utils import safe_sql
+from .cmi_pb_grammar import grammar, TreeToDict
+from .validate import (
+    validate_rows_intra,
+    validate_rows_trees,
+    validate_rows_constraints,
+    validate_tree_foreign_keys,
+    validate_under,
+)
 
 CHUNK_SIZE = 300
 MULTIPROCESSING = False
@@ -844,14 +833,14 @@ if __name__ == "__main__":
         p.add_argument("db_dir", help="The directory in which to save the database file")
         args = p.parse_args()
 
-        config = read_config_files(
+        CONFIG = read_config_files(
             args.table, Lark(grammar, parser="lalr", transformer=TreeToDict())
         )
 
-        with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as conn:
-            config["db"] = conn
-            config["db"].execute("PRAGMA foreign_keys = ON")
-            configure_and_load_db(config)
+        with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as CONN:
+            CONFIG["db"] = CONN
+            CONFIG["db"].execute("PRAGMA foreign_keys = ON")
+            configure_and_load_db(CONFIG)
     except (
         CycleError,
         FileNotFoundError,
