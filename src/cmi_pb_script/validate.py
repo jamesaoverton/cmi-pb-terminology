@@ -1,6 +1,9 @@
 import json
 
-from .sql_utils import safe_sql
+try:
+    from .sql_utils import safe_sql
+except ImportError:
+    from sql_utils import safe_sql
 
 
 class ValidationException(Exception):

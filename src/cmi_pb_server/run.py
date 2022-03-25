@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.9
 import csv
 import json
 import logging
@@ -1340,10 +1339,6 @@ def run(db, table_config, cgi_path=None, log_file=None):
     app.register_blueprint(BLUEPRINT)
     app.url_map.strict_slashes = False
 
-    # Next line is required for running as CGI cmi_pb_script - comment/uncomment as needed
-    if cgi_path:
-        os.chdir("../..")
-
     # Set up logging to file
     LOGGER = logging.getLogger("cmi_pb_logger")
     LOGGER.setLevel(logging.DEBUG)
@@ -1373,12 +1368,3 @@ def run(db, table_config, cgi_path=None, log_file=None):
     else:
         LOGGER.error(os.path.abspath(os.path.join(os.path.dirname(__file__), "templates")))
         app.run()
-
-
-if __name__ == "__main__":
-    run(
-        "build/cmi-pb.db",
-        "src/table.tsv",
-        cgi_path="/CMI-PB/branches/next/views/src/cmi_pb_server/run.py",
-        log_file="app.log"
-    )

@@ -14,15 +14,26 @@ from lark import Lark
 from lark.exceptions import VisitError
 from multiprocessing import cpu_count, Manager, Process
 
-from .sql_utils import safe_sql
-from .cmi_pb_grammar import grammar, TreeToDict
-from .validate import (
-    validate_rows_intra,
-    validate_rows_trees,
-    validate_rows_constraints,
-    validate_tree_foreign_keys,
-    validate_under,
-)
+try:
+    from .sql_utils import safe_sql
+    from .cmi_pb_grammar import grammar, TreeToDict
+    from .validate import (
+        validate_rows_intra,
+        validate_rows_trees,
+        validate_rows_constraints,
+        validate_tree_foreign_keys,
+        validate_under,
+    )
+except ImportError:
+    from sql_utils import safe_sql
+    from cmi_pb_grammar import grammar, TreeToDict
+    from validate import (
+        validate_rows_intra,
+        validate_rows_trees,
+        validate_rows_constraints,
+        validate_tree_foreign_keys,
+        validate_under,
+    )
 
 CHUNK_SIZE = 300
 MULTIPROCESSING = False
