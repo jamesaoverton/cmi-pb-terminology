@@ -2,7 +2,7 @@
 #
 # - Open the [terminology](https://docs.google.com/spreadsheets/d/1xCrNM8Rv3v04ii1Fd8GMNTSwHzreo74t4DGsAeTsMbk/edit#gid=0) sheet
 # - Run [`make all`](all) to rebuild the terminology
-# - Preview the terminology [tree](./src/server/tree.sh)
+# - Preview the terminology [tree](./src/run.py)
 # - Download the [`cmi-pb.owl`](cmi-pb.owl) file
 # - Download the [`cmi-pb.db`](build/cmi-pb.db) database file
 
@@ -259,19 +259,19 @@ update-tsv:
 	rm -f $(GS_TSVS) $(API_TSVS) $(ZIP_TSVS)
 	make update-gs-tsv update-api-tsv update-zip-tsv
 
-build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv src/script/validate.py | build
+build/cmi-pb.sql: src/cmi_pb_script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv src/cmi_pb_script/validate.py | build
 	python3 $< $(word 2,$^) $| > $@
 
-# The database file we be created as a side-effect of calling src/script/load.py to create the sql file:
+# The database file we be created as a side-effect of calling src/cmi_pb_script/load.py to create the sql file:
 build/cmi-pb.db: build/cmi-pb.sql
 
 output:
 	mkdir -p $@
 
-output/messages.tsv: src/script/export.py build/cmi-pb.db | output
+output/messages.tsv: src/cmi_pb_script/export.py build/cmi-pb.db | output
 	python3 $< messages $(word 2,$^) $| prefix import test_tree_under
 
-output/%.tsv: src/script/export.py build/cmi-pb.db | output
+output/%.tsv: src/cmi_pb_script/export.py build/cmi-pb.db | output
 	python3 $< data $(word 2,$^) $| $*
 
 .PHONY: test
