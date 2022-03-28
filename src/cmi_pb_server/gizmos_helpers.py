@@ -9,7 +9,7 @@ from html import escape as html_escape
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.sql.expression import bindparam
 from sqlalchemy.sql.expression import text as sql_text
-from typing import Dict, Optional, Iterable
+from typing import Dict, Optional
 
 LOGIC_PREDICATES = [
     "rdfs:subClassOf",
@@ -186,7 +186,9 @@ def get_ids(conn, id_or_labels, raise_exc=True, statement="statement"):
     return ids
 
 
-def get_predicate_ids(conn: Connection, id_or_labels, statement: str = "statement") -> dict:
+def get_predicate_ids(
+    conn: Connection, id_or_labels: list = None, statement: str = "statement"
+) -> dict:
     """Create a map of predicate label or full header (if the header has a value format) -> ID."""
     if id_or_labels:
         predicate_ids = {}
@@ -244,16 +246,17 @@ def get_term_attributes(
     :return: string export in given format
     """
     if terms:
+        # Use list of terms (IDs or labels) to get a list of term IDs
         term_ids = get_ids(conn, terms, statement=statement)
-    else:
-        if where:
-            # Use provided query filter to select terms
-            query = f'SELECT DISTINCT subject FROM "{statement}" WHERE ' + where
-        else:
-            query = f'SELECT DISTINCT subject FROM "{statement}"'
+    elif where:
+        # Use provided query filter to select terms
+        query = f'SELECT DISTINCT subject FROM "{statement}" WHERE ' + where
         term_ids = [res["subject"] for res in conn.execute(query)]
+    else:
+        # No term IDs, we will return details for all subjects in the database
+        term_ids = None
 
-    predicate_ids = get_predicate_ids(conn, predicates, statement=statement)
+    predicate_ids = get_predicate_ids(conn, id_or_labels=predicates, statement=statement)
 
     # Get prefixes
     prefixes = {}
@@ -263,37 +266,64 @@ def get_term_attributes(
     # Get the term details
     return get_objects(
         conn,
-        term_ids,
         predicate_ids,
         exclude_json=exclude_json,
         include_all_predicates=include_all_predicates,
         statement=statement,
+        term_ids=term_ids,
     )
 
 
 def get_objects(
     conn: Connection,
-    term_ids: list,
     predicate_ids: dict,
     exclude_json: bool = False,
     include_all_predicates: bool = True,
     statement: str = "statement",
+    term_ids: list = None,
 ) -> dict:
     """Get a dict of predicate ID -> objects."""
     term_objects = defaultdict(defaultdict)
     if include_all_predicates:
-        for term_id in term_ids:
+        # Build dict of all terms with all predicates
+        tmp_ids = term_ids
+        if not tmp_ids:
+            # If term IDs were not included, retrieve all subjects
+            # We use a "temp" variable here so that we don't have to pass all to query
+            tmp_ids = [
+                x["subject"]
+                for x in conn.execute(f'SELECT DISTINCT subject FROM "{statement}";').fetchall()
+            ]
+        for term_id in tmp_ids:
             term_objects[term_id] = defaultdict(list)
             for p in predicate_ids.keys():
                 term_objects[term_id][p] = list()
-    query = f"""SELECT DISTINCT subject, predicate, object, datatype, annotation
-            FROM "{statement}" WHERE subject IN :terms AND predicate IN :predicates"""
-    if exclude_json:
-        query += " AND datatype IS NOT '_JSON'"
-    query = sql_text(query).bindparams(
-        bindparam("terms", expanding=True), bindparam("predicates", expanding=True)
-    )
-    results = conn.execute(query, {"terms": term_ids, "predicates": list(predicate_ids.keys())})
+
+    results = []
+    if term_ids:
+        # Max num of sql variables is 999 - use chunks to get around this
+        chunks = [term_ids[i : i + 999] for i in range(0, len(term_ids), 999)]
+        for chunk in chunks:
+            query = f"""SELECT DISTINCT subject, predicate, object, datatype, annotation
+                    FROM "{statement}" WHERE subject IN :terms AND predicate IN :predicates"""
+            if exclude_json:
+                query += " AND datatype IS NOT '_JSON'"
+            query = sql_text(query).bindparams(
+                bindparam("terms", expanding=True), bindparam("predicates", expanding=True)
+            )
+            results.extend(
+                conn.execute(
+                    query, {"terms": chunk, "predicates": list(predicate_ids.keys())}
+                ).fetchall()
+            )
+    else:
+        query = f"""SELECT DISTINCT subject, predicate, object, datatype, annotation
+                FROM "{statement}" WHERE predicate IN :predicates"""
+        if exclude_json:
+            query += " AND datatype IS NOT '_JSON'"
+        query = sql_text(query).bindparams(bindparam("predicates", expanding=True))
+        results.extend(conn.execute(query, {"predicates": list(predicate_ids.keys())}).fetchall())
+
     for res in results:
         s = res["subject"]
         p = res["predicate"]

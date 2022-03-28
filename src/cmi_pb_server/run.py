@@ -27,7 +27,7 @@ from .gizmos_helpers import (
     objects_to_hiccup,
     terms_to_dict,
 )
-from .gizmos_search import get_search_results
+from .gizmos_search import simple_search
 from gizmos.helpers import get_children  # These still work with LDTab
 from gizmos.hiccup import render
 from .gizmos_tree import tree
@@ -80,8 +80,9 @@ BLUEPRINT = Blueprint(
     template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), "templates")),
 )
 CONFIG = None  # type: Optional[dict]
-CONN = None    # type: Optional[Connection]
+CONN = None  # type: Optional[Connection]
 LOGGER = None  # type: Optional[Logger]
+SYNONYMS = ["IAO:0000118"]
 
 
 @BLUEPRINT.errorhandler(Exception)
@@ -136,14 +137,14 @@ def table(table_name):
     if is_ontology(table_name):
         if request.args.get("format") == "json":
             # Support for typeahead search
-            data = get_search_results(
-                CONN, request.args.get("text", ""), limit=None, statements=table_name, synonyms=[],
+            data = simple_search(
+                CONN, limit=30, search_text=request.args.get("text", ""), statement=table_name,
             )
             return json.dumps(data)
 
         # Maybe get a set of predicates to restrict search results to
         select = request.args.get("select")
-        predicates = ["rdfs:label", "IAO:0000118"]
+        predicates = ["rdfs:label", SYNONYMS[0]]
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
@@ -773,14 +774,7 @@ def dump_search_results(table_name, search_arg=None):
         terms = []
     # return the raw search results to use in typeahead
     return json.dumps(
-        get_search_results(
-            CONN,
-            search_text,
-            limit=None,
-            statements=table_name,
-            synonyms=["IAO:0000118", "CMI-PB:alternativeTerm"],
-            terms=terms,
-        )
+        simple_search(CONN, search_text, limit=30, statement=table_name, terms=terms,)
     )
 
 
@@ -981,17 +975,17 @@ def render_subclass_of(table_name, param, arg):
 
     if request.args.get("format") == "json":
         # Support for searching the subset of these terms
-        data = get_search_results(
+        data = simple_search(
             CONN,
-            limit=None,
+            limit=30,
             search_text=request.args.get("text", ""),
-            statements=table_name,
+            statement=table_name,
             terms=list(terms),
         )
         return json.dumps(data)
     # Maybe get a set of predicates to restrict search results to
     select = request.args.get("select")
-    predicates = ["rdfs:label", "IAO:0000118"]
+    predicates = ["rdfs:label", SYNONYMS[0]]
     if select:
         # TODO: add form at top of page for user to select predicates to show?
         pred_labels = select.split(",")
@@ -1144,18 +1138,11 @@ def render_tree(table_name, term_id: str = None):
         else:
             terms = []
         # Get matching terms (label or synonym - need to support other cols if select is provided)
-        data = get_search_results(
-            CONN,
-            search_text,
-            terms=terms,
-            limit=None,
-            statements=table_name,
-            synonyms=["IAO:0000118"],
-        )
+        data = simple_search(CONN, search_text, limit=30, statement=table_name, terms=terms,)
         data = get_term_attributes(
             CONN,
             terms=[x["id"] for x in data],
-            predicates=["rdfs:label", "IAO:0000118"],
+            predicates=["rdfs:label", SYNONYMS[0]],
             statement=table_name,
         )
         response = render_ontology_table(table_name, data)
@@ -1332,8 +1319,20 @@ def update_term(table_name, term_id):
     return term_id
 
 
-def run(db, table_config, cgi_path=None, log_file=None):
-    global CONFIG, CONN, LOGGER
+def run(db, table_config, cgi_path=None, log_file=None, synonyms=None):
+    """
+    :param db:
+    :param table_config:
+    :param cgi_path:
+    :param log_file:
+    :param synonyms: list of synonyms to include in search results
+                     (the first item of this list is used as the synonym displayed in table view)
+    """
+    global CONFIG, CONN, LOGGER, SYNONYMS
+
+    if synonyms:
+        # Override default (only IAO 'alternative term')
+        SYNONYMS = synonyms
 
     app = Flask(__name__)
     app.register_blueprint(BLUEPRINT)
@@ -1346,7 +1345,8 @@ def run(db, table_config, cgi_path=None, log_file=None):
         fh = logging.FileHandler(log_file)
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(
-            logging.Formatter("%(asctime)s - %(levelname)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
+            logging.Formatter("%(asctime)s - %(levelname)s: %(message)s", "%Y-%m-%d %H:%M:%S")
+        )
         LOGGER.addHandler(fh)
 
     # sqlite3 is required for executescript used in load
@@ -1364,6 +1364,7 @@ def run(db, table_config, cgi_path=None, log_file=None):
     if cgi_path:
         os.environ["SCRIPT_NAME"] = cgi_path
         from wsgiref.handlers import CGIHandler
+
         CGIHandler().run(app)
     else:
         LOGGER.error(os.path.abspath(os.path.join(os.path.dirname(__file__), "templates")))

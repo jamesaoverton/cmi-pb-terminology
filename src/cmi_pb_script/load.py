@@ -123,13 +123,7 @@ def read_config_files(table_table_path, condition_parser):
         "special": {},
         "parser": condition_parser,
         "rule": {},
-        "constraints": {
-            "foreign": {},
-            "unique": {},
-            "primary": {},
-            "tree": {},
-            "under": {},
-        },
+        "constraints": {"foreign": {}, "unique": {}, "primary": {}, "tree": {}, "under": {},},
     }
 
     special_table_types = {
@@ -408,8 +402,7 @@ def validate_and_insert_chunks(config, table_name, chunks):
         for chunk_number, chunk in enumerate(chunks):
             chunk = filter(None, chunk)
             proc = Process(
-                target=validate_rows_intra,
-                args=(config, table_name, chunk, chunk_number, results),
+                target=validate_rows_intra, args=(config, table_name, chunk, chunk_number, results),
             )
             procs.append(proc)
 
