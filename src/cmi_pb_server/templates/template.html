@@ -483,12 +483,12 @@
 	function showVertical(rowNum, offset) {
 		/**
 		 * Show the given row in vertical view. This overrides sprocket default behavior,
-		 * as we are redirecting to {table_name}/{row_number}.
+		 * as we are redirecting to {table_name}/{primary_key}.
 		 */
-		// Get the row_number for this row
-		var sqlRowNum = document.getElementById(`row_number${rowNum}`).innerText;
+		// Get the primary key for this row
+		var sqlPK = document.getElementById(`pk${rowNum}`).innerText;
 		var newURL = "{{ url_for('cmi-pb.table', table_name=table_name) }}";
-		newURL += "/" + sqlRowNum;
+		newURL += "/" + sqlPK;
 		window.location.href = newURL;
 	}
 

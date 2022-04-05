@@ -1,4 +1,3 @@
-import csv
 import json
 import logging
 import os
@@ -16,37 +15,36 @@ from flask import (
     Response,
     url_for,
 )
-from .gizmos_helpers import (
-    flatten,
+from gadget.export import terms2dict, terms2tsv
+from gadget.sql import (
+    get_children,
     get_descendants,
-    get_entity_type,
     get_ids,
     get_labels,
     get_term_attributes,
-    LOGIC_PREDICATES,
-    objects_to_hiccup,
-    terms_to_dict,
+    get_top_entity_type,
 )
-from .gizmos_search import simple_search
-from gizmos.helpers import get_children  # These still work with LDTab
-from gizmos.hiccup import render
-from .gizmos_tree import tree
+from gadget.tree import tree
+from gadget.search import search
+from hiccupy import insert_href, render
 from html import escape as html_escape
-from io import StringIO
+from itertools import chain
 from lark import Lark, UnexpectedCharacters
+from logging import Logger
 from sprocket import (
     get_sql_columns,
     get_sql_tables,
     parse_order_by,
     render_database_table,
     render_html_table,
+    SprocketError,
 )
 from sprocket.grammar import PARSER, SprocketTransformer
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Connection
 from sqlalchemy.sql.expression import bindparam
 from sqlalchemy.sql.expression import text as sql_text
 from typing import Optional, Tuple
-from werkzeug.datastructures import ImmutableMultiDict
 from werkzeug.exceptions import HTTPException
 
 try:
@@ -73,6 +71,15 @@ BUILTIN_LABELS = {
     "owl:differentFrom": "different individual",
 }
 FORM_ROW_ID = 0
+LOGIC_PREDICATES = [
+    "rdfs:subClassOf",
+    "owl:equivalentClass",
+    "owl:disjointWith",
+    "rdfs:subPropertyOf",
+    "rdf:type",
+    "rdfs:domain",
+    "rdfs:range",
+]
 
 BLUEPRINT = Blueprint(
     "cmi-pb",
@@ -137,8 +144,8 @@ def table(table_name):
     if is_ontology(table_name):
         if request.args.get("format") == "json":
             # Support for typeahead search
-            data = simple_search(
-                CONN, limit=30, search_text=request.args.get("text", ""), statement=table_name,
+            data = search(
+                CONN, limit=30, search_text=request.args.get("text", ""), statement=table_name
             )
             return json.dumps(data)
 
@@ -148,13 +155,15 @@ def table(table_name):
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
-            predicates = get_ids(CONN, pred_labels, raise_exc=False, statement=table_name)
+            predicates = get_ids(
+                CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
+            )
 
         # Export the data - excluding anon objects
         data = get_term_attributes(
             CONN, exclude_json=True, predicates=predicates, statement=table_name
         )
-        response = render_ontology_table(table_name, data)
+        response = render_ontology_table(table_name, data, predicates=predicates)
         if isinstance(response, Response):
             return response
         return render_template(
@@ -205,16 +214,26 @@ def table(table_name):
         )
 
     # Otherwise render default sprocket table
-    response = render_database_table(
-        CONN,
-        table_name,
-        display_messages=messages,
-        hide_in_row=["row_number"],
-        ignore_params=["project-name", "branch-name", "view-path"],
-        show_help=True,
-        standalone=False,
-        use_view=True,
-    )
+    pk = get_primary_key(table_name)
+    if pk != "row_number":
+        ignore_cols = ["row_number"]
+    else:
+        ignore_cols = None
+    try:
+        response = render_database_table(
+            CONN,
+            table_name,
+            request.args,
+            display_messages=messages,
+            ignore_cols=ignore_cols,
+            ignore_params=["project-name", "branch-name", "view-path"],
+            primary_key=pk,
+            show_help=True,
+            standalone=False,
+            use_view=True,
+        )
+    except SprocketError as e:
+        return abort(422, str(e))
     if isinstance(response, Response):
         return response
     return render_template(
@@ -226,11 +245,12 @@ def table(table_name):
 def term(table_name, term_id):
     messages = {}
     if not is_ontology(table_name):
-        try:
-            row_number = int(term_id)
-        except ValueError:
-            return abort(400, f"Term ID ({term_id}) for data table must be an integer")
-
+        # Get row number based on PK
+        row_number = get_row_number(table_name, term_id)
+        if not row_number:
+            return abort(
+                500, f"'{term_id}' is not a valid primary key value for table '{table_name}'"
+            )
         view = request.args.get("view")
 
         form_html = None
@@ -250,8 +270,6 @@ def term(table_name, term_id):
                 validated_row = validated_row_2
                 form_html = get_row_as_form(table_name, validated_row)
             elif request.form["action"] == "submit":
-                # Update or add new row
-                row_number = int(term_id)
                 # First validate the row to get the meta columns
                 validated_row = validate_table_row(table_name, new_row, row_number=row_number)
                 # Update the row regardless of results
@@ -264,13 +282,6 @@ def term(table_name, term_id):
                     messages["warn"] = warn
                 else:
                     messages["success"] = ["Row successfully updated!"]
-
-        # Treat term ID as row ID
-        try:
-            row_number = int(term_id)
-        except ValueError:
-            return abort(418, f"ID ({term_id}) must be an integer (row ID) for non-ontology tables")
-        tables = [x for x in get_sql_tables(CONN) if not x.startswith("tmp_")]
 
         if view == "form":
             if not form_html:
@@ -291,28 +302,42 @@ def term(table_name, term_id):
                 messages=messages,
                 row_form=form_html,
                 table_name=table_name,
-                tables=tables,
+                tables=get_sql_tables(CONN),
             )
 
         # Set the request.args to be in the format sprocket expects (like swagger)
         request_args = request.args.to_dict()
         request_args["offset"] = str(row_number - 1)
         request_args["limit"] = "1"
-        request.args = ImmutableMultiDict(request_args)
 
-        response = render_database_table(
-            CONN,
-            table_name,
-            ignore_params=["project-name", "branch-name", "view-path"],
-            show_help=True,
-            show_options=False,
-            standalone=False,
-            use_view=True,
-        )
+        pk = get_primary_key(table_name)
+        if pk != "row_number":
+            ignore_cols = ["row_number"]
+        else:
+            ignore_cols = None
+        try:
+            response = render_database_table(
+                CONN,
+                table_name,
+                request_args,
+                ignore_cols=ignore_cols,
+                ignore_params=["project-name", "branch-name", "view-path"],
+                primary_key=pk,
+                show_help=True,
+                show_options=False,
+                standalone=False,
+                use_view=True,
+            )
+        except SprocketError as e:
+            return abort(422, str(e))
         if isinstance(response, Response):
             return response
         return render_template(
-            "template.html", html=response, include_back=True, table_name=table_name, tables=tables
+            "template.html",
+            html=response,
+            include_back=True,
+            table_name=table_name,
+            tables=get_sql_tables(CONN),
         )
 
     # Redirect to main ontology table search, do not limit search results
@@ -323,7 +348,8 @@ def term(table_name, term_id):
     view = request.args.get("view")
     if view == "form":
         if request.method == "POST":
-            term_id = update_term(table_name, term_id)
+            return abort(501, "POST method for ontology term is not implemented")
+            # term_id = update_term(table_name, pk)
         # editable form that updates database
         return render_term_form(table_name, term_id)
     elif view == "tree":
@@ -336,24 +362,25 @@ def term(table_name, term_id):
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
-            predicates = get_ids(CONN, pred_labels, raise_exc=False, statement=table_name)
+            predicates = get_ids(
+                CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
+            )
 
         data = get_term_attributes(
             CONN,
-            terms=[term_id],
             include_all_predicates=False,
             predicates=predicates,
             statement=table_name,
+            term_ids=[term_id],
         )
 
-        response = render_ontology_table(table_name, data)
+        response = render_ontology_table(table_name, data, predicates=predicates)
         if isinstance(response, Response):
             return response
         base_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
         tree_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id, view="tree")
         html = (
             render(
-                [],
                 [
                     "div",
                     {"class": "row justify-content-end"},
@@ -382,14 +409,21 @@ def term(table_name, term_id):
             )
             + response
         )
-        tables = [x for x in get_sql_tables(CONN) if not x.startswith("tmp_")]
         return render_template(
             "template.html",
             html=html,
             show_search=is_ontology(table_name),
             table_name=table_name,
-            tables=tables,
+            tables=get_sql_tables(CONN),
         )
+
+
+def flatten(lst):
+    for el in lst:
+        if isinstance(el, list) and not isinstance(el, (str, bytes)):
+            yield from flatten(el)
+        else:
+            yield el
 
 
 # ----- DATA TABLE METHODS -----
@@ -595,6 +629,17 @@ def get_html_type_and_values(datatype, values=None) -> Tuple[Optional[str], Opti
     return None, None
 
 
+def get_primary_key(table_name):
+    query = sql_text(
+        'SELECT "column" FROM "column" WHERE "table" = :table AND "structure" LIKE "%%primary%%"'
+    )
+    res = CONN.execute(query, table=table_name).fetchone()
+    if res:
+        return res["column"]
+    else:
+        return "row_number"
+
+
 def get_row_as_form(table_name, row):
     """Transform a row either from query results or validation into a hiccup-style HTML form."""
     html = ["form", {"method": "post"}]
@@ -662,6 +707,11 @@ def get_row_as_form(table_name, row):
             # This will still allow users to input invalid values
             html_type = "search"
 
+        readonly = False
+        if html_type == "readonly":
+            html_type = "text"
+            readonly = True
+
         # Add the hiccup vector for this field as a Bootstrap row containing form elements
         html.append(
             get_hiccup_form_row(
@@ -670,6 +720,7 @@ def get_row_as_form(table_name, row):
                 description=desc,
                 html_type=html_type,
                 message=message,
+                readonly=readonly,
                 valid=valid,
                 value=value,
             )
@@ -718,7 +769,17 @@ def get_row_as_form(table_name, row):
             ],
         ]
     )
-    return render([], html)
+    return render(html)
+
+
+def get_row_number(table_name, primary_key):
+    pk_col = get_primary_key(table_name)
+    res = CONN.execute(
+        sql_text(f'SELECT row_number FROM "{table_name}" WHERE "{pk_col}" = :pk'), pk=primary_key
+    ).fetchone()
+    if not res:
+        return None
+    return int(res["row_number"])
 
 
 def get_messages(row):
@@ -774,7 +835,7 @@ def dump_search_results(table_name, search_arg=None):
         terms = []
     # return the raw search results to use in typeahead
     return json.dumps(
-        simple_search(CONN, search_text, limit=30, statement=table_name, terms=terms,)
+        search(CONN, limit=30, search_text=search_text, statement=table_name, term_ids=terms)
     )
 
 
@@ -814,20 +875,18 @@ def merge_dicts(d1, d2):
     return d_copy
 
 
-def render_ontology_table(table_name, data, term_id=None):
+def render_ontology_table(table_name, data, predicates: list = None, term_id=None):
     """
     :param table_name: name of SQL table that contains terms
     :param data: data to render - dict of term ID -> predicate ID -> list of JSON objects
     """
     # TODO: do we care about displaying annotations in this table view? Or only on term view?
-    results = CONN.execute("SELECT prefix, base FROM prefix;").fetchall()
-    prefixes = [(res["prefix"], res["base"]) for res in results]
-
+    # Reverse the ID -> label dictionary to translate column names to IDs
+    if not predicates:
+        predicates = set(chain.from_iterable([list(x.keys()) for x in data.values()]))
+    predicate_labels = get_labels(CONN, list(predicates), statement=table_name)
     # Order based on raw value of 'object', don't worry about rendering
     if request.args.get("order"):
-        # Reverse the ID -> label dictionary to translate column names to IDs
-        predicates = set(flatten([list(x.keys()) for x in data.values()]))
-        predicate_labels = get_labels(CONN, list(predicates), statement=table_name)
         label_to_id = {v: k for k, v in predicate_labels.items()}
         order_by = parse_order_by(request.args["order"])
         for ob in order_by:
@@ -863,9 +922,6 @@ def render_ontology_table(table_name, data, term_id=None):
     offset = int(request.args.get("offset", "0"))
     limit = int(request.args.get("limit", "100")) + offset
 
-    # TODO: issue with ordering, we can't order without having everything rendered
-    #       but rendering takes too long on everything...
-    # TODO: make sure this is efficient
     data = [[k, v] for k, v in data.items()]
     data_subset = {k: v for k, v in data[offset:limit]}
     post_subset = {k: v for k, v in data[limit:]}
@@ -875,24 +931,23 @@ def render_ontology_table(table_name, data, term_id=None):
 
     if not fmt:
         # Convert objects to hiccup with ofn
-        rendered = objects_to_hiccup(
-            CONN, data_subset, include_annotations=True, statement=table_name
+        rendered = terms2dict(
+            CONN, data_subset, hiccup=True, include_annotations=True, statement=table_name
         )
         for term_id, predicate_objects in rendered.items():
             # Render using hiccup module
             rendered_term = {}
             for predicate_id, hiccup in predicate_objects.items():
                 if hiccup:
-                    rendered_term[predicate_id] = render(
-                        prefixes, hiccup, href=get_href_pattern(table_name)
-                    )
+                    hiccup = insert_href(hiccup, href=get_href_pattern(table_name))
+                    rendered_term[predicate_id] = render(hiccup)
                 else:
                     rendered_term[predicate_id] = None
             data[term_id] = rendered_term
         data.update(post_subset)
 
-        predicates = list(set(flatten([list(x.keys()) for x in rendered.values()])))
-        predicate_labels = get_labels(CONN, predicates, statement=table_name)
+        predicates = set(chain.from_iterable([list(x.keys()) for x in rendered.values()]))
+        predicate_labels = get_labels(CONN, list(predicates), statement=table_name)
 
         # Create the HTML output of data
         table_data = []
@@ -901,7 +956,6 @@ def render_ontology_table(table_name, data, term_id=None):
             term_id = html_escape(term_id)
             term_data = {
                 "ID": render(
-                    [],
                     [
                         "a",
                         {"href": url_for("cmi-pb.term", table_name=table_name, term_id=term_id)},
@@ -916,33 +970,35 @@ def render_ontology_table(table_name, data, term_id=None):
             base_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
         else:
             base_url = url_for("cmi-pb.table", table_name=table_name)
-        return render_html_table(
-            table_data,
-            table_name,
-            [],
-            request.args,
-            base_url=base_url,
-            hidden=["search_text"],
-            ignore_params=["project-name", "branch-name", "view-path"],
-            show_options=False,
-            include_expand=False,
-            standalone=False,
-        )
+        try:
+            predicates = list(predicates)
+            predicates.insert(0, "ID")
+            return render_html_table(
+                table_data,
+                table_name,
+                request.args,
+                base_url=base_url,
+                columns=[predicate_labels.get(p, p) for p in predicates],
+                hidden=["search_text"],
+                ignore_params=["project-name", "branch-name", "view-path"],
+                include_expand=False,
+                show_options=False,
+                standalone=False,
+            )
+        except SprocketError as e:
+            abort(422, str(e))
     elif fmt.lower() in ["tsv", "csv"]:
         # Create TSV or CSV export of data
         field_sep = request.args.get("sep", "|")
-        term_dict = terms_to_dict(CONN, data_subset, sep=field_sep, statement=table_name)
-        headers = term_dict[0].keys()
-        sep = "\t"
         mt = "text/tab-separated-values"
+        delimiter = "\t"
         if fmt.lower() == "csv":
-            sep = ","
+            delimiter = ","
             mt = "text/comma-separated-values"
-        output = StringIO()
-        writer = csv.DictWriter(output, delimiter=sep, fieldnames=headers, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(term_dict)
-        return Response(output.getvalue(), mimetype=mt)
+        return Response(
+            terms2tsv(CONN, data_subset, delimiter=delimiter, sep=field_sep, statement=table_name),
+            mimetype=mt,
+        )
     else:
         return abort(400, "Unknown export format: " + fmt)
 
@@ -958,29 +1014,29 @@ def render_subclass_of(table_name, param, arg):
     terms = set()
     if param == "subClassOf":
         for p in id_to_label.keys():
-            terms.update(get_children(CONN, p, statements=table_name))
+            terms.update(get_children(CONN, p, statement=table_name))
     elif param == "subClassOf?":
         terms.update(id_to_label.keys())
         for p in id_to_label.keys():
-            terms.update(get_children(CONN, p, statements=table_name))
+            terms.update(get_children(CONN, p, statement=table_name))
     elif param == "subClassOfplus":
         for p in id_to_label.keys():
-            terms.update(get_descendants(CONN, p, statements=table_name))
+            terms.update(get_descendants(CONN, p, statement=table_name))
     elif param == "subClassOf*":
         terms.update(id_to_label.keys())
         for p in id_to_label.keys():
-            terms.update(get_descendants(CONN, p, statements=table_name))
+            terms.update(get_descendants(CONN, p, statement=table_name))
     else:
         abort(400, "Unknown 'subClassOf' query parameter: " + param)
 
     if request.args.get("format") == "json":
         # Support for searching the subset of these terms
-        data = simple_search(
+        data = search(
             CONN,
             limit=30,
             search_text=request.args.get("text", ""),
             statement=table_name,
-            terms=list(terms),
+            term_ids=list(terms),
         )
         return json.dumps(data)
     # Maybe get a set of predicates to restrict search results to
@@ -989,12 +1045,14 @@ def render_subclass_of(table_name, param, arg):
     if select:
         # TODO: add form at top of page for user to select predicates to show?
         pred_labels = select.split(",")
-        predicates = get_ids(CONN, pred_labels, raise_exc=False, statement=table_name)
+        predicates = get_ids(
+            CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
+        )
 
     data = get_term_attributes(
-        CONN, exclude_json=True, terms=list(terms), predicates=predicates, statement=table_name
+        CONN, exclude_json=True, predicates=predicates, statement=table_name, term_ids=list(terms)
     )
-    response = render_ontology_table(table_name, data)
+    response = render_ontology_table(table_name, data, predicates=predicates)
     if isinstance(response, Response):
         return response
     return render_template(
@@ -1010,7 +1068,7 @@ def render_subclass_of(table_name, param, arg):
 
 def render_term_form(table_name, term_id):
     global FORM_ROW_ID
-    entity_type = get_entity_type(CONN, term_id, statements=table_name)
+    entity_type = get_top_entity_type(CONN, term_id, statements=table_name)
 
     # Get all annotation properties
     query = sql_text(
@@ -1019,7 +1077,7 @@ def render_term_form(table_name, term_id):
     results = CONN.execute(query, {"logic": LOGIC_PREDICATES}).fetchall()
     aps = get_labels(CONN, [x["predicate"] for x in results], statement=table_name)
 
-    term_details = get_term_attributes(CONN, terms=[term_id], statement=table_name)
+    term_details = get_term_attributes(CONN, statement=table_name, term_ids=[term_id])
     if not term_details:
         return abort(400, f"Unable to find term {term_id} in '{table_name}' table")
     term_details = term_details[term_id]
@@ -1120,8 +1178,8 @@ def render_term_form(table_name, term_id):
         term_id=term_id,
         title=f"Update " + label or term_id,
         annotation_properties=aps,
-        metadata=render([], metadata_html),
-        logic=render([], logic_html),
+        metadata=render(metadata_html),
+        logic=render(logic_html),
         entity_type=entity_type,
     )
 
@@ -1138,14 +1196,14 @@ def render_tree(table_name, term_id: str = None):
         else:
             terms = []
         # Get matching terms (label or synonym - need to support other cols if select is provided)
-        data = simple_search(CONN, search_text, limit=30, statement=table_name, terms=terms,)
+        data = search(CONN, limit=30, search_text=search_text, statement=table_name, term_ids=terms)
         data = get_term_attributes(
             CONN,
-            terms=[x["id"] for x in data],
             predicates=["rdfs:label", SYNONYMS[0]],
             statement=table_name,
+            term_ids=[x["id"] for x in data],
         )
-        response = render_ontology_table(table_name, data)
+        response = render_ontology_table(table_name, data, predicates=["rdfs:label", SYNONYMS[0]])
         if isinstance(response, Response):
             return response
         return render_template(
@@ -1168,12 +1226,12 @@ def render_tree(table_name, term_id: str = None):
         html += "</div></div></div>"
     html += tree(
         CONN,
-        "ontie",
-        term_id,
         href=get_href_pattern(table_name, view="tree"),
+        include_search=False,
         standalone=False,
         max_children=20,
-        statements=table_name,
+        statement=table_name,
+        term_id=term_id,
     )
     tables = [x for x in get_sql_tables(CONN) if not x.startswith("tmp_")]
     return render_template(
@@ -1281,7 +1339,7 @@ def update_term(table_name, term_id):
 
         new_objects = request.form.getlist(predicate)
         # TODO: instead of getting IDs, use wiring to translate manchester into JSON object
-        new_obj_ids = get_ids(CONN, new_objects, statement=table_name)
+        new_obj_ids = get_ids(CONN, id_or_labels=new_objects, statement=table_name)
         if len(new_objects) > len(new_obj_ids):
             LOGGER.error(
                 "Cannot get IDs for one or more terms from term list: " + ", ".join(new_objects)

@@ -29,5 +29,5 @@ setup(
     install_requires=install_requires,
     packages=find_packages(exclude="test"),
     python_requires=">=3.6, <4",
-    package_data={"cmi_pb_server": ["templates/*.html"]}
+    package_data={"cmi_pb_server": ["templates/*.html"]},
 )
