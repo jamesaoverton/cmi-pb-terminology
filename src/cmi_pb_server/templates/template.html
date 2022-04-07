@@ -192,7 +192,7 @@
 <body>
 	<nav class="navbar navbar-expand-lg navbar-light bg-light">
 		<div class="container-fluid">
-			<a class="navbar-brand">CMI-PB Terminology</a>
+			<a class="navbar-brand">{{ project_name }}</a>
 			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
 				<li class="nav-item dropdown">
 					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -408,15 +408,14 @@
 		 * This overrides gizmos default behavior.
 		 */
 		var curURL = window.location.href;
-		console.l
 		var tableURL = curURL.substr(0, curURL.lastIndexOf("/"));
 		var termId = curURL.substr(curURL.lastIndexOf("/") + 1);
 		if (termId.includes("?")) {
 			termId = termId.split("?")[0];
 		}
-		if (termId === tableURL.substr(tableURL.lastIndexOf("/") + 1)) {
-			// if the termID is the table name, we just want to see classes
+		if (termId === "{{ table_name }}") {
 			termId = "owl:Thing";
+			tableURL = tableURL + "/{{ table_name }}";
 		}
 		if (termId == "owl:Class") {
 			termId = "owl:Thing";

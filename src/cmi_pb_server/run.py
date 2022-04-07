@@ -90,6 +90,7 @@ CONFIG = None  # type: Optional[dict]
 CONN = None  # type: Optional[Connection]
 LOGGER = None  # type: Optional[Logger]
 SYNONYMS = ["IAO:0000118"]
+TITLE = "Terminology"
 
 
 @BLUEPRINT.errorhandler(Exception)
@@ -99,6 +100,7 @@ def handle_exception(e):
     return (
         render_template(
             "template.html",
+            project_name=TITLE,
             tables=get_sql_tables(CONN),
             html="<code>" + "<br>".join(traceback.format_exc().split("\n")),
         )
@@ -110,6 +112,7 @@ def handle_exception(e):
 def index():
     return render_template(
         "template.html",
+        project_name=TITLE,
         html="<h3>Welcome</h3><p>Please select a table</p>",
         tables=get_sql_tables(CONN),
     )
@@ -169,6 +172,7 @@ def table(table_name):
         return render_template(
             "template.html",
             html=response,
+            project_name=TITLE,
             title="Showing terms from " + table_name,
             subtitle=f'<a href="{url_for("cmi-pb.table", table_name=table_name, view="tree")}">View as tree</a>',
             show_search=True,
@@ -206,6 +210,7 @@ def table(table_name):
             form_html = get_row_as_form(table_name, row)
         return render_template(
             "data_form.html",
+            project_name=TITLE,
             include_back=True,
             messages=messages,
             row_form=form_html,
@@ -237,7 +242,7 @@ def table(table_name):
     if isinstance(response, Response):
         return response
     return render_template(
-        "template.html", html=response, table_name=table_name, tables=get_sql_tables(CONN)
+        "template.html", html=response, project_name=TITLE, table_name=table_name, tables=get_sql_tables(CONN)
     )
 
 
@@ -298,6 +303,7 @@ def term(table_name, term_id):
 
             return render_template(
                 "data_form.html",
+                project_name=TITLE,
                 include_back=True,
                 messages=messages,
                 row_form=form_html,
@@ -334,6 +340,7 @@ def term(table_name, term_id):
             return response
         return render_template(
             "template.html",
+            project_name=TITLE,
             html=response,
             include_back=True,
             table_name=table_name,
@@ -411,6 +418,7 @@ def term(table_name, term_id):
         )
         return render_template(
             "template.html",
+            project_name=TITLE,
             html=html,
             show_search=is_ontology(table_name),
             table_name=table_name,
@@ -1057,6 +1065,7 @@ def render_subclass_of(table_name, param, arg):
         return response
     return render_template(
         "template.html",
+        project_name=TITLE,
         html=response,
         title=title,
         add_params=f"{param}={arg}",
@@ -1172,6 +1181,7 @@ def render_term_form(table_name, term_id):
     FORM_ROW_ID = 0
     return render_template(
         "ontology_form.html",
+        project_name=TITLE,
         include_back=True,
         table_name=table_name,
         tables=get_sql_tables(CONN),
@@ -1208,6 +1218,7 @@ def render_tree(table_name, term_id: str = None):
             return response
         return render_template(
             "template.html",
+            project_name=TITLE,
             html=response,
             title=f"Showing search results for '{search_text}'",
             show_search=True,
@@ -1235,7 +1246,7 @@ def render_tree(table_name, term_id: str = None):
     )
     tables = [x for x in get_sql_tables(CONN) if not x.startswith("tmp_")]
     return render_template(
-        "template.html", html=html, show_search=True, table_name=table_name, tables=tables,
+        "template.html", project_name=TITLE, html=html, show_search=True, table_name=table_name, tables=tables,
     )
 
 
@@ -1377,7 +1388,7 @@ def update_term(table_name, term_id):
     return term_id
 
 
-def run(db, table_config, cgi_path=None, log_file=None, synonyms=None):
+def run(db, table_config, cgi_path=None, log_file=None, synonyms=None, title=None):
     """
     :param db:
     :param table_config:
@@ -1386,11 +1397,13 @@ def run(db, table_config, cgi_path=None, log_file=None, synonyms=None):
     :param synonyms: list of synonyms to include in search results
                      (the first item of this list is used as the synonym displayed in table view)
     """
-    global CONFIG, CONN, LOGGER, SYNONYMS
+    global CONFIG, CONN, LOGGER, SYNONYMS, TITLE
 
     if synonyms:
         # Override default (only IAO 'alternative term')
         SYNONYMS = synonyms
+    if title:
+        TITLE = title
 
     app = Flask(__name__)
     app.register_blueprint(BLUEPRINT)
