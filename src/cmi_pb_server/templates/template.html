@@ -414,6 +414,10 @@
 		if (termId.includes("?")) {
 			termId = termId.split("?")[0];
 		}
+		if (termId === tableURL.substr(tableURL.lastIndexOf("/") + 1)) {
+			// if the termID is the table name, we just want to see classes
+			termId = "owl:Thing";
+		}
 		if (termId == "owl:Class") {
 			termId = "owl:Thing";
 		}
