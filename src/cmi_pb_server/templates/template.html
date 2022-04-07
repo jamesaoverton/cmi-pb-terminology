@@ -414,6 +414,9 @@
 		if (termId.includes("?")) {
 			termId = termId.split("?")[0];
 		}
+		if (termId == "owl:Class") {
+			termId = "owl:Thing";
+		}
 		var url = new URL(tableURL);
 		url.searchParams.append("subClassOf", termId);
 		window.location = url;
