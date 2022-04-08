@@ -119,6 +119,17 @@ def index():
     )
 
 
+@BLUEPRINT.route("/<table_name>/row/<row_number>", methods=["GET", "POST"])
+def row(table_name, row_number):
+    if is_ontology(table_name):
+        return abort(400, f"'row' path is not valid for ontology table '{table_name}'")
+    try:
+        row_number = int(row_number)
+    except ValueError:
+        return abort(400, f"Row number '{row_number}' must be an integer")
+    return render_row_from_database(table_name, row_number)
+
+
 @BLUEPRINT.route("/<table_name>", methods=["GET", "POST"])
 def table(table_name):
     messages = defaultdict(list)
@@ -193,6 +204,7 @@ def table(table_name):
         )
 
     form_html = None
+    pk = get_primary_key(table_name)
     if request.method == "POST":
         # Override view, which isn't passed in POST
         view = "form"
@@ -202,8 +214,27 @@ def table(table_name):
         if request.form["action"] == "validate":
             form_html = get_row_as_form(table_name, validated_row)
         elif request.form["action"] == "submit":
+            # Add row to the database and get the new row number
             row_number = insert_new_row(CONFIG, table_name, validated_row)
-            return redirect(url_for("cmi-pb.term", table_name=table_name, term_id=row_number))
+            # Use row number to get the primary key for this row & redirect to new term
+            if pk == "row_number":
+                row_pk = row_number
+            else:
+                res = CONN.execute(
+                    sql_text(
+                        f"""SELECT DISTINCT "{pk}" from "{table_name}_view"
+                        WHERE row_number = :row_number"""
+                    ),
+                    row_number=row_number,
+                ).fetchone()
+                if res and res[pk]:
+                    row_pk = res[pk]
+                else:
+                    # This row does not have a primary key, meaning it is a conflict
+                    # Use "row" format for URL
+                    row_pk = f"row/{row_number}"
+            logging.error(row_pk)
+            return redirect(url_for("cmi-pb.term", table_name=table_name, term_id=row_pk))
 
     if view == "form":
         if not form_html:
@@ -220,7 +251,6 @@ def table(table_name):
         )
 
     # Otherwise render default sprocket table
-    pk = get_primary_key(table_name)
     if pk != "row_number":
         ignore_cols = ["row_number"]
     else:
@@ -249,7 +279,6 @@ def table(table_name):
 
 @BLUEPRINT.route("/<table_name>/<term_id>", methods=["GET", "POST"])
 def term(table_name, term_id):
-    messages = {}
     if not is_ontology(table_name):
         # Get row number based on PK
         row_number = get_row_number(table_name, term_id)
@@ -257,96 +286,7 @@ def term(table_name, term_id):
             return abort(
                 500, f"'{term_id}' is not a valid primary key value for table '{table_name}'"
             )
-        view = request.args.get("view")
-
-        form_html = None
-        if request.method == "POST":
-            # Get the row from the form and remove the hidden param
-            new_row = dict(request.form)
-            del new_row["action"]
-
-            # Manually override view, which is not included in request.args in CGI app
-            view = "form"
-
-            if request.form["action"] == "validate":
-                validated_row = validate_table_row(table_name, new_row, row_number=row_number)
-                # Place row_number first
-                validated_row_2 = {"row_number": row_number}
-                validated_row_2.update(validated_row)
-                validated_row = validated_row_2
-                form_html = get_row_as_form(table_name, validated_row)
-            elif request.form["action"] == "submit":
-                # First validate the row to get the meta columns
-                validated_row = validate_table_row(table_name, new_row, row_number=row_number)
-                # Update the row regardless of results
-                # Row ID may be different than row number, if exists
-                update_row(CONFIG, table_name, validated_row, row_number)
-                messages = get_messages(validated_row)
-                if messages.get("error"):
-                    warn = messages.get("warn", [])
-                    warn.append(f"Row updated with {len(messages['error'])} errors")
-                    messages["warn"] = warn
-                else:
-                    messages["success"] = ["Row successfully updated!"]
-
-        if view == "form":
-            if not form_html:
-                # Get the row
-                res = dict(
-                    CONN.execute(
-                        f"SELECT * FROM {table_name}_view WHERE row_number = {row_number}"
-                    ).fetchone()
-                )
-                form_html = get_row_as_form(table_name, res)
-
-            if not form_html:
-                return abort(500, "something went wrong - unable to render form")
-
-            return render_template(
-                "data_form.html",
-                project_name=TITLE,
-                include_back=True,
-                messages=messages,
-                row_form=form_html,
-                table_name=table_name,
-                tables=get_sql_tables(CONN),
-            )
-
-        # Set the request.args to be in the format sprocket expects (like swagger)
-        request_args = request.args.to_dict()
-        request_args["offset"] = str(row_number - 1)
-        request_args["limit"] = "1"
-
-        pk = get_primary_key(table_name)
-        if pk != "row_number":
-            ignore_cols = ["row_number"]
-        else:
-            ignore_cols = None
-        try:
-            response = render_database_table(
-                CONN,
-                table_name,
-                request_args,
-                ignore_cols=ignore_cols,
-                ignore_params=["project-name", "branch-name", "view-path"],
-                primary_key=pk,
-                show_help=True,
-                show_options=False,
-                standalone=False,
-                use_view=True,
-            )
-        except SprocketError as e:
-            return abort(422, str(e))
-        if isinstance(response, Response):
-            return response
-        return render_template(
-            "template.html",
-            project_name=TITLE,
-            html=response,
-            include_back=True,
-            table_name=table_name,
-            tables=get_sql_tables(CONN),
-        )
+        return render_row_from_database(table_name, row_number)
 
     # Redirect to main ontology table search, do not limit search results
     search_text = request.args.get("text")
@@ -656,8 +596,10 @@ def get_row_as_form(table_name, row):
     if row_number:
         html.append(get_hiccup_form_row("row_number", readonly=True, value=row_number))
     row_valid = None
+
     for header, value in row.items():
         if header == "row_number" or header.endswith("_meta"):
+            logging.error("rn")
             continue
 
         # Get the details from the value,
@@ -812,6 +754,99 @@ def get_messages(row):
                         messages["info"] = list()
                     messages["info"].append(msg["message"])
     return messages
+
+
+def render_row_from_database(table_name, row_number):
+    view = request.args.get("view")
+    messages = None
+    form_html = None
+    if request.method == "POST":
+        # Get the row from the form and remove the hidden param
+        new_row = dict(request.form)
+        del new_row["action"]
+
+        # Manually override view, which is not included in request.args in CGI app
+        view = "form"
+
+        if request.form["action"] == "validate":
+            validated_row = validate_table_row(table_name, new_row, row_number=row_number)
+            # Place row_number first
+            validated_row_2 = {"row_number": row_number}
+            validated_row_2.update(validated_row)
+            validated_row = validated_row_2
+            form_html = get_row_as_form(table_name, validated_row)
+        elif request.form["action"] == "submit":
+            # First validate the row to get the meta columns
+            validated_row = validate_table_row(table_name, new_row, row_number=row_number)
+            # Update the row regardless of results
+            # Row ID may be different than row number, if exists
+            update_row(CONFIG, table_name, validated_row, row_number)
+            messages = get_messages(validated_row)
+            if messages.get("error"):
+                warn = messages.get("warn", [])
+                warn.append(f"Row updated with {len(messages['error'])} errors")
+                messages["warn"] = warn
+            else:
+                messages["success"] = ["Row successfully updated!"]
+
+    if view == "form":
+        if not form_html:
+            # Get the row
+            res = dict(
+                CONN.execute(
+                    f"SELECT * FROM {table_name}_view WHERE row_number = {row_number}"
+                ).fetchone()
+            )
+            form_html = get_row_as_form(table_name, res)
+
+        if not form_html:
+            return abort(500, "something went wrong - unable to render form")
+
+        return render_template(
+            "data_form.html",
+            project_name=TITLE,
+            include_back=True,
+            messages=messages,
+            row_form=form_html,
+            table_name=table_name,
+            tables=get_sql_tables(CONN),
+        )
+
+    # Set the request.args to be in the format sprocket expects (like swagger)
+    request_args = request.args.to_dict()
+    request_args["offset"] = str(row_number - 1)
+    request_args["limit"] = "1"
+
+    pk = get_primary_key(table_name)
+    if pk != "row_number":
+        ignore_cols = ["row_number"]
+    else:
+        ignore_cols = None
+    try:
+        response = render_database_table(
+            CONN,
+            table_name,
+            request_args,
+            ignore_cols=ignore_cols,
+            ignore_params=["project-name", "branch-name", "view-path"],
+            primary_key=pk,
+            show_help=True,
+            show_options=False,
+            standalone=False,
+            use_view=True,
+        )
+    except SprocketError as e:
+        return abort(422, str(e))
+    if isinstance(response, Response):
+        return response
+    return render_template(
+        "template.html",
+        project_name=TITLE,
+        html=response,
+        include_back=True,
+        table_name=table_name,
+        tables=get_sql_tables(CONN),
+    )
 
 
 def validate_table_row(table_name, row, row_number=None):
