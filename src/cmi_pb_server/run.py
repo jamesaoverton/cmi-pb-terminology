@@ -89,6 +89,7 @@ BLUEPRINT = Blueprint(
 CONFIG = None  # type: Optional[dict]
 CONN = None  # type: Optional[Connection]
 LOGGER = None  # type: Optional[Logger]
+MAX_CHILDREN = 20
 SYNONYMS = ["IAO:0000118"]
 TITLE = "Terminology"
 
@@ -1240,7 +1241,7 @@ def render_tree(table_name, term_id: str = None):
         href=get_href_pattern(table_name, view="tree"),
         include_search=False,
         standalone=False,
-        max_children=20,
+        max_children=MAX_CHILDREN,
         statement=table_name,
         term_id=term_id,
     )
@@ -1388,22 +1389,27 @@ def update_term(table_name, term_id):
     return term_id
 
 
-def run(db, table_config, cgi_path=None, log_file=None, synonyms=None, title=None):
+def run(db, table_config, cgi_path=None, log_file=None, max_children=20, synonyms=None, title=None):
     """
-    :param db:
-    :param table_config:
-    :param cgi_path:
-    :param log_file:
+    :param db: path to database
+    :param table_config: path to table TSV file
+    :param cgi_path: path to the script to use as SCRIPT_NAME environment variable
+                     - this will run the app in CGI mode
+    :param log_file: path to a log file - if not provided, logging will output to console
+    :param max_children: max number of child nodes to display in tree view
     :param synonyms: list of synonyms to include in search results
                      (the first item of this list is used as the synonym displayed in table view)
+    :param title: project title to display in header
     """
-    global CONFIG, CONN, LOGGER, SYNONYMS, TITLE
+    global CONFIG, CONN, LOGGER, MAX_CHILDREN, SYNONYMS, TITLE
 
     if synonyms:
         # Override default (only IAO 'alternative term')
         SYNONYMS = synonyms
     if title:
         TITLE = title
+    if max_children:
+        MAX_CHILDREN = max_children
 
     app = Flask(__name__)
     app.register_blueprint(BLUEPRINT)
