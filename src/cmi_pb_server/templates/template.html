@@ -437,15 +437,11 @@
 		if (ele === null) {
 			ele = document.getElementById("sqlTableHorizontal");
 			if (ele === null) {
-				// We are currently ignoring ontology editing
-				includeEdit = false;
-				// ele = document.getElementById("gizmosTree");
-				// if (ele === null) {
-					// Not correct view
-					// return;
-				// }
-				// Include both edit & new buttons
-				// includeNew = true;
+				ele = document.getElementById("gadgetTree");
+				if (ele === null) {
+					// Not correct view - no edit button needed
+					return;
+				}
 			} else {
 				// Multiple rows, include only 'new' button
 				includeEdit = false;

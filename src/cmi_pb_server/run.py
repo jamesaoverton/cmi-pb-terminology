@@ -89,9 +89,14 @@ BLUEPRINT = Blueprint(
 CONFIG = None  # type: Optional[dict]
 CONN = None  # type: Optional[Connection]
 LOGGER = None  # type: Optional[Logger]
-MAX_CHILDREN = 20
-SYNONYMS = ["IAO:0000118"]
-TITLE = "Terminology"
+
+OPTIONS = {
+    "hide_index": False,
+    "max_children": 20,
+    "synonym": "IAO:0000118",
+    "term_index": None,
+    "title": "Terminology",
+}
 
 
 @BLUEPRINT.errorhandler(Exception)
@@ -101,8 +106,8 @@ def handle_exception(e):
     return (
         render_template(
             "template.html",
-            project_name=TITLE,
-            tables=get_sql_tables(CONN),
+            project_name=OPTIONS["title"],
+            tables=get_display_tables(),
             html="<code>" + "<br>".join(traceback.format_exc().split("\n")),
         )
         + "</code>"
@@ -113,9 +118,9 @@ def handle_exception(e):
 def index():
     return render_template(
         "template.html",
-        project_name=TITLE,
+        project_name=OPTIONS["title"],
         html="<h3>Welcome</h3><p>Please select a table</p>",
-        tables=get_sql_tables(CONN),
+        tables=get_display_tables(),
     )
 
 
@@ -166,7 +171,7 @@ def table(table_name):
 
         # Maybe get a set of predicates to restrict search results to
         select = request.args.get("select")
-        predicates = ["rdfs:label", SYNONYMS[0]]
+        predicates = ["rdfs:label", OPTIONS["synonym"]]
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
@@ -184,12 +189,12 @@ def table(table_name):
         return render_template(
             "template.html",
             html=response,
-            project_name=TITLE,
+            project_name=OPTIONS["title"],
             title="Showing terms from " + table_name,
             subtitle=f'<a href="{url_for("cmi-pb.table", table_name=table_name, view="tree")}">View as tree</a>',
             show_search=True,
             table_name=table_name,
-            tables=get_sql_tables(CONN),
+            tables=get_display_tables(),
         )
 
     # Typeahead for autocomplete in data forms
@@ -233,7 +238,6 @@ def table(table_name):
                     # This row does not have a primary key, meaning it is a conflict
                     # Use "row" format for URL
                     row_pk = f"row/{row_number}"
-            logging.error(row_pk)
             return redirect(url_for("cmi-pb.term", table_name=table_name, term_id=row_pk))
 
     if view == "form":
@@ -242,12 +246,12 @@ def table(table_name):
             form_html = get_row_as_form(table_name, row)
         return render_template(
             "data_form.html",
-            project_name=TITLE,
+            project_name=OPTIONS["title"],
             include_back=True,
             messages=messages,
             row_form=form_html,
             table_name=table_name,
-            tables=get_sql_tables(CONN),
+            tables=get_display_tables(),
         )
 
     # Otherwise render default sprocket table
@@ -273,7 +277,11 @@ def table(table_name):
     if isinstance(response, Response):
         return response
     return render_template(
-        "template.html", html=response, project_name=TITLE, table_name=table_name, tables=get_sql_tables(CONN)
+        "template.html",
+        html=response,
+        project_name=OPTIONS["title"],
+        table_name=table_name,
+        tables=get_display_tables(),
     )
 
 
@@ -299,6 +307,23 @@ def term(table_name, term_id):
             return abort(501, "POST method for ontology term is not implemented")
             # term_id = update_term(table_name, pk)
         # editable form that updates database
+        term_index = OPTIONS["term_index"]
+        if term_index and term_index in get_sql_tables(CONN):
+            # TODO: this is currently specific to MRO
+            index_cols = get_sql_columns(CONN, OPTIONS["term_index"])
+            if "table" in index_cols:
+                # Try to find a template for this term & redirect to the form for that
+                res = CONN.execute(
+                    sql_text(f'SELECT "table" FROM "{term_index}" WHERE ID == :term_id'),
+                    term_id=term_id,
+                ).fetchone()
+                if res:
+                    return redirect(
+                        url_for(
+                            "cmi-pb.term", table_name=res["table"], term_id=term_id, view="form"
+                        )
+                    )
+        # No template for this term -- show form for ontology term
         return render_term_form(table_name, term_id)
     elif view == "tree":
         return render_tree(table_name, term_id=term_id)
@@ -359,11 +384,11 @@ def term(table_name, term_id):
         )
         return render_template(
             "template.html",
-            project_name=TITLE,
+            project_name=OPTIONS["title"],
             html=html,
             show_search=is_ontology(table_name),
             table_name=table_name,
-            tables=get_sql_tables(CONN),
+            tables=get_display_tables(),
         )
 
 
@@ -373,6 +398,12 @@ def flatten(lst):
             yield from flatten(el)
         else:
             yield el
+
+
+def get_display_tables():
+    if OPTIONS["term_index"] and OPTIONS["hide_index"]:
+        return [x for x in get_sql_tables(CONN) if x != OPTIONS["term_index"]]
+    return get_sql_tables(CONN)
 
 
 # ----- DATA TABLE METHODS -----
@@ -593,13 +624,13 @@ def get_row_as_form(table_name, row):
     """Transform a row either from query results or validation into a hiccup-style HTML form."""
     html = ["form", {"method": "post"}]
     row_number = row.get("row_number")
-    if row_number:
+    if get_primary_key(table_name) == "row_number":
+        # Only show row num if this is the primary key - do not allow user to edit
         html.append(get_hiccup_form_row("row_number", readonly=True, value=row_number))
     row_valid = None
 
     for header, value in row.items():
         if header == "row_number" or header.endswith("_meta"):
-            logging.error("rn")
             continue
 
         # Get the details from the value,
@@ -804,12 +835,12 @@ def render_row_from_database(table_name, row_number):
 
         return render_template(
             "data_form.html",
-            project_name=TITLE,
+            project_name=OPTIONS["title"],
             include_back=True,
             messages=messages,
             row_form=form_html,
             table_name=table_name,
-            tables=get_sql_tables(CONN),
+            tables=get_display_tables(),
         )
 
     # Set the request.args to be in the format sprocket expects (like swagger)
@@ -841,11 +872,11 @@ def render_row_from_database(table_name, row_number):
         return response
     return render_template(
         "template.html",
-        project_name=TITLE,
+        project_name=OPTIONS["title"],
         html=response,
         include_back=True,
         table_name=table_name,
-        tables=get_sql_tables(CONN),
+        tables=get_display_tables(),
     )
 
 
@@ -1085,7 +1116,7 @@ def render_subclass_of(table_name, param, arg):
         return json.dumps(data)
     # Maybe get a set of predicates to restrict search results to
     select = request.args.get("select")
-    predicates = ["rdfs:label", SYNONYMS[0]]
+    predicates = ["rdfs:label", OPTIONS["synonym"]]
     if select:
         # TODO: add form at top of page for user to select predicates to show?
         pred_labels = select.split(",")
@@ -1101,13 +1132,13 @@ def render_subclass_of(table_name, param, arg):
         return response
     return render_template(
         "template.html",
-        project_name=TITLE,
+        project_name=OPTIONS["title"],
         html=response,
         title=title,
         add_params=f"{param}={arg}",
         show_search=True,
         table_name=table_name,
-        tables=get_sql_tables(CONN),
+        tables=get_display_tables(),
     )
 
 
@@ -1217,10 +1248,10 @@ def render_term_form(table_name, term_id):
     FORM_ROW_ID = 0
     return render_template(
         "ontology_form.html",
-        project_name=TITLE,
+        project_name=OPTIONS["title"],
         include_back=True,
         table_name=table_name,
-        tables=get_sql_tables(CONN),
+        tables=get_display_tables(),
         term_id=term_id,
         title=f"Update " + label or term_id,
         annotation_properties=aps,
@@ -1245,21 +1276,23 @@ def render_tree(table_name, term_id: str = None):
         data = search(CONN, limit=30, search_text=search_text, statement=table_name, term_ids=terms)
         data = get_term_attributes(
             CONN,
-            predicates=["rdfs:label", SYNONYMS[0]],
+            predicates=["rdfs:label", OPTIONS["synonym"]],
             statement=table_name,
             term_ids=[x["id"] for x in data],
         )
-        response = render_ontology_table(table_name, data, predicates=["rdfs:label", SYNONYMS[0]])
+        response = render_ontology_table(
+            table_name, data, predicates=["rdfs:label", OPTIONS["synonym"]]
+        )
         if isinstance(response, Response):
             return response
         return render_template(
             "template.html",
-            project_name=TITLE,
+            project_name=OPTIONS["title"],
             html=response,
             title=f"Showing search results for '{search_text}'",
             show_search=True,
             table_name=table_name,
-            tables=get_sql_tables(CONN),
+            tables=get_display_tables(),
         )
 
     # nothing to search, just return the tree view
@@ -1276,13 +1309,17 @@ def render_tree(table_name, term_id: str = None):
         href=get_href_pattern(table_name, view="tree"),
         include_search=False,
         standalone=False,
-        max_children=MAX_CHILDREN,
+        max_children=OPTIONS["max_children"],
         statement=table_name,
         term_id=term_id,
     )
-    tables = [x for x in get_sql_tables(CONN) if not x.startswith("tmp_")]
     return render_template(
-        "template.html", project_name=TITLE, html=html, show_search=True, table_name=table_name, tables=tables,
+        "template.html",
+        project_name=OPTIONS["title"],
+        html=html,
+        show_search=True,
+        table_name=table_name,
+        tables=get_display_tables(),
     )
 
 
@@ -1424,27 +1461,37 @@ def update_term(table_name, term_id):
     return term_id
 
 
-def run(db, table_config, cgi_path=None, log_file=None, max_children=20, synonyms=None, title=None):
+def run(
+    db,
+    table_config,
+    cgi_path=None,
+    hide_index=False,
+    log_file=None,
+    max_children: int = 20,
+    synonym: str = "IAO:0000118",
+    term_index: str = None,
+    title: str = "Terminology",
+):
     """
     :param db: path to database
     :param table_config: path to table TSV file
     :param cgi_path: path to the script to use as SCRIPT_NAME environment variable
                      - this will run the app in CGI mode
+    :param hide_index: if True, hide the table used for term_index
     :param log_file: path to a log file - if not provided, logging will output to console
     :param max_children: max number of child nodes to display in tree view
-    :param synonyms: list of synonyms to include in search results
-                     (the first item of this list is used as the synonym displayed in table view)
+    :param synonym: ID for the annotation property to use as synonym in search table (IAO:0000118)
+    :param term_index: table name of ontology term index which includes term ID and a "table"
+                       column that provides the table name where a term is located for editing
     :param title: project title to display in header
     """
-    global CONFIG, CONN, LOGGER, MAX_CHILDREN, SYNONYMS, TITLE
+    global CONFIG, CONN, LOGGER, OPTIONS
 
-    if synonyms:
-        # Override default (only IAO 'alternative term')
-        SYNONYMS = synonyms
-    if title:
-        TITLE = title
-    if max_children:
-        MAX_CHILDREN = max_children
+    # Override default options
+    for k in OPTIONS.keys():
+        v = locals().get(k)
+        if v:
+            OPTIONS[k] = v
 
     app = Flask(__name__)
     app.register_blueprint(BLUEPRINT)
