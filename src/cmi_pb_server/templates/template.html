@@ -569,19 +569,7 @@
 		name: table,
 		source: bloodhound,
 		display: function(item) {
-		  if (item.label && item.short_label && item.synonym) {
-			return item.short_label + ' - ' + item.label + ' - ' + item.synonym;
-		  } else if (item.label && item.short_label) {
-			return item.short_label + ' - ' + item.label;
-		  } else if (item.label && item.synonym) {
-			return item.label + ' - ' + item.synonym;
-		  } else if (item.short_label && item.synonym) {
-			return item.short_label + ' - ' + item.synonym;
-		  } else if (item.short_label && !item.label) {
-			return item.short_label;
-		  } else {
-			return item.label;
-		  }
+		  return item.label;
 		},
 		limit: 40
 	  });
@@ -598,18 +586,21 @@
 
 	function go(table, value) {
 	  q = {}
-	  table = table.replace('_all', '');
 	  q[table] = value
 	  window.location = query(q);
 	}
 
 	function query(obj) {
-	  var str = [];
+	  var url = "";
 	  for (var p in obj)
 		if (obj.hasOwnProperty(p)) {
-		  str.push("{{ url_for('cmi-pb.table', table_name=table_name) }}/" + encodeURIComponent(obj[p]) + "");
+		  url = "{{ url_for('cmi-pb.table', table_name=table_name) }}/" + encodeURIComponent(obj[p]);
 		}
-	  return str.join("&");
+	  ele = document.getElementById("gadgetTree");
+	  if (ele !== null) {
+	  	url += "?view=tree";
+	  }
+	  return url;
 	}
 
 	// Icon change for hovering on ontology form delete buttons
