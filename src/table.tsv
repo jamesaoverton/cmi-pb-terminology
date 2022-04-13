@@ -4,15 +4,3 @@ column	src/column.tsv	Columns for all of the tables.	column
 datatype	src/datatype.tsv	Datatypes for all of the columns	datatype
 prefix	src/prefix.tsv	Prefixes and source ontologies.	
 import	src/ontology/import.tsv	Terms imported from other ontologies	
-cell_type	build/cell_type.tsv	All cell types used in CMI-PB.	
-gate	src/ontology/gate.tsv	Mappings from gating defitions to cell types.	
-gene	build/gene.tsv	Ensembl genes	
-olink_prot_info	build/olink_prot_info.tsv	Mappings from UniProt to OLink protein identifiers.	
-protein	build/protein.tsv	Ensembl proteins	
-transcript	build/transcript.tsv	Ensembl transcripts	
-subject	data/subject.tsv	CMI-PB study subjects.	
-specimen	data/specimen.tsv	Specimens taken from subjects.	
-live_cell_percentages	data/live_cell_percentages.tsv	Measurements of live cell percentages in specimens.	
-olink_prot_exp	data/olink_prot_exp.tsv	OLink protein expression measurements.	
-ab_titer	data/ab_titer.tsv	Antibody titer results	
-rnaseq	data/rnaseq.tsv	RNASeq results	

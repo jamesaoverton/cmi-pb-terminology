@@ -117,8 +117,20 @@
 		  color: #0066ff;
 		}
 
-		.th {
-			white-space: nowrap;
+		table {
+		  border-collapse: separate;
+		  border-spacing: 0px;
+		}
+		thead th {
+		  position: sticky;
+		  top: 0px;
+		  white-space: nowrap;
+		  background-color: #fff !important;
+		  border-bottom-width: 1px;
+		  z-index: 2;
+		}
+		tbody {
+		  z-index: 1;
 		}
 
 
@@ -194,18 +206,34 @@
 	<nav class="navbar navbar-expand-lg navbar-light bg-light">
 		<div class="container-fluid">
 			<a class="navbar-brand">{{ project_name }}</a>
-			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+			<div class="collapse navbar-collapse">
+			{% if ontologies %}
+			<ul class="navbar-nav">
 				<li class="nav-item dropdown">
-					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+					<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+						Ontologies
+					</a>
+					<ul class="dropdown-menu">
+						{% for o in ontologies %}
+						<li><a class="dropdown-item" href="{{ url_for('cmi-pb.table', table_name=o, view='tree') }}">{{ o }}</a></li>
+						{% endfor %}
+					</ul>
+				</li>
+			</ul>
+			{% endif %}
+			<ul class="navbar-nav">
+				<li class="nav-item dropdown">
+					<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
 						Tables
 					</a>
-					<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+					<ul class="dropdown-menu">
 						{% for t in tables %}
 						<li><a class="dropdown-item" href="{{ url_for('cmi-pb.table', table_name=t) }}">{{ t }}</a></li>
 						{% endfor %}
 					</ul>
 				</li>
 			</ul>
+			</div>
 		</div>
 	</nav>
 	{% if include_back %}

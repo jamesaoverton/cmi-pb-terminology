@@ -1,3 +1,4 @@
+import gadget.sql as gs
 import json
 import logging
 import os
@@ -5,6 +6,7 @@ import sqlite3
 import traceback
 
 from collections import defaultdict
+
 from flask import (
     abort,
     Blueprint,
@@ -16,14 +18,6 @@ from flask import (
     url_for,
 )
 from gadget.export import terms2dict, terms2tsv
-from gadget.sql import (
-    get_children,
-    get_descendants,
-    get_ids,
-    get_labels,
-    get_term_attributes,
-    get_top_entity_type,
-)
 from gadget.tree import tree
 from gadget.search import search
 from hiccupy import insert_href, render
@@ -92,6 +86,8 @@ LOGGER = None  # type: Optional[Logger]
 
 OPTIONS = {
     "hide_index": False,
+    "default_params": {},
+    "default_table": None,
     "max_children": 20,
     "synonym": "IAO:0000118",
     "term_index": None,
@@ -108,6 +104,7 @@ def handle_exception(e):
             "template.html",
             project_name=OPTIONS["title"],
             tables=get_display_tables(),
+            ontologies=get_display_ontologies(),
             html="<code>" + "<br>".join(traceback.format_exc().split("\n")),
         )
         + "</code>"
@@ -116,11 +113,18 @@ def handle_exception(e):
 
 @BLUEPRINT.route("/")
 def index():
+    if OPTIONS["default_table"]:
+        return redirect(
+            url_for(
+                "cmi-pb.table", table_name=OPTIONS["default_table"], **OPTIONS["default_params"]
+            )
+        )
     return render_template(
         "template.html",
         project_name=OPTIONS["title"],
         html="<h3>Welcome</h3><p>Please select a table</p>",
         tables=get_display_tables(),
+        ontologies=get_display_ontologies(),
     )
 
 
@@ -162,12 +166,35 @@ def table(table_name):
 
     # First check if table is an ontology table - if so, render term IDs + labels
     if is_ontology(table_name):
-        if request.args.get("format") == "json":
-            # Support for typeahead search
-            data = search(
-                CONN, limit=30, search_text=request.args.get("text", ""), statement=table_name
+        search_text = request.args.get("text")
+        if search_text or request.args.get("format"):
+            # Get matching terms
+            data = search(CONN, limit=30, search_text=search_text or "", statement=table_name)
+            if request.args.get("format") == "json":
+                # Support for typeahead search
+                return json.dumps(data)
+            data = gs.get_term_attributes(
+                CONN,
+                predicates=["rdfs:label", OPTIONS["synonym"]],
+                statement=table_name,
+                term_ids=[x["id"] for x in data],
             )
-            return json.dumps(data)
+            response = render_ontology_table(
+                table_name, data, predicates=["rdfs:label", OPTIONS["synonym"]]
+            )
+            if isinstance(response, Response):
+                return response
+            return render_template(
+                "template.html",
+                project_name=OPTIONS["title"],
+                html=response,
+                ontologies=get_display_ontologies(),
+                show_search=True,
+                subtitle=f"Showing search results for '{search_text}'",
+                table_name=table_name,
+                tables=get_display_tables(),
+                title=get_ontology_title(table_name),
+            )
 
         # Maybe get a set of predicates to restrict search results to
         select = request.args.get("select")
@@ -175,12 +202,12 @@ def table(table_name):
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
-            predicates = get_ids(
+            predicates = gs.get_ids(
                 CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
             )
 
         # Export the data - excluding anon objects
-        data = get_term_attributes(
+        data = gs.get_term_attributes(
             CONN, exclude_json=True, predicates=predicates, statement=table_name
         )
         response = render_ontology_table(table_name, data, predicates=predicates)
@@ -189,12 +216,12 @@ def table(table_name):
         return render_template(
             "template.html",
             html=response,
+            ontologies=get_display_ontologies(),
             project_name=OPTIONS["title"],
-            title="Showing terms from " + table_name,
-            subtitle=f'<a href="{url_for("cmi-pb.table", table_name=table_name, view="tree")}">View as tree</a>',
             show_search=True,
             table_name=table_name,
             tables=get_display_tables(),
+            title=get_ontology_title(table_name),
         )
 
     # Typeahead for autocomplete in data forms
@@ -252,6 +279,7 @@ def table(table_name):
             row_form=form_html,
             table_name=table_name,
             tables=get_display_tables(),
+            ontologies=get_display_ontologies(),
         )
 
     # Otherwise render default sprocket table
@@ -269,6 +297,7 @@ def table(table_name):
             ignore_params=["project-name", "branch-name", "view-path"],
             primary_key=pk,
             show_help=True,
+            show_options=False,
             standalone=False,
             use_view=True,
         )
@@ -282,6 +311,8 @@ def table(table_name):
         project_name=OPTIONS["title"],
         table_name=table_name,
         tables=get_display_tables(),
+        ontologies=get_display_ontologies(),
+        title=table_name,
     )
 
 
@@ -335,60 +366,33 @@ def term(table_name, term_id):
         if select:
             # TODO: add form at top of page for user to select predicates to show?
             pred_labels = select.split(",")
-            predicates = get_ids(
+            predicates = gs.get_ids(
                 CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
             )
 
-        data = get_term_attributes(
+        data = gs.get_term_attributes(
             CONN,
             include_all_predicates=False,
             predicates=predicates,
             statement=table_name,
             term_ids=[term_id],
         )
+        lbls = data[term_id].get("rdfs:label")
+        subtitle = lbls[0]["object"] if lbls else term_id
 
         response = render_ontology_table(table_name, data, predicates=predicates)
         if isinstance(response, Response):
             return response
-        base_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
-        tree_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id, view="tree")
-        html = (
-            render(
-                [
-                    "div",
-                    {"class": "row justify-content-end"},
-                    [
-                        "div",
-                        {"class": "col-auto"},
-                        [
-                            "div",
-                            {"class": "btn-group"},
-                            [
-                                "a",
-                                {
-                                    "href": base_url,
-                                    "class": "btn btn-sm btn-outline-primary active",
-                                },
-                                "Table",
-                            ],
-                            [
-                                "a",
-                                {"href": tree_url, "class": "btn btn-sm btn-outline-primary"},
-                                "Tree",
-                            ],
-                        ],
-                    ],
-                ],
-            )
-            + response
-        )
         return render_template(
             "template.html",
             project_name=OPTIONS["title"],
-            html=html,
+            html=response,
+            ontologies=get_display_ontologies(),
             show_search=is_ontology(table_name),
+            subtitle=subtitle,
             table_name=table_name,
             tables=get_display_tables(),
+            title=get_ontology_title(table_name, term_id=term_id),
         )
 
 
@@ -400,10 +404,16 @@ def flatten(lst):
             yield el
 
 
+def get_display_ontologies():
+    return [t for t in get_sql_tables(CONN) if is_ontology(t)]
+
+
 def get_display_tables():
     if OPTIONS["term_index"] and OPTIONS["hide_index"]:
-        return [x for x in get_sql_tables(CONN) if x != OPTIONS["term_index"]]
-    return get_sql_tables(CONN)
+        tables = [x for x in get_sql_tables(CONN) if x != OPTIONS["term_index"]]
+    else:
+        tables = get_sql_tables(CONN)
+    return [t for t in tables if not is_ontology(t)]
 
 
 # ----- DATA TABLE METHODS -----
@@ -838,9 +848,11 @@ def render_row_from_database(table_name, row_number):
             project_name=OPTIONS["title"],
             include_back=True,
             messages=messages,
+            ontologies=get_display_ontologies(),
             row_form=form_html,
             table_name=table_name,
             tables=get_display_tables(),
+            title=table_name,
         )
 
     # Set the request.args to be in the format sprocket expects (like swagger)
@@ -875,8 +887,10 @@ def render_row_from_database(table_name, row_number):
         project_name=OPTIONS["title"],
         html=response,
         include_back=True,
+        ontologies=get_display_ontologies(),
         table_name=table_name,
         tables=get_display_tables(),
+        title=table_name,
     )
 
 
@@ -922,6 +936,44 @@ def get_href_pattern(table_name, view=None):
     )
 
 
+def get_ontology_title(table_name, table_active=True, term_id=None):
+    # Try to get an ontology title using the dce:title property
+    ontology_title = None
+    ontology_iri = gs.get_ontology_iri(CONN, statement=table_name)
+    if ontology_iri:
+        prefixes = gs.get_prefixes(CONN)
+        ontology_title = gs.get_ontology_title(CONN, prefixes, ontology_iri, statement=table_name)
+
+    # Create the links
+    if term_id:
+        table_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
+        tree_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id, view="tree")
+    else:
+        table_url = url_for("cmi-pb.table", table_name=table_name)
+        tree_url = url_for("cmi-pb.table", table_name=table_name, view="tree")
+
+    # Return the HTML element with title & buttons for tree/table view
+    if table_active:
+        table_class = "btn btn-sm btn-outline-primary active"
+        tree_class = "btn btn-sm btn-outline-primary"
+    else:
+        table_class = "btn btn-sm btn-outline-primary"
+        tree_class = "btn btn-sm btn-outline-primary active"
+    return render(
+        [
+            "div",
+            {"class": "d-flex justify-content-between align-items-center"},
+            ["div", ontology_title or table_name],
+            [
+                "div",
+                {"class": "btn-group", "style": "display: inline-table !important;"},
+                ["a", {"href": table_url, "class": table_class}, "Table"],
+                ["a", {"href": tree_url, "class": tree_class}, "Tree"],
+            ],
+        ]
+    )
+
+
 def get_terms_from_arg(table_name, arg):
     try:
         parsed = PARSER.parse(arg)
@@ -932,7 +984,17 @@ def get_terms_from_arg(table_name, arg):
     except UnexpectedCharacters:
         parent_terms = [arg]
     # We don't know if we were passed ID or label, so get both for all terms
-    return get_labels(CONN, parent_terms, statement=table_name)
+    return gs.get_labels(CONN, parent_terms, statement=table_name)
+
+
+def get_terms_of_type(table_name, entity_type):
+    results = CONN.execute(
+        sql_text(
+            f"SELECT subject FROM \"{table_name}\" WHERE predicate = 'rdf:type' AND object = :type"
+        ),
+        type=entity_type,
+    ).fetchall()
+    return [res["subject"] for res in results]
 
 
 def is_ontology(table_name):
@@ -940,26 +1002,17 @@ def is_ontology(table_name):
     return {"subject", "predicate", "object", "datatype", "annotation"}.issubset(set(columns))
 
 
-def merge_dicts(d1, d2):
-    d_copy = d1.copy()
-    for k, v in d_copy.items():
-        if k in d2:
-            v.update(d2[k])
-        else:
-            d_copy[k] = d2[k]
-    return d_copy
-
-
-def render_ontology_table(table_name, data, predicates: list = None, term_id=None):
+def render_ontology_table(table_name, data, predicates: list = None):
     """
     :param table_name: name of SQL table that contains terms
     :param data: data to render - dict of term ID -> predicate ID -> list of JSON objects
+    :param predicates: list of predicate IDs - if not provided, predicate IDs are taken from data
     """
     # TODO: do we care about displaying annotations in this table view? Or only on term view?
     # Reverse the ID -> label dictionary to translate column names to IDs
     if not predicates:
         predicates = set(chain.from_iterable([list(x.keys()) for x in data.values()]))
-    predicate_labels = get_labels(CONN, list(predicates), statement=table_name)
+    predicate_labels = gs.get_labels(CONN, list(predicates), statement=table_name)
     # Order based on raw value of 'object', don't worry about rendering
     if request.args.get("order"):
         label_to_id = {v: k for k, v in predicate_labels.items()}
@@ -1022,7 +1075,7 @@ def render_ontology_table(table_name, data, predicates: list = None, term_id=Non
         data.update(post_subset)
 
         predicates = set(chain.from_iterable([list(x.keys()) for x in rendered.values()]))
-        predicate_labels = get_labels(CONN, list(predicates), statement=table_name)
+        predicate_labels = gs.get_labels(CONN, list(predicates), statement=table_name)
 
         # Create the HTML output of data
         table_data = []
@@ -1041,8 +1094,9 @@ def render_ontology_table(table_name, data, predicates: list = None, term_id=Non
             for predicate, objs in predicate_objects.items():
                 term_data[predicate_labels.get(predicate, predicate)] = objs
             table_data.append(term_data)
-        if term_id:
-            base_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
+        if len(data) == 1:
+            # Single term view
+            base_url = url_for("cmi-pb.term", table_name=table_name, term_id=list(data.keys())[0])
         else:
             base_url = url_for("cmi-pb.table", table_name=table_name)
         try:
@@ -1080,27 +1134,22 @@ def render_ontology_table(table_name, data, predicates: list = None, term_id=Non
 
 def render_subclass_of(table_name, param, arg):
     id_to_label = get_terms_from_arg(table_name, arg)
-    hrefs = [
-        f"<a href='/{url_for('cmi-pb.term', table_name=table_name, term_id=term_id)}'>{label}</a>"
-        for term_id, label in id_to_label.items()
-    ]
-    title = "Showing children of " + ", ".join(hrefs)
 
     terms = set()
     if param == "subClassOf":
         for p in id_to_label.keys():
-            terms.update(get_children(CONN, p, statement=table_name))
+            terms.update(gs.get_children(CONN, p, statement=table_name))
     elif param == "subClassOf?":
         terms.update(id_to_label.keys())
         for p in id_to_label.keys():
-            terms.update(get_children(CONN, p, statement=table_name))
+            terms.update(gs.get_children(CONN, p, statement=table_name))
     elif param == "subClassOfplus":
         for p in id_to_label.keys():
-            terms.update(get_descendants(CONN, p, statement=table_name))
+            terms.update(gs.get_descendants(CONN, p, statement=table_name))
     elif param == "subClassOf*":
         terms.update(id_to_label.keys())
         for p in id_to_label.keys():
-            terms.update(get_descendants(CONN, p, statement=table_name))
+            terms.update(gs.get_descendants(CONN, p, statement=table_name))
     else:
         abort(400, "Unknown 'subClassOf' query parameter: " + param)
 
@@ -1120,40 +1169,47 @@ def render_subclass_of(table_name, param, arg):
     if select:
         # TODO: add form at top of page for user to select predicates to show?
         pred_labels = select.split(",")
-        predicates = get_ids(
+        predicates = gs.get_ids(
             CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
         )
 
-    data = get_term_attributes(
+    data = gs.get_term_attributes(
         CONN, exclude_json=True, predicates=predicates, statement=table_name, term_ids=list(terms)
     )
     response = render_ontology_table(table_name, data, predicates=predicates)
     if isinstance(response, Response):
         return response
+
+    hrefs = [
+        f"<a href='/{url_for('cmi-pb.term', table_name=table_name, term_id=term_id)}'>{label}</a>"
+        for term_id, label in id_to_label.items()
+    ]
     return render_template(
         "template.html",
-        project_name=OPTIONS["title"],
-        html=response,
-        title=title,
         add_params=f"{param}={arg}",
+        html=response,
+        ontologies=get_display_ontologies(),
+        project_name=OPTIONS["title"],
         show_search=True,
         table_name=table_name,
         tables=get_display_tables(),
+        title=get_ontology_title(table_name),
+        subtitle="Showing children of " + ", ".join(hrefs),
     )
 
 
 def render_term_form(table_name, term_id):
     global FORM_ROW_ID
-    entity_type = get_top_entity_type(CONN, term_id, statements=table_name)
+    entity_type = gs.get_top_entity_type(CONN, term_id, statements=table_name)
 
     # Get all annotation properties
     query = sql_text(
         f'SELECT DISTINCT predicate FROM "{table_name}" WHERE predicate NOT IN :logic',
     ).bindparams(bindparam("logic", expanding=True))
     results = CONN.execute(query, {"logic": LOGIC_PREDICATES}).fetchall()
-    aps = get_labels(CONN, [x["predicate"] for x in results], statement=table_name)
+    aps = gs.get_labels(CONN, [x["predicate"] for x in results], statement=table_name)
 
-    term_details = get_term_attributes(CONN, statement=table_name, term_ids=[term_id])
+    term_details = gs.get_term_attributes(CONN, statement=table_name, term_ids=[term_id])
     if not term_details:
         return abort(400, f"Unable to find term {term_id} in '{table_name}' table")
     term_details = term_details[term_id]
@@ -1252,12 +1308,13 @@ def render_term_form(table_name, term_id):
         include_back=True,
         table_name=table_name,
         tables=get_display_tables(),
+        ontologies=get_display_ontologies(),
         term_id=term_id,
-        title=f"Update " + label or term_id,
         annotation_properties=aps,
         metadata=render(metadata_html),
         logic=render(logic_html),
         entity_type=entity_type,
+        title=f"Update " + label or term_id,
     )
 
 
@@ -1265,46 +1322,8 @@ def render_tree(table_name, term_id: str = None):
     if not is_ontology(table_name):
         return abort(418, "Cannot show tree view for non-ontology table")
 
-    # TODO: add support for select
-    search_text = request.args.get("text")
-    if search_text:
-        if term_id:
-            terms = get_terms_from_arg(table_name, term_id).keys()
-        else:
-            terms = []
-        # Get matching terms (label or synonym - need to support other cols if select is provided)
-        data = search(CONN, limit=30, search_text=search_text, statement=table_name, term_ids=terms)
-        data = get_term_attributes(
-            CONN,
-            predicates=["rdfs:label", OPTIONS["synonym"]],
-            statement=table_name,
-            term_ids=[x["id"] for x in data],
-        )
-        response = render_ontology_table(
-            table_name, data, predicates=["rdfs:label", OPTIONS["synonym"]]
-        )
-        if isinstance(response, Response):
-            return response
-        return render_template(
-            "template.html",
-            project_name=OPTIONS["title"],
-            html=response,
-            title=f"Showing search results for '{search_text}'",
-            show_search=True,
-            table_name=table_name,
-            tables=get_display_tables(),
-        )
-
     # nothing to search, just return the tree view
-    html = ""
-    if term_id:
-        term_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
-        tree_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id, view="tree")
-        html += '<div class="row justify-content-end"><div class="col-auto"><div class="btn-group">'
-        html += f'<a href="{term_url}" class="btn btn-sm btn-outline-primary">Table</a>'
-        html += f'<a href="{tree_url}" class="btn btn-sm btn-outline-primary active">Tree</a>'
-        html += "</div></div></div>"
-    html += tree(
+    html = tree(
         CONN,
         href=get_href_pattern(table_name, view="tree"),
         include_search=False,
@@ -1313,13 +1332,16 @@ def render_tree(table_name, term_id: str = None):
         statement=table_name,
         term_id=term_id,
     )
+
     return render_template(
         "template.html",
         project_name=OPTIONS["title"],
         html=html,
+        ontologies=get_display_ontologies(),
         show_search=True,
         table_name=table_name,
         tables=get_display_tables(),
+        title=get_ontology_title(table_name, table_active=False, term_id=term_id),
     )
 
 
@@ -1465,6 +1487,8 @@ def run(
     db,
     table_config,
     cgi_path=None,
+    default_params=None,
+    default_table=None,
     hide_index=False,
     log_file=None,
     max_children: int = 20,

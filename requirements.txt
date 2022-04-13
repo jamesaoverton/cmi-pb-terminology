@@ -3,6 +3,5 @@ hiccupy==1.0.0
 lark==1.0.0
 SQLAlchemy==1.4.29
 xlsx2csv==0.7.8
-git+https://github.com/ontodev/gizmos.git
-git+https://github.com/ontodev/sprocket.git
+git+https://github.com/ontodev/sprocket.git@standalone-table
 git+https://github.com/ontodev/gadget.git
