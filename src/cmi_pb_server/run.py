@@ -1074,7 +1074,8 @@ def render_ontology_table(table_name, data, predicates: list = None):
             data[term_id] = rendered_term
         data.update(post_subset)
 
-        predicates = set(chain.from_iterable([list(x.keys()) for x in rendered.values()]))
+        if not predicates:
+            predicates = set(chain.from_iterable([list(x.keys()) for x in rendered.values()]))
         predicate_labels = gs.get_labels(CONN, list(predicates), statement=table_name)
 
         # Create the HTML output of data
