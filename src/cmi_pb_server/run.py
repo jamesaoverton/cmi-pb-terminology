@@ -276,10 +276,11 @@ def table(table_name):
             project_name=OPTIONS["title"],
             include_back=True,
             messages=messages,
+            ontologies=get_display_ontologies(),
             row_form=form_html,
             table_name=table_name,
             tables=get_display_tables(),
-            ontologies=get_display_ontologies(),
+            title=f"Add row to '{table_name}'",
         )
 
     # Otherwise render default sprocket table
@@ -292,12 +293,12 @@ def table(table_name):
             CONN,
             table_name,
             request.args,
+            base_url=url_for("cmi-pb.table", table_name=table_name),
             display_messages=messages,
             ignore_cols=ignore_cols,
             ignore_params=["project-name", "branch-name", "view-path"],
             primary_key=pk,
             show_help=True,
-            show_options=False,
             standalone=False,
             use_view=True,
         )
@@ -845,6 +846,7 @@ def render_row_from_database(table_name, row_number):
 
         return render_template(
             "data_form.html",
+            base_url=url_for("cmi-pb.table", table_name=table_name),
             project_name=OPTIONS["title"],
             include_back=True,
             messages=messages,
@@ -852,7 +854,7 @@ def render_row_from_database(table_name, row_number):
             row_form=form_html,
             table_name=table_name,
             tables=get_display_tables(),
-            title=table_name,
+            title=f"Update row in '{table_name}'",
         )
 
     # Set the request.args to be in the format sprocket expects (like swagger)
@@ -870,11 +872,11 @@ def render_row_from_database(table_name, row_number):
             CONN,
             table_name,
             request_args,
+            base_url=url_for("cmi-pb.table", table_name=table_name),
             ignore_cols=ignore_cols,
             ignore_params=["project-name", "branch-name", "view-path"],
             primary_key=pk,
             show_help=True,
-            show_options=False,
             standalone=False,
             use_view=True,
         )
@@ -890,7 +892,7 @@ def render_row_from_database(table_name, row_number):
         ontologies=get_display_ontologies(),
         table_name=table_name,
         tables=get_display_tables(),
-        title=table_name,
+        title=f"Viewing row in '{table_name}'",
     )
 
 
@@ -1109,10 +1111,8 @@ def render_ontology_table(table_name, data, predicates: list = None):
                 request.args,
                 base_url=base_url,
                 columns=[predicate_labels.get(p, p) for p in predicates],
-                hidden=["search_text"],
                 ignore_params=["project-name", "branch-name", "view-path"],
                 include_expand=False,
-                show_options=False,
                 standalone=False,
             )
         except SprocketError as e:
