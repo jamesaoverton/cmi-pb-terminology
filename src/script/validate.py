@@ -215,23 +215,39 @@ def validate_cell_foreign_constraints(config, table_name, column_name, cell):
     fkeys = [fkey for fkey in constraints["foreign"][table_name] if fkey["column"] == column_name]
     for fkey in fkeys:
         ftable, fcolumn = fkey["ftable"], fkey["fcolumn"]
-        rows = config["db"].execute(
-            safe_sql(
-                f"SELECT 1 FROM `{ftable}` WHERE `{fcolumn}` = :value LIMIT 1",
-                {"value": cell["value"]},
+        if (
+            not config["db"]
+            .execute(
+                safe_sql(
+                    f"SELECT 1 FROM `{ftable}` WHERE `{fcolumn}` = :value LIMIT 1",
+                    {"value": cell["value"]},
+                )
             )
-        )
-        if not rows.fetchall():
+            .fetchall()
+        ):
             cell["valid"] = False
-            cell["messages"].append(
-                {
-                    "rule": "key:foreign",
-                    "level": "error",
-                    "message": "Value {} of column {} is not in {}.{}".format(
-                        cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
-                    ),
-                }
-            )
+            message = {
+                "rule": "key:foreign",
+                "level": "error",
+            }
+            if (
+                not config["db"]
+                .execute(
+                    safe_sql(
+                        f"SELECT 1 FROM `{ftable}_conflict` WHERE `{fcolumn}` = :value LIMIT 1",
+                        {"value": cell["value"]},
+                    )
+                )
+                .fetchall()
+            ):
+                message["message"] = "Value {} of column {} is not in {}.{}".format(
+                    cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
+                )
+            else:
+                message["message"] = "Value {} of column {} exists only in {}_conflict.{}".format(
+                    cell["value"], column_name, fkey["ftable"], fkey["fcolumn"]
+                )
+            cell["messages"].append(message)
     return cell
 
 
