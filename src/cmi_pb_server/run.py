@@ -240,11 +240,16 @@ def table(table_name):
         view = "form"
         # Use the cols from the table, in case a value wasn't given to something
         # - we always ignore meta columns & row_number (for new row)
-        new_row = {
-            c: request.form.get(c, "")
-            for c in [x for x in cols if x != "row_number"]
-            if not c.endswith("_meta")
-        }
+        new_row = {}
+        for c in cols:
+            if c.endswith("_meta") or c == "row_number":
+                continue
+            v = request.form.get(c)
+            if not v:
+                # Check for "other"
+                v = request.form.get(c + "_other", "")
+            new_row[c] = v
+
         validated_row = validate_table_row(table_name, new_row)
         if request.form["action"] == "validate":
             form_html = get_row_as_form(table_name, validated_row)
@@ -549,27 +554,43 @@ def get_hiccup_form_row(
         input_attrs["type"] = html_type
         input_attrs["class"] = " ".join(classes)
         validation_cls = None
-        if message:
-            validation_cls = "invalid-feedback"
-            if valid:
-                validation_cls = "valid-feedback"
-        i = 1
         for av in allowed_values:
             av_safe = html_escape(str(av))
             attrs_copy = input_attrs.copy()
             attrs_copy["value"] = av_safe
             if value and str(av) == str(value):
                 attrs_copy["checked"] = True
-            e = [
-                "div",
-                ["input", attrs_copy],
-                ["label", {"class": "form-check-label", "for": av_safe}, av_safe],
-            ]
-            if validation_cls and i == len(allowed_values):
-                # Only add validation message to the last form-check element
-                e.append(["div", {"class": validation_cls}, message])
-            value_col.append(e)
-            i += 1
+            value_col.append(
+                [
+                    "div",
+                    ["input", attrs_copy],
+                    ["label", {"class": "form-check-label", "for": av_safe}, av_safe],
+                ]
+            )
+        if message:
+            validation_cls = "invalid-feedback"
+            if valid:
+                validation_cls = "valid-feedback"
+        attrs_copy = input_attrs.copy()
+        attrs_copy["value"] = ""
+        input_attrs = {
+            "type": "text",
+            "class": "form-control",
+            "name": header + "_other",
+            "placeholder": "other",
+        }
+        if value and value not in allowed_values:
+            attrs_copy["checked"] = True
+            input_attrs["value"] = value
+        e = [
+            "div",
+            ["input", attrs_copy],
+            ["label", {"class": "form-check-label", "for": "other"}, ["input", input_attrs]],
+        ]
+        if validation_cls:
+            # Only add validation message to the last form-check element
+            e.append(["div", {"class": validation_cls}, message])
+        value_col.append(e)
 
     else:
         raise abort(500, f"'{html_type}' form field is not supported.")
@@ -828,13 +849,20 @@ def render_row_from_database(table_name, term_id, row_number):
     messages = None
     form_html = None
     if request.method == "POST":
-        # Get the row from the form and remove the hidden param
-        new_row = dict(request.form)
-        del new_row["action"]
+        # Use the cols from the table, in case a value wasn't given to something
+        # - we always ignore meta columns & row_number (for new row)
+        new_row = {}
+        for c in get_sql_columns(CONN, table_name):
+            if c.endswith("_meta") or c == "row_number":
+                continue
+            v = request.form.get(c)
+            if not v:
+                # Check for "other"
+                v = request.form.get(c + "_other", "")
+            new_row[c] = v
 
         # Manually override view, which is not included in request.args in CGI app
         view = "form"
-
         if request.form["action"] == "validate":
             validated_row = validate_table_row(table_name, new_row, row_number=row_number)
             # Place row_number first
