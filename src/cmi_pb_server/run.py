@@ -136,7 +136,7 @@ def row(table_name, row_number):
         row_number = int(row_number)
     except ValueError:
         return abort(400, f"Row number '{row_number}' must be an integer")
-    return render_row_from_database(table_name, row_number)
+    return render_row_from_database(table_name, None, row_number)
 
 
 @BLUEPRINT.route("/<table_name>", methods=["GET", "POST"])
@@ -164,38 +164,10 @@ def table(table_name):
 
     # TODO: view=form for tables to add new ontology term
 
+    tables = get_display_tables()
+
     # First check if table is an ontology table - if so, render term IDs + labels
     if is_ontology(table_name):
-        search_text = request.args.get("text")
-        if search_text or request.args.get("format"):
-            # Get matching terms
-            data = search(CONN, limit=30, search_text=search_text or "", statement=table_name)
-            if request.args.get("format") == "json":
-                # Support for typeahead search
-                return json.dumps(data)
-            data = gs.get_term_attributes(
-                CONN,
-                predicates=["rdfs:label", OPTIONS["synonym"]],
-                statement=table_name,
-                term_ids=[x["id"] for x in data],
-            )
-            response = render_ontology_table(
-                table_name, data, predicates=["rdfs:label", OPTIONS["synonym"]]
-            )
-            if isinstance(response, Response):
-                return response
-            return render_template(
-                "template.html",
-                project_name=OPTIONS["title"],
-                html=response,
-                ontologies=get_display_ontologies(),
-                show_search=True,
-                subtitle=f"Showing search results for '{search_text}'",
-                table_name=table_name,
-                tables=get_display_tables(),
-                title=get_ontology_title(table_name),
-            )
-
         # Maybe get a set of predicates to restrict search results to
         select = request.args.get("select")
         predicates = ["rdfs:label", OPTIONS["synonym"]]
@@ -206,9 +178,34 @@ def table(table_name):
                 CONN, id_or_labels=pred_labels, id_type="predicate", statement=table_name
             )
 
+        search_text = request.args.get("text")
+        if search_text or request.args.get("format"):
+            # Get matching terms
+            data = search(CONN, limit=None, search_text=search_text or "", statement=table_name)
+            if request.args.get("format") == "json":
+                # Support for typeahead search
+                return json.dumps(data)
+            data = gs.get_term_attributes(
+                CONN, predicates=predicates, statement=table_name, term_ids=[x["id"] for x in data],
+            )
+            response = render_ontology_table(table_name, data, predicates=predicates)
+            if isinstance(response, Response):
+                return response
+            return render_template(
+                "template.html",
+                project_name=OPTIONS["title"],
+                html=response,
+                ontologies=get_display_ontologies(),
+                show_search=True,
+                subtitle=f"Showing search results for '{search_text}'",
+                table_name=table_name,
+                tables=tables,
+                title=get_ontology_title(table_name),
+            )
+
         # Export the data - excluding anon objects
         data = gs.get_term_attributes(
-            CONN, exclude_json=True, predicates=predicates, statement=table_name
+            CONN, exclude_json=True, predicates=predicates, statement=table_name,
         )
         response = render_ontology_table(table_name, data, predicates=predicates)
         if isinstance(response, Response):
@@ -220,7 +217,7 @@ def table(table_name):
             project_name=OPTIONS["title"],
             show_search=True,
             table_name=table_name,
-            tables=get_display_tables(),
+            tables=tables,
             title=get_ontology_title(table_name),
         )
 
@@ -274,20 +271,24 @@ def table(table_name):
         return render_template(
             "data_form.html",
             project_name=OPTIONS["title"],
-            include_back=True,
             messages=messages,
             ontologies=get_display_ontologies(),
             row_form=form_html,
             table_name=table_name,
-            tables=get_display_tables(),
-            title=f"Add row to '{table_name}'",
+            tables=tables,
+            title=f'Add row to <a href="{url_for("cmi-pb.table", table_name=table_name)}">{table_name}</a>',
         )
 
+    # TODO: add link from template -> tree, on hold until we can associate table -> ontology
+    # if "column" in tables and "ID" in get_sql_columns(CONN, table_name):
+        # res = CONN.execute(
+        #    sql_text('SELECT template FROM "column" WHERE "table" = :t AND column = "ID"'),
+        #    t=table_name
+        # ).fetchone()
+        # if res:
+        #    transform = {"ID": url_for("cmi-pb.term", table_name="", view="tree")}
+
     # Otherwise render default sprocket table
-    if pk != "row_number":
-        ignore_cols = ["row_number"]
-    else:
-        ignore_cols = None
     try:
         response = render_database_table(
             CONN,
@@ -295,7 +296,7 @@ def table(table_name):
             request.args,
             base_url=url_for("cmi-pb.table", table_name=table_name),
             display_messages=messages,
-            ignore_cols=ignore_cols,
+            ignore_cols=["row_number"],
             ignore_params=["project-name", "branch-name", "view-path"],
             primary_key=pk,
             show_help=True,
@@ -326,7 +327,7 @@ def term(table_name, term_id):
             return abort(
                 500, f"'{term_id}' is not a valid primary key value for table '{table_name}'"
             )
-        return render_row_from_database(table_name, row_number)
+        return render_row_from_database(table_name, term_id, row_number)
 
     # Redirect to main ontology table search, do not limit search results
     search_text = request.args.get("text")
@@ -338,10 +339,10 @@ def term(table_name, term_id):
         if request.method == "POST":
             return abort(501, "POST method for ontology term is not implemented")
             # term_id = update_term(table_name, pk)
-        # editable form that updates database
+        # Get the name of the 'index' table which maps ID to template
         term_index = OPTIONS["term_index"]
         if term_index and term_index in get_sql_tables(CONN):
-            # TODO: this is currently specific to MRO
+            # Check that 'table' is in the columns, otherwise we don't know which template
             index_cols = get_sql_columns(CONN, OPTIONS["term_index"])
             if "table" in index_cols:
                 # Try to find a template for this term & redirect to the form for that
@@ -350,6 +351,13 @@ def term(table_name, term_id):
                     term_id=term_id,
                 ).fetchone()
                 if res:
+                    if request.args.get("action") == "new":
+                        # New term in same template
+                        return redirect(
+                            url_for(
+                                "cmi-pb.table", table_name=res["table"], view="form"
+                            )
+                        )
                     return redirect(
                         url_for(
                             "cmi-pb.term", table_name=res["table"], term_id=term_id, view="form"
@@ -634,10 +642,6 @@ def get_primary_key(table_name):
 def get_row_as_form(table_name, row):
     """Transform a row either from query results or validation into a hiccup-style HTML form."""
     html = ["form", {"method": "post"}]
-    row_number = row.get("row_number")
-    if get_primary_key(table_name) == "row_number":
-        # Only show row num if this is the primary key - do not allow user to edit
-        html.append(get_hiccup_form_row("row_number", readonly=True, value=row_number))
     row_valid = None
 
     for header, value in row.items():
@@ -798,7 +802,7 @@ def get_messages(row):
     return messages
 
 
-def render_row_from_database(table_name, row_number):
+def render_row_from_database(table_name, term_id, row_number):
     view = request.args.get("view")
     messages = None
     form_html = None
@@ -844,17 +848,21 @@ def render_row_from_database(table_name, row_number):
         if not form_html:
             return abort(500, "something went wrong - unable to render form")
 
+        if term_id:
+            table_url = url_for("cmi-pb.term", table_name=table_name, term_id=term_id)
+        else:
+            table_url = url_for("cmi-pb.row", table_name=table_name, row_number=row_number)
         return render_template(
             "data_form.html",
             base_url=url_for("cmi-pb.table", table_name=table_name),
             project_name=OPTIONS["title"],
-            include_back=True,
             messages=messages,
             ontologies=get_display_ontologies(),
             row_form=form_html,
+            subtitle=f'<a href="{table_url}">Return to row</a>',
             table_name=table_name,
             tables=get_display_tables(),
-            title=f"Update row in '{table_name}'",
+            title=f'Update row in <a href="{url_for("cmi-pb.table", table_name=table_name)}">{table_name}</a>',
         )
 
     # Set the request.args to be in the format sprocket expects (like swagger)
@@ -862,20 +870,15 @@ def render_row_from_database(table_name, row_number):
     request_args["offset"] = str(row_number - 1)
     request_args["limit"] = "1"
 
-    pk = get_primary_key(table_name)
-    if pk != "row_number":
-        ignore_cols = ["row_number"]
-    else:
-        ignore_cols = None
     try:
         response = render_database_table(
             CONN,
             table_name,
             request_args,
             base_url=url_for("cmi-pb.table", table_name=table_name),
-            ignore_cols=ignore_cols,
+            ignore_cols=["row_number"],
             ignore_params=["project-name", "branch-name", "view-path"],
-            primary_key=pk,
+            primary_key=get_primary_key(table_name),
             show_help=True,
             standalone=False,
             use_view=True,
@@ -888,11 +891,10 @@ def render_row_from_database(table_name, row_number):
         "template.html",
         project_name=OPTIONS["title"],
         html=response,
-        include_back=True,
         ontologies=get_display_ontologies(),
         table_name=table_name,
         tables=get_display_tables(),
-        title=f"Viewing row in '{table_name}'",
+        title=f'Viewing row in <a href="{url_for("cmi-pb.table", table_name=table_name)}">{table_name}</a>',
     )
 
 
@@ -1113,6 +1115,7 @@ def render_ontology_table(table_name, data, predicates: list = None):
                 columns=[predicate_labels.get(p, p) for p in predicates],
                 ignore_params=["project-name", "branch-name", "view-path"],
                 include_expand=False,
+                show_filters=False,
                 standalone=False,
             )
         except SprocketError as e:
@@ -1306,7 +1309,6 @@ def render_term_form(table_name, term_id):
     return render_template(
         "ontology_form.html",
         project_name=OPTIONS["title"],
-        include_back=True,
         table_name=table_name,
         tables=get_display_tables(),
         ontologies=get_display_ontologies(),
@@ -1446,7 +1448,7 @@ def update_term(table_name, term_id):
 
         new_objects = request.form.getlist(predicate)
         # TODO: instead of getting IDs, use wiring to translate manchester into JSON object
-        new_obj_ids = get_ids(CONN, id_or_labels=new_objects, statement=table_name)
+        new_obj_ids = gs.get_ids(CONN, id_or_labels=new_objects, statement=table_name)
         if len(new_objects) > len(new_obj_ids):
             LOGGER.error(
                 "Cannot get IDs for one or more terms from term list: " + ", ".join(new_objects)

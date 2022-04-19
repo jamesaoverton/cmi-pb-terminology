@@ -265,13 +265,6 @@
 			</div>
 		</div>
 	</nav>
-	{% if include_back %}
-	<nav class="navbar navbar-expand navbar-light bg-light" style="margin-top: -10px;">
-		<div class="container-fluid">
-			<a class="nav-item" href="javascript:history.back()"><i class="bi-arrow-left-circle"></i> Back</a>
-		</div>
-	</nav>
-	{% endif %}
 	<div id="cmi-pb" class="px-5 py-1">
 		{% if show_search %}
 		<div class="row">
@@ -341,6 +334,7 @@
 		 */
 		var includeEdit = true;
 		var includeNew = false;
+		var isOntology = false;
 		var ele = document.getElementById("sqlTableVertical");
 		if (ele === null) {
 			ele = document.getElementById("sqlTableHorizontal");
@@ -350,6 +344,8 @@
 					// Not correct view - no edit button needed
 					return;
 				}
+				isOntology = true;
+				includeNew = true;
 			} else {
 				// Multiple rows, include only 'new' button
 				includeEdit = false;
@@ -359,7 +355,13 @@
 
 		var container = document.getElementById("cmi-pb");
 		if (includeNew) {
-			var newURL = new URL(window.location.origin + '{{ url_for("cmi-pb.table", table_name=table_name, view="form") }}');
+			if (isOntology) {
+				var newURL = new URL(window.location.href);
+				newURL.searchParams.set("view", "form");
+				newURL.searchParams.set("action", "new");
+			} else {
+				var newURL = new URL(window.location.origin + '{{ url_for("cmi-pb.table", table_name=table_name, view="form") }}');
+			}
 			var newBtn = document.createElement("a");
 			newBtn.setAttribute("data-bs-toggle", "tooltip");
 			newBtn.setAttribute("data-bs-placement", "left");
