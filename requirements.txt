@@ -1,7 +1,7 @@
-Flask==2.0.2
+Flask
 hiccupy==1.0.0
-lark==1.0.0
-SQLAlchemy==1.4.29
-xlsx2csv==0.7.8
+lark
+SQLAlchemy
+xlsx2csv
 git+https://github.com/ontodev/sprocket.git@standalone-table
 git+https://github.com/ontodev/gadget.git

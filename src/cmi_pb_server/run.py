@@ -234,11 +234,17 @@ def table(table_name):
 
     form_html = None
     pk = get_primary_key(table_name)
+    cols = get_sql_columns(CONN, table_name)
     if request.method == "POST":
         # Override view, which isn't passed in POST
         view = "form"
-        new_row = dict(request.form)
-        del new_row["action"]
+        # Use the cols from the table, in case a value wasn't given to something
+        # - we always ignore meta columns & row_number (for new row)
+        new_row = {
+            c: request.form.get(c, "")
+            for c in [x for x in cols if x != "row_number"]
+            if not c.endswith("_meta")
+        }
         validated_row = validate_table_row(table_name, new_row)
         if request.form["action"] == "validate":
             form_html = get_row_as_form(table_name, validated_row)
@@ -266,7 +272,7 @@ def table(table_name):
 
     if view == "form":
         if not form_html:
-            row = {c: None for c in get_sql_columns(CONN, table_name) if c != "row_number"}
+            row = {c: None for c in cols if c != "row_number"}
             form_html = get_row_as_form(table_name, row)
         return render_template(
             "data_form.html",
@@ -281,12 +287,12 @@ def table(table_name):
 
     # TODO: add link from template -> tree, on hold until we can associate table -> ontology
     # if "column" in tables and "ID" in get_sql_columns(CONN, table_name):
-        # res = CONN.execute(
-        #    sql_text('SELECT template FROM "column" WHERE "table" = :t AND column = "ID"'),
-        #    t=table_name
-        # ).fetchone()
-        # if res:
-        #    transform = {"ID": url_for("cmi-pb.term", table_name="", view="tree")}
+    # res = CONN.execute(
+    #    sql_text('SELECT template FROM "column" WHERE "table" = :t AND column = "ID"'),
+    #    t=table_name
+    # ).fetchone()
+    # if res:
+    #    transform = {"ID": url_for("cmi-pb.term", table_name="", view="tree")}
 
     # Otherwise render default sprocket table
     try:
@@ -354,9 +360,7 @@ def term(table_name, term_id):
                     if request.args.get("action") == "new":
                         # New term in same template
                         return redirect(
-                            url_for(
-                                "cmi-pb.table", table_name=res["table"], view="form"
-                            )
+                            url_for("cmi-pb.table", table_name=res["table"], view="form")
                         )
                     return redirect(
                         url_for(
@@ -495,7 +499,7 @@ def get_hiccup_form_row(
         # Everything else uses the header as the element name
         input_attrs["name"] = header
 
-    value_col = ["div", {"class": "col-md-9"}]
+    value_col = ["div", {"class": "col-md-9 form-group"}]
     if html_type == "textarea":
         classes.insert(0, "form-control")
         input_attrs["class"] = " ".join(classes)
@@ -541,20 +545,37 @@ def get_hiccup_form_row(
 
     elif html_type == "radio":
         # TODO: what if value is not in allowed_values? Or what if there is no value?
-        classes.insert(0, "form-check")
+        classes.insert(0, "form-check-input")
         input_attrs["type"] = html_type
+        input_attrs["class"] = " ".join(classes)
+        validation_cls = None
+        if message:
+            validation_cls = "invalid-feedback"
+            if valid:
+                validation_cls = "valid-feedback"
+        i = 1
         for av in allowed_values:
             av_safe = html_escape(str(av))
             attrs_copy = input_attrs.copy()
             attrs_copy["value"] = av_safe
             if value and str(av) == str(value):
                 attrs_copy["checked"] = True
-            value_col.append(["div", ["input", attrs_copy], ["label", {"for": av_safe}, av_safe]])
+            e = [
+                "div",
+                ["input", attrs_copy],
+                ["label", {"class": "form-check-label", "for": av_safe}, av_safe],
+            ]
+            if validation_cls and i == len(allowed_values):
+                # Only add validation message to the last form-check element
+                e.append(["div", {"class": validation_cls}, message])
+            value_col.append(e)
+            i += 1
 
     else:
         raise abort(500, f"'{html_type}' form field is not supported.")
 
-    if message:
+    if message and html_type != "radio":
+        # We already added the message to the radio type; needs to be embedded in radio ele
         cls = "invalid-feedback"
         if valid:
             cls = "valid-feedback"
