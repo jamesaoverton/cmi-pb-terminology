@@ -30,4 +30,4 @@ foobar	C4	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
 foobar	D4	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
 foobar	C5	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
 foobar	C7	error	under:not-in-tree	Value z of column xyzzy is not in foobar.child	z
-foobar	A9	error	key:foreign	Value i of column child is not in foreign_table.foreign_column	i
+foobar	A9	error	key:foreign	Value i of column child exists only in foreign_table_conflict.other_foreign_column	i
