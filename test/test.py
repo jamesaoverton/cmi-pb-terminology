@@ -128,14 +128,62 @@ def test_messages(db_file):
 def test_validate_and_insert_new_row(config):
     row = {
         "id": {"messages": [], "valid": True, "value": "BFO:0000027"},
-        "label": {"messages": [], "valid": True, "value": "zar"},
-        "parent": {"messages": [], "valid": True, "value": "car"},
-        "source": {"messages": [], "valid": True, "value": "BFO"},
+        "label": {"messages": [], "valid": True, "value": "car"},
+        "parent": {
+            "messages": [
+                {"level": "error", "message": "An unrelated error", "rule": "custom:unrelated"}
+            ],
+            "valid": False,
+            "value": "barrie",
+        },
+        "source": {"messages": [], "valid": True, "value": "BFOBBER"},
         "type": {"messages": [], "valid": True, "value": "owl:Class"},
     }
     # The result of the validation should be identical to the original row since there are no
     # problems with it:
-    expected_row = row
+    expected_row = {
+        "id": {"messages": [], "valid": True, "value": "BFO:0000027"},
+        "label": {
+            "messages": [
+                {
+                    "level": "error",
+                    "message": "Values of label must be unique",
+                    "rule": "key:primary",
+                },
+                {
+                    "level": "error",
+                    "message": "Values of label must be unique",
+                    "rule": "tree:child-unique",
+                },
+            ],
+            "valid": False,
+            "value": "car",
+        },
+        "parent": {
+            "messages": [
+                {"level": "error", "message": "An unrelated error", "rule": "custom:unrelated"},
+                {
+                    "level": "error",
+                    "message": "Value barrie of column parent is not in " "column label",
+                    "rule": "tree:foreign",
+                },
+            ],
+            "valid": False,
+            "value": "barrie",
+        },
+        "source": {
+            "messages": [
+                {
+                    "level": "error",
+                    "message": "Value BFOBBER of column source is not in " "prefix.prefix",
+                    "rule": "key:foreign",
+                }
+            ],
+            "valid": False,
+            "value": "BFOBBER",
+        },
+        "type": {"messages": [], "valid": True, "value": "owl:Class"},
+    }
     actual_row = validate_row(config, "import", row)
     if actual_row != expected_row:
         print(
@@ -164,16 +212,16 @@ def test_validate_and_insert_new_row(config):
     )
     expected_row = (
         10,
-        "BFO",
         None,
+        '{"messages":[{"rule":"key:foreign","level":"error","message":"Value BFOBBER of column source is not in prefix.prefix"}],"valid":false,"value":"BFOBBER"}',
         "BFO:0000027",
         None,
-        "zar",
         None,
+        '{"messages":[{"rule":"key:primary","level":"error","message":"Values of label must be unique"},{"rule":"tree:child-unique","level":"error","message":"Values of label must be unique"}],"valid":false,"value":"car"}',
         "owl:Class",
         None,
-        "car",
         None,
+        '{"messages":[{"level":"error","message":"An unrelated error","rule":"custom:unrelated"},{"rule":"tree:foreign","level":"error","message":"Value barrie of column parent is not in column label"}],"valid":false,"value":"barrie"}',
     )
     if actual_row != expected_row:
         print(
@@ -189,32 +237,54 @@ def test_validate_and_insert_new_row(config):
 
 def test_validate_and_update_row(config):
     row = {
-        "id": {"messages": [], "valid": True, "value": "ZOB:0000013"},
-        "label": {"messages": [], "valid": True, "value": "bar"},
-        "parent": {"messages": [], "valid": True, "value": "car"},
-        "source": {"messages": [], "valid": True, "value": "ZOB"},
-        "type": {"messages": [], "valid": True, "value": "owl:Class"},
+        "child": {"messages": [], "valid": True, "value": "b"},
+        "parent": {"messages": [], "valid": True, "value": "f"},
+        "xyzzy": {"messages": [], "valid": True, "value": "w"},
+        "foo": {"messages": [], "valid": True, "value": "A"},
+        "bar": {
+            "messages": [
+                {"level": "error", "message": "An unrelated error", "rule": "custom:unrelated"}
+            ],
+            "valid": False,
+            "value": "B",
+        },
     }
 
     expected_row = {
-        "id": {"messages": [], "valid": True, "value": "ZOB:0000013"},
-        "label": {"messages": [], "valid": True, "value": "bar"},
-        "parent": {"messages": [], "valid": True, "value": "car"},
-        "source": {
+        "bar": {
+            "messages": [
+                {"level": "error", "message": "An unrelated error", "rule": "custom:unrelated"}
+            ],
+            "valid": False,
+            "value": "B",
+        },
+        "child": {
             "messages": [
                 {
-                    "rule": "key:foreign",
                     "level": "error",
-                    "message": "Value ZOB of column source is not in prefix.prefix",
+                    "message": "Values of child must be unique",
+                    "rule": "tree:child-unique",
                 }
             ],
             "valid": False,
-            "value": "ZOB",
+            "value": "b",
         },
-        "type": {"messages": [], "valid": True, "value": "owl:Class"},
+        "foo": {"messages": [], "valid": True, "value": "A"},
+        "parent": {"messages": [], "valid": True, "value": "f"},
+        "xyzzy": {
+            "messages": [
+                {
+                    "level": "error",
+                    "message": "Value w of column xyzzy is not in " "foobar.child",
+                    "rule": "under:not-in-tree",
+                }
+            ],
+            "valid": False,
+            "value": "w",
+        },
     }
 
-    actual_row = validate_row(config, "import", row, True, row_number=2)
+    actual_row = validate_row(config, "foobar", row, True, row_number=1)
     if actual_row != expected_row:
         print(
             "Actual result of validate_row() differs from expected.\n"
@@ -224,27 +294,25 @@ def test_validate_and_update_row(config):
 
     # We happen to know that this is the 2nd row in the table. If we change the test data this may
     # change.
-    update_row(config, "import", row, 2)
-    actual_row = config["db"].execute("SELECT * FROM `import` WHERE `row_number` = 2").fetchall()[0]
+    update_row(config, "foobar", row, 1)
+    actual_row = config["db"].execute("SELECT * FROM `foobar` WHERE `row_number` = 1").fetchall()[0]
     expected_row = (
-        2,
+        1,
         None,
-        '{"messages":[{"rule":"key:foreign","level":"error","message":"Value ZOB of column source is not in prefix.prefix"}],"valid":false,"value":"ZOB"}',
-        "ZOB:0000013",
+        '{"messages":[{"rule":"tree:child-unique","level":"error","message":"Values of child must be unique"}],"valid":false,"value":"b"}',
+        "f",
         None,
-        "bar",
         None,
-        "owl:Class",
+        '{"messages":[{"rule":"under:not-in-tree","level":"error","message":"Value w of column xyzzy is not in foobar.child"}],"valid":false,"value":"w"}',
+        "A",
         None,
-        "car",
         None,
+        '{"messages":[{"level":"error","message":"An unrelated error","rule":"custom:unrelated"}],"valid":false,"value":"B"}',
     )
     if actual_row != expected_row:
         print(
             "Actual result of update_row() differs from expected.\n"
-            + "Actual:\n{}\n\nExpected:\n{}".format(
-                pformat(actual_row, width=500), pformat(expected_row, width=500)
-            )
+            + "Actual:\n{}\n\nExpected:\n{}".format(pformat(actual_row), pformat(expected_row))
         )
         return 1
     return 0
