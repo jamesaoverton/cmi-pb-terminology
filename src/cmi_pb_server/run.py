@@ -39,6 +39,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.sql.expression import bindparam
 from sqlalchemy.sql.expression import text as sql_text
 from typing import Optional, Tuple
+from urllib.parse import unquote
 from werkzeug.exceptions import HTTPException
 
 try:
@@ -85,9 +86,10 @@ CONN = None  # type: Optional[Connection]
 LOGGER = None  # type: Optional[Logger]
 
 OPTIONS = {
-    "hide_index": False,
+    "base_ontology": None,
     "default_params": {},
     "default_table": None,
+    "hide_index": False,
     "max_children": 20,
     "synonym": "IAO:0000118",
     "term_index": None,
@@ -181,12 +183,34 @@ def table(table_name):
         search_text = request.args.get("text")
         if search_text or request.args.get("format"):
             # Get matching terms
-            data = search(CONN, limit=None, search_text=search_text or "", statement=table_name)
-            if request.args.get("format") == "json":
-                # Support for typeahead search
-                return json.dumps(data)
+            if request.args.get("exact") and not request.args.get("format") == "json":
+                term_ids = gs.get_ids(CONN, id_or_labels=[search_text], statement=table_name)
+            else:
+                data = search(CONN, limit=None, search_text=search_text or "", statement=table_name)
+                if request.args.get("format") == "json":
+                    # Support for typeahead search
+                    return json.dumps(data)
+                term_ids = [x["id"] for x in data]
+            if len(term_ids) == 1:
+                # Single result, redirect to the tree view of that term
+                return redirect(
+                    url_for("cmi-pb.term", table_name=table_name, term_id=term_ids[0], view="tree")
+                )
+
+            # Otherwise, display a table of the results (if they exist)
+            if not term_ids:
+                return render_template(
+                    "template.html",
+                    project_name=OPTIONS["title"],
+                    ontologies=get_display_ontologies(),
+                    show_search=True,
+                    subtitle=f"No results for '{search_text}'",
+                    table_name=table_name,
+                    tables=tables,
+                    title=get_ontology_title(table_name),
+                )
             data = gs.get_term_attributes(
-                CONN, predicates=predicates, statement=table_name, term_ids=[x["id"] for x in data],
+                CONN, predicates=predicates, statement=table_name, term_ids=term_ids,
             )
             response = render_ontology_table(table_name, data, predicates=predicates)
             if isinstance(response, Response):
@@ -290,15 +314,6 @@ def table(table_name):
             title=f'Add row to <a href="{url_for("cmi-pb.table", table_name=table_name)}">{table_name}</a>',
         )
 
-    # TODO: add link from template -> tree, on hold until we can associate table -> ontology
-    # if "column" in tables and "ID" in get_sql_columns(CONN, table_name):
-    # res = CONN.execute(
-    #    sql_text('SELECT template FROM "column" WHERE "table" = :t AND column = "ID"'),
-    #    t=table_name
-    # ).fetchone()
-    # if res:
-    #    transform = {"ID": url_for("cmi-pb.term", table_name="", view="tree")}
-
     # Otherwise render default sprocket table
     try:
         response = render_database_table(
@@ -312,6 +327,7 @@ def table(table_name):
             primary_key=pk,
             show_help=True,
             standalone=False,
+            transform=get_transformations(table_name),
             use_view=True,
         )
     except SprocketError as e:
@@ -593,7 +609,7 @@ def get_hiccup_form_row(
         value_col.append(e)
 
     else:
-        raise abort(500, f"'{html_type}' form field is not supported.")
+        raise abort(500, f"'{html_type}' form field is not supported for column {header}.")
 
     if message and html_type != "radio":
         # We already added the message to the radio type; needs to be embedded in radio ele
@@ -668,6 +684,29 @@ def get_html_type_and_values(datatype, values=None) -> Tuple[Optional[str], Opti
         if parent:
             return get_html_type_and_values(parent, values=values)
     return None, None
+
+
+def get_messages(row):
+    """Extract messages from a validated row into a dictionary of messages."""
+    messages = defaultdict(list)
+    for header, details in row.items():
+        if header == "row_number":
+            continue
+        if details["messages"]:
+            for msg in details["messages"]:
+                if msg["level"] == "error":
+                    if "error" not in messages:
+                        messages["error"] = list()
+                    messages["error"].append(msg["message"])
+                elif msg["level"] == "warn":
+                    if "warn" not in messages:
+                        messages["warn"] = list()
+                    messages["warn"].append(msg["message"])
+                elif msg["level"] == "info":
+                    if "info" not in messages:
+                        messages["info"] = list()
+                    messages["info"].append(msg["message"])
+    return messages
 
 
 def get_primary_key(table_name):
@@ -821,27 +860,36 @@ def get_row_number(table_name, primary_key):
     return int(res["row_number"])
 
 
-def get_messages(row):
-    """Extract messages from a validated row into a dictionary of messages."""
-    messages = defaultdict(list)
-    for header, details in row.items():
-        if header == "row_number":
-            continue
-        if details["messages"]:
-            for msg in details["messages"]:
-                if msg["level"] == "error":
-                    if "error" not in messages:
-                        messages["error"] = list()
-                    messages["error"].append(msg["message"])
-                elif msg["level"] == "warn":
-                    if "warn" not in messages:
-                        messages["warn"] = list()
-                    messages["warn"].append(msg["message"])
-                elif msg["level"] == "info":
-                    if "info" not in messages:
-                        messages["info"] = list()
-                    messages["info"].append(msg["message"])
-    return messages
+def get_transformations(table_name):
+    transform = {}
+    cols = get_sql_columns(CONN, table_name)
+    query = sql_text(
+        f'SELECT "column", "datatype" FROM "column" WHERE "table" = :t AND "column" IN :cols'
+    ).bindparams(bindparam("cols", expanding=True))
+    results = CONN.execute(query, t=table_name, cols=cols).fetchall()
+    for res in results:
+        # Currently we are only transforming ontology_id to tree links
+        if res["datatype"] == "ontology_id":
+            url_pat = unquote(
+                url_for(
+                    "cmi-pb.term",
+                    table_name=OPTIONS["base_ontology"],
+                    term_id=f"{{{res['column']}}}",
+                    view="tree",
+                )
+            ).replace("+", " ")
+            transform[res["column"]] = f'<a href="{url_pat}">{{{res["column"]}}}</a>'
+        elif res["datatype"] == "ontology_label":
+            url_pat = unquote(
+                url_for(
+                    "cmi-pb.table",
+                    table_name=OPTIONS["base_ontology"],
+                    text=f"{{{res['column']}}}",
+                    exact="true",
+                )
+            ).replace("+", " ")
+            transform[res["column"]] = f'<a href="{url_pat}">{{{res["column"]}}}</a>'
+    return transform
 
 
 def render_row_from_database(table_name, term_id, row_number):
@@ -865,6 +913,7 @@ def render_row_from_database(table_name, term_id, row_number):
         view = "form"
         if request.form["action"] == "validate":
             validated_row = validate_table_row(table_name, new_row, row_number=row_number)
+            logging.error(json.dumps(validated_row, indent=2))
             # Place row_number first
             validated_row_2 = {"row_number": row_number}
             validated_row_2.update(validated_row)
@@ -873,6 +922,7 @@ def render_row_from_database(table_name, term_id, row_number):
         elif request.form["action"] == "submit":
             # First validate the row to get the meta columns
             validated_row = validate_table_row(table_name, new_row, row_number=row_number)
+            logging.error(json.dumps(validated_row, indent=2))
             # Update the row regardless of results
             # Row ID may be different than row number, if exists
             update_row(CONFIG, table_name, validated_row, row_number)
@@ -930,6 +980,7 @@ def render_row_from_database(table_name, term_id, row_number):
             primary_key=get_primary_key(table_name),
             show_help=True,
             standalone=False,
+            transform=get_transformations(table_name),
             use_view=True,
         )
     except SprocketError as e:
@@ -978,14 +1029,6 @@ def dump_search_results(table_name, search_arg=None):
     # return the raw search results to use in typeahead
     return json.dumps(
         search(CONN, limit=30, search_text=search_text, statement=table_name, term_ids=terms)
-    )
-
-
-def get_href_pattern(table_name, view=None):
-    return (
-        url_for("cmi-pb.term", table_name=table_name, view=view, term_id="{curie}")
-        .replace("%7B", "{")
-        .replace("%7D", "}")
     )
 
 
@@ -1120,7 +1163,12 @@ def render_ontology_table(table_name, data, predicates: list = None):
             rendered_term = {}
             for predicate_id, hiccup in predicate_objects.items():
                 if hiccup:
-                    hiccup = insert_href(hiccup, href=get_href_pattern(table_name))
+                    hiccup = insert_href(
+                        hiccup,
+                        href=unquote(
+                            url_for("cmi-pb.term", table_name=table_name, term_id="{curie}")
+                        ),
+                    )
                     rendered_term[predicate_id] = render(hiccup)
                 else:
                     rendered_term[predicate_id] = None
@@ -1377,7 +1425,7 @@ def render_tree(table_name, term_id: str = None):
     # nothing to search, just return the tree view
     html = tree(
         CONN,
-        href=get_href_pattern(table_name, view="tree"),
+        href=unquote(url_for("cmi-pb.term", table_name=table_name, view="tree", term_id="{curie}")),
         include_search=False,
         standalone=False,
         max_children=OPTIONS["max_children"],
@@ -1538,6 +1586,7 @@ def update_term(table_name, term_id):
 def run(
     db,
     table_config,
+    base_ontology=None,
     cgi_path=None,
     default_params=None,
     default_table=None,
