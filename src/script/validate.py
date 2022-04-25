@@ -51,6 +51,20 @@ def validate_row(config, table_name, row, existing_row=True, row_number=None):
                 row_number=row_number,
             )
         result_row[column_name] = cell
+
+    violations = validate_tree_foreign_keys(
+        config, table_name, result_row, row_number
+    ) + validate_under(config, table_name, result_row, row_number)
+    violations = [row for row in violations if row["row_number"] == row_number]
+    for violation in violations:
+        column = violation["column"]
+        column_meta = violation["meta"]
+        # If there were any previous error messages for this cell, add them to the meta info that we
+        # just received:
+        column_meta["messages"] = result_row[column]["messages"] + column_meta["messages"]
+        # Now overwrite the old meta information for this cell:
+        result_row[column].update(column_meta)
+
     return result_row
 
 
@@ -440,7 +454,7 @@ def validate_unique_constraints(
             with_sql = safe_sql(
                 f"WITH `{except_table}` AS ( "
                 f"  SELECT * FROM `{table_name}` "
-                f"  WHERE `row_number` <> :value "
+                f"  WHERE `row_number` IS NOT :value "
                 f") ",
                 {"value": row_number},
             )
@@ -487,7 +501,28 @@ def with_tree_sql(tree, table_name, root, extra_clause=""):
     )
 
 
-def validate_under(config, table_name):
+def select_with_extra_row(extra_row, row_number, table_name):
+    """
+    Generate a SQL Select clause that is a union of: (a) the literal values of the given extra row,
+    and (b) a Select statement over `table_name` of all the fields in the extra row.
+    """
+    extra_row_len = len(extra_row)
+    first_select = safe_sql("SELECT :rn AS `row_number`, ", {"rn": row_number})
+    second_select = "SELECT `row_number`, "
+    for i, (key, content) in enumerate(extra_row.items(), start=1):
+        if key != "row_number":
+            first_select += safe_sql(f":value AS `{key}`, ", {"value": content["value"]})
+            first_select += f"NULL AS `{key}_meta`"
+            first_select = f"{first_select}, " if i < extra_row_len else first_select
+            second_select += f"`{key}`, `{key}_meta`"
+            if i < extra_row_len:
+                second_select = f"{second_select}, "
+            else:
+                second_select = f"{second_select} FROM `{table_name}`"
+    return f"WITH `{table_name}_ext` AS ({first_select} UNION {second_select})"
+
+
+def validate_under(config, table_name, extra_row=None, row_number=None):
     """
     Validate any associated 'under' constraints for the current column.
     """
@@ -503,6 +538,7 @@ def validate_under(config, table_name):
             if tkey["child"] == ukey["tcolumn"]
         ].pop()
         tree_parent = tree["parent"]
+        extra_clause = select_with_extra_row(extra_row, row_number, table_name) if extra_row else ""
 
         # For each value of the column to be checked:
         # (1) Determine whether it is in the tree's child column.
@@ -514,28 +550,35 @@ def validate_under(config, table_name):
         #     it _is_ under the under_value.
         #     Note that "under" is interpreted in the inclusive sense; i.e., values are trivially
         #     understood to be under themselves.
+
+        effective_table = table_name + "_ext" if extra_clause else table_name
+        effective_tree = effective_table if tree_table == table_name else tree_table
+        tree_sql = with_tree_sql(tree, effective_tree, ukey["value"])
+        # Remove the "WITH" part of the extra clause since it is redundant given the tree sql and
+        # will therefore result in a syntax error:
+        extra_clause = ", " + extra_clause[5:] if extra_clause else extra_clause
         sql = (
-            with_tree_sql(tree, ukey["ttable"], ukey["value"]) + f"SELECT "
+            tree_sql + extra_clause + f"SELECT "
             f"  `row_number`, "
-            f"  `{table_name}`.`{column}`, "
+            f"  `{effective_table}`.`{column}`, "
             f"  CASE "
-            f"    WHEN `{table_name}`.`{column}_meta` IS NOT NULL "
-            f"      THEN JSON(`{table_name}`.`{column}_meta`) "
+            f"    WHEN `{effective_table}`.`{column}_meta` IS NOT NULL "
+            f"      THEN JSON(`{effective_table}`.`{column}_meta`) "
             '     ELSE JSON(\'{"valid": true, "messages": []}\') '
             f"  END AS `{column}_meta`, "
             f"  CASE "
-            f"    WHEN `{table_name}`.`{column}` IN ( "
-            f"      SELECT `{tree_child}` FROM `{tree_table}` "
+            f"    WHEN `{effective_table}`.`{column}` IN ( "
+            f"      SELECT `{tree_child}` FROM `{effective_tree}` "
             f"    ) "
             f"    THEN 1 ELSE 0 "
             f"  END, "
             f"  CASE "
-            f"    WHEN `{table_name}`.`{column}` IN ( "
+            f"    WHEN `{effective_table}`.`{column}` IN ( "
             f"      SELECT `{tree_parent}` FROM `tree` "
             f"    ) "
             f"    THEN 0 ELSE 1 "
             f"  END "
-            f"FROM `{table_name}`"
+            f"FROM `{effective_table}`"
         )
 
         rows = config["db"].execute(sql).fetchall()
@@ -582,7 +625,7 @@ def validate_under(config, table_name):
     return results
 
 
-def validate_tree_foreign_keys(config, table_name):
+def validate_tree_foreign_keys(config, table_name, extra_row=None, row_number=None):
     """
     Given a config map and a table name, validate whether there is a 'foreign key' violation for
     any of the table's trees; i.e., for a given tree: tree(child) which has a given parent column,
@@ -593,9 +636,12 @@ def validate_tree_foreign_keys(config, table_name):
     for tkey in tkeys:
         child_col = tkey["child"]
         parent_col = tkey["parent"]
+        with_clause = select_with_extra_row(extra_row, row_number, table_name) if extra_row else ""
+        effective_table_name = table_name + "_ext" if with_clause else table_name
         rows = (
             config["db"]
             .execute(
+                f"{with_clause} "
                 f"SELECT "
                 f"  t1.row_number, t1.`{parent_col}`, "
                 f"  CASE "
@@ -603,10 +649,10 @@ def validate_tree_foreign_keys(config, table_name):
                 f"      THEN JSON(t1.`{parent_col}_meta`) "
                 '     ELSE JSON(\'{"valid": true, "messages": []}\') '
                 f"  END AS `{parent_col}_meta` "
-                f"FROM `{table_name}` t1 "
+                f"FROM `{effective_table_name}` t1 "
                 f"WHERE NOT EXISTS ( "
                 f"    SELECT 1 "
-                f"    FROM `{table_name}` t2 "
+                f"    FROM `{effective_table_name}` t2 "
                 f"    WHERE t2.`{child_col}` = t1.`{parent_col}` "
                 f")"
             )
