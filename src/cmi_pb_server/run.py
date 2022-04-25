@@ -1600,8 +1600,11 @@ def run(
     """
     :param db: path to database
     :param table_config: path to table TSV file
+    :param base_ontology: the name of the LDTab table for the base ontology of this project
     :param cgi_path: path to the script to use as SCRIPT_NAME environment variable
                      - this will run the app in CGI mode
+    :param default_params: the query parameters to use for the default_table redirection
+    :param default_table: the name of the table to redirect to from index (if None, will show index)
     :param hide_index: if True, hide the table used for term_index
     :param log_file: path to a log file - if not provided, logging will output to console
     :param max_children: max number of child nodes to display in tree view
