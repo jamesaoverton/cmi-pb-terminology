@@ -29,6 +29,13 @@ def validate_row(config, table_name, row, existing_row=True, row_number=None):
     # We check all the cells for nulltype first, since the rules validation requires that we
     # have this information for all cells.
     for column_name, cell in result_row.items():
+        if not column_name:
+            if row_number:
+                raise ValueError(
+                    f"No column for cell '{cell}' in '{table_name}' in row {row_number}"
+                )
+            else:
+                raise ValueError(f"No column for cell '{cell}' in '{table_name}' in new row")
         cell = validate_cell_nulltype(config, table_name, column_name, cell)
         result_row[column_name] = cell
 
