@@ -196,7 +196,10 @@ def validate_cell_nulltype(config, table_name, column_name, cell):
     fill in the cell's nulltype value before returning the cell.
     """
     # If the value of the cell is one of the:
-    column = config["table"][table_name]["column"][column_name]
+    try:
+        column = config["table"][table_name]["column"][column_name]
+    except KeyError:
+        raise KeyError(f"Unable to get column '{column_name}' from '{table_name}' in config")
     if column["nulltype"]:
         nt_name = column["nulltype"]
         nulltype = config["datatype"][nt_name]
