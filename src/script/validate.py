@@ -122,6 +122,20 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
             )
             rows = config["db"].execute(sql)
             values = [r[0] for r in rows.fetchall()]
+        elif structure and structure["type"] == "function" and structure["name"] == "tree":
+            tree_col = structure["args"][0]["value"]
+            tree = [c for c in config["constraints"]["tree"][table_name] if c["child"] == tree_col]
+            if not tree:
+                raise ValidationException(f"No tree: '{table_name}.{tree_col}' found")
+            tree = tree[0]
+            child_column = tree["child"]
+            sql = safe_sql(
+                with_tree_sql(tree, table_name)
+                + f"SELECT `{child_column}` FROM `tree` WHERE `{child_column}` LIKE :value",
+                {"value": matching_string},
+            )
+            rows = config["db"].execute(sql)
+            values = [r[0] for r in rows.fetchall()]
 
     return [{"id": v, "label": v, "order": i} for i, v in enumerate(values, start=1)]
 
@@ -478,7 +492,7 @@ def validate_unique_constraints(
     return cell
 
 
-def with_tree_sql(tree, table_name, root, extra_clause=""):
+def with_tree_sql(tree, table_name, root=None, extra_clause=""):
     """
     Given a dict representing a tree constraint, a table name, a root from which to generate a
     sub-tree of the tree, and an extra SQL clause, generate the SQL for a WITH clause representing
@@ -486,18 +500,18 @@ def with_tree_sql(tree, table_name, root, extra_clause=""):
     """
     child_col = tree["child"]
     parent_col = tree["parent"]
-    return safe_sql(
+    under_sql = safe_sql(f"WHERE `{child_col}` = :parent_val", {"parent_val": root}) if root else ""
+    return (
         f"WITH RECURSIVE `tree` AS ( "
         f"{extra_clause} "
         f"    SELECT `{child_col}`, `{parent_col}` "
         f"        FROM `{table_name}` "
-        f"        WHERE `{child_col}` = :parent_val "
+        f"        {under_sql} "
         f"        UNION ALL "
         f"    SELECT `t1`.`{child_col}`, `t1`.`{parent_col}` "
         f"        FROM `{table_name}` AS `t1` "
         f"        JOIN `tree` AS `t2` ON `t2`.`{parent_col}` = `t1`.`{child_col}`"
-        f") ",
-        {"parent_val": root},
+        f") "
     )
 
 
