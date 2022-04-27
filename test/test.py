@@ -319,8 +319,8 @@ def test_validate_and_update_row(config):
 
 
 def test_auto_complete(config):
-    actual = get_matching_values(config, "foobar", "xyzzy", "d")
-    expected = [{"id": "d", "label": "d", "order": 1}]
+    actual = get_matching_values(config, "foobar", "parent", "b")
+    expected = [{"id": "b", "label": "b", "order": 1}]
     if actual != expected:
         print(f"Actual auto_complete values: {actual} do not match the expected values: {expected}")
         return 1

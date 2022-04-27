@@ -83,9 +83,9 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
     # be returned:
     dt_name = config["table"][table_name]["column"][column_name]["datatype"]
     datatype = config["datatype"][dt_name]
-    dt_condition = datatype["parsed_condition"]
+    dt_condition = datatype.get("parsed_condition")
     values = []
-    if dt_condition["type"] == "function" and dt_condition["name"] == "in":
+    if dt_condition and dt_condition["type"] == "function" and dt_condition["name"] == "in":
         # Remove the enclosing quotes from the values being returned:
         values = [arg["value"].strip("'\"") for arg in dt_condition["args"]]
         values = [v for v in values if matching_string in v]
@@ -95,7 +95,7 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
         # condition, then the values are taken from the foreign column. Otherwise if the structure
         # includes an `under(tree_table.tree_column, value)` condition, then get the values from the
         # tree column that are under `value`
-        structure = config["table"][table_name]["column"][column_name]["parsed_structure"]
+        structure = config["table"][table_name]["column"][column_name].get("parsed_structure")
         # Convert the given matching string into one suitable for substring matching in SQL:
         matching_string = "%" if not matching_string else f"%{matching_string}%"
         if structure and structure["type"] == "function" and structure["name"] == "from":
