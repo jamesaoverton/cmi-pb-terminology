@@ -83,9 +83,9 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
     # be returned:
     dt_name = config["table"][table_name]["column"][column_name]["datatype"]
     datatype = config["datatype"][dt_name]
-    dt_condition = datatype["parsed_condition"]
+    dt_condition = datatype.get("parsed_condition")
     values = []
-    if dt_condition["type"] == "function" and dt_condition["name"] == "in":
+    if dt_condition and dt_condition["type"] == "function" and dt_condition["name"] == "in":
         # Remove the enclosing quotes from the values being returned:
         values = [arg["value"].strip("'\"") for arg in dt_condition["args"]]
         values = [v for v in values if matching_string in v]
@@ -95,7 +95,7 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
         # condition, then the values are taken from the foreign column. Otherwise if the structure
         # includes an `under(tree_table.tree_column, value)` condition, then get the values from the
         # tree column that are under `value`
-        structure = config["table"][table_name]["column"][column_name]["parsed_structure"]
+        structure = config["table"][table_name]["column"][column_name].get("parsed_structure")
         # Convert the given matching string into one suitable for substring matching in SQL:
         matching_string = "%" if not matching_string else f"%{matching_string}%"
         if structure and structure["type"] == "function" and structure["name"] == "from":
@@ -107,14 +107,21 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
             )
             rows = config["db"].execute(sql)
             values = [r[0] for r in rows.fetchall()]
-        elif structure and structure["type"] == "function" and structure["name"] == "under":
-            tree_col = structure["args"][0]["column"]
+        elif (
+            structure and structure["type"] == "function" and structure["name"] in ("under", "tree")
+        ):
+            if structure["name"] == "under":
+                tree_col = structure["args"][0]["column"]
+                under_val = structure["args"][1]["value"]
+            else:
+                tree_col = structure["args"][0]["value"]
+                under_val = None
+
             tree = [c for c in config["constraints"]["tree"][table_name] if c["child"] == tree_col]
             if not tree:
                 raise ValidationException(f"No tree: '{table_name}.{tree_col}' found")
             tree = tree[0]
             child_column = tree["child"]
-            under_val = structure["args"][1]["value"]
             sql = safe_sql(
                 with_tree_sql(tree, table_name, under_val)
                 + f"SELECT `{child_column}` FROM `tree` WHERE `{child_column}` LIKE :value",
@@ -478,7 +485,7 @@ def validate_unique_constraints(
     return cell
 
 
-def with_tree_sql(tree, table_name, root, extra_clause=""):
+def with_tree_sql(tree, table_name, root=None, extra_clause=""):
     """
     Given a dict representing a tree constraint, a table name, a root from which to generate a
     sub-tree of the tree, and an extra SQL clause, generate the SQL for a WITH clause representing
@@ -486,18 +493,18 @@ def with_tree_sql(tree, table_name, root, extra_clause=""):
     """
     child_col = tree["child"]
     parent_col = tree["parent"]
-    return safe_sql(
+    under_sql = safe_sql(f"WHERE `{child_col}` = :parent_val", {"parent_val": root}) if root else ""
+    return (
         f"WITH RECURSIVE `tree` AS ( "
         f"{extra_clause} "
         f"    SELECT `{child_col}`, `{parent_col}` "
         f"        FROM `{table_name}` "
-        f"        WHERE `{child_col}` = :parent_val "
+        f"        {under_sql} "
         f"        UNION ALL "
         f"    SELECT `t1`.`{child_col}`, `t1`.`{parent_col}` "
         f"        FROM `{table_name}` AS `t1` "
         f"        JOIN `tree` AS `t2` ON `t2`.`{parent_col}` = `t1`.`{child_col}`"
-        f") ",
-        {"parent_val": root},
+        f") "
     )
 
 
