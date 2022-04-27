@@ -107,30 +107,23 @@ def get_matching_values(config, table_name, column_name, matching_string=""):
             )
             rows = config["db"].execute(sql)
             values = [r[0] for r in rows.fetchall()]
-        elif structure and structure["type"] == "function" and structure["name"] == "under":
-            tree_col = structure["args"][0]["column"]
+        elif (
+            structure and structure["type"] == "function" and structure["name"] in ("under", "tree")
+        ):
+            if structure["name"] == "under":
+                tree_col = structure["args"][0]["column"]
+                under_val = structure["args"][1]["value"]
+            else:
+                tree_col = structure["args"][0]["value"]
+                under_val = None
+
             tree = [c for c in config["constraints"]["tree"][table_name] if c["child"] == tree_col]
             if not tree:
                 raise ValidationException(f"No tree: '{table_name}.{tree_col}' found")
             tree = tree[0]
             child_column = tree["child"]
-            under_val = structure["args"][1]["value"]
             sql = safe_sql(
                 with_tree_sql(tree, table_name, under_val)
-                + f"SELECT `{child_column}` FROM `tree` WHERE `{child_column}` LIKE :value",
-                {"value": matching_string},
-            )
-            rows = config["db"].execute(sql)
-            values = [r[0] for r in rows.fetchall()]
-        elif structure and structure["type"] == "function" and structure["name"] == "tree":
-            tree_col = structure["args"][0]["value"]
-            tree = [c for c in config["constraints"]["tree"][table_name] if c["child"] == tree_col]
-            if not tree:
-                raise ValidationException(f"No tree: '{table_name}.{tree_col}' found")
-            tree = tree[0]
-            child_column = tree["child"]
-            sql = safe_sql(
-                with_tree_sql(tree, table_name)
                 + f"SELECT `{child_column}` FROM `tree` WHERE `{child_column}` LIKE :value",
                 {"value": matching_string},
             )
