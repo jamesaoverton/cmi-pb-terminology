@@ -92,7 +92,6 @@ OPTIONS = {
     "hide_index": False,
     "max_children": 20,
     "synonym": "IAO:0000118",
-    "term_index": None,
     "title": "Terminology",
 }
 
@@ -367,7 +366,7 @@ def term(table_name, term_id):
             return abort(501, "POST method for ontology term is not implemented")
             # term_id = update_term(table_name, pk)
         # Get the name of the 'index' table which maps ID to template
-        term_index = OPTIONS["term_index"]
+        term_index = get_term_index()
         if term_index and term_index in get_sql_tables(CONN):
             # Check that 'table' is in the columns, otherwise we don't know which template
             index_cols = get_sql_columns(CONN, OPTIONS["term_index"])
@@ -443,14 +442,45 @@ def get_display_ontologies():
 
 
 def get_display_tables():
-    if OPTIONS["term_index"] and OPTIONS["hide_index"]:
-        tables = [x for x in get_sql_tables(CONN) if x != OPTIONS["term_index"]]
+    term_index = get_term_index()
+    if term_index and OPTIONS["hide_index"]:
+        tables = [x for x in get_sql_tables(CONN) if x != term_index]
     else:
         tables = get_sql_tables(CONN)
     return [t for t in tables if not is_ontology(t)]
 
 
+def get_term_index():
+    res = CONN.execute('SELECT "table" FROM "table" WHERE "type" = "index"').fetchone()
+    if res:
+        return res["table"]
+    return None
+
+
 # ----- DATA TABLE METHODS -----
+
+
+def get_all_datatypes(datatype):
+    query = sql_text(
+        """WITH RECURSIVE ancestors(child, parent) AS (
+            SELECT DISTINCT
+                :dt AS child,
+                parent AS parent
+            FROM datatype
+            WHERE datatype = :dt
+            UNION
+            SELECT
+                datatype AS child,
+                datatype.parent AS parent
+            FROM datatype, ancestors
+            WHERE ancestors.parent = datatype)
+        SELECT DISTINCT parent FROM ancestors"""
+    )
+    results = CONN.execute(query, dt=datatype)
+    all_types = [datatype]
+    for res in results:
+        all_types.append(res["parent"])
+    return all_types
 
 
 def get_hiccup_form_row(
@@ -773,7 +803,7 @@ def get_row_as_form(table_name, row):
                 desc = res["description"]
                 datatype = res["datatype"]
                 structure = res["structure"]
-                if structure and structure.startswith("from("):
+                if structure and structure.split("(")[0] in ["from", "in", "tree", "under"]:
                     # Given the from structure, we always turn the input into a search
                     html_type = "search"
                 elif datatype and "datatype" in tables:
@@ -868,27 +898,52 @@ def get_transformations(table_name):
     ).bindparams(bindparam("cols", expanding=True))
     results = CONN.execute(query, t=table_name, cols=cols).fetchall()
     for res in results:
+        dt = res["datatype"]
+        col = res["column"]
+        all_types = get_all_datatypes(dt)
         # Currently we are only transforming ontology_id to tree links
-        if res["datatype"] == "ontology_id":
+        if "split_ontology_id" in all_types:
             url_pat = unquote(
                 url_for(
                     "cmi-pb.term",
                     table_name=OPTIONS["base_ontology"],
-                    term_id=f"{{{res['column']}}}",
+                    term_id="TERM",
                     view="tree",
                 )
-            ).replace("+", " ")
-            transform[res["column"]] = f'<a href="{url_pat}">{{{res["column"]}}}</a>'
-        elif res["datatype"] == "ontology_label":
+            ).replace("+", " ").replace("TERM", "''' + c + '''")
+            transform[col] = f""""|".join(
+            [f'''<a href="{url_pat}">''' + c + "</a>" for c in '''{{{col}}}'''.split('|')])"""
+        elif "split_ontology_label" in all_types:
             url_pat = unquote(
                 url_for(
                     "cmi-pb.table",
                     table_name=OPTIONS["base_ontology"],
-                    text=f"{{{res['column']}}}",
+                    text="TERM",
+                    exact="true",
+                )
+            ).replace("+", " ").replace("TERM", "''' + c + '''")
+            transform[col] = f""""|".join(
+            [f'''<a href="{url_pat}">''' + c + "</a>" for c in '''{{{col}}}'''.split('|')])"""
+        elif "ontology_id" in all_types:
+            url_pat = unquote(
+                url_for(
+                    "cmi-pb.term",
+                    table_name=OPTIONS["base_ontology"],
+                    term_id=f"{{{col}}}",
+                    view="tree",
+                )
+            ).replace("+", " ")
+            transform[col] = f'''"""<a href="{url_pat}">{{{col}}}</a>"""'''
+        elif "ontology_label" in all_types:
+            url_pat = unquote(
+                url_for(
+                    "cmi-pb.table",
+                    table_name=OPTIONS["base_ontology"],
+                    text=f"{{{col}}}",
                     exact="true",
                 )
             ).replace("+", " ")
-            transform[res["column"]] = f'<a href="{url_pat}">{{{res["column"]}}}</a>'
+            transform[col] = f'''"""<a href="{url_pat}">{{{col}}}</a>"""'''
     return transform
 
 
@@ -1594,7 +1649,6 @@ def run(
     log_file=None,
     max_children: int = 20,
     synonym: str = "IAO:0000118",
-    term_index: str = None,
     title: str = "Terminology",
 ):
     """
@@ -1605,12 +1659,10 @@ def run(
                      - this will run the app in CGI mode
     :param default_params: the query parameters to use for the default_table redirection
     :param default_table: the name of the table to redirect to from index (if None, will show index)
-    :param hide_index: if True, hide the table used for term_index
+    :param hide_index: if True, hide the table of type index
     :param log_file: path to a log file - if not provided, logging will output to console
     :param max_children: max number of child nodes to display in tree view
     :param synonym: ID for the annotation property to use as synonym in search table (IAO:0000118)
-    :param term_index: table name of ontology term index which includes term ID and a "table"
-                       column that provides the table name where a term is located for editing
     :param title: project title to display in header
     """
     global CONFIG, CONN, LOGGER, OPTIONS
