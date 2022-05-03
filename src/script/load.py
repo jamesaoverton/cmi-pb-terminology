@@ -673,7 +673,7 @@ def create_table(config, table_name):
     output.append(");")
     # Loop through the tree constraints and if any of their associated child columns do not already
     # have an associated unique or primary index, create one implicitly here:
-    for i, tree in enumerate(table_constraints["tree"]):
+    for tree in table_constraints["tree"]:
         if tree["child"] not in (table_constraints["unique"] + table_constraints["primary"]):
             output.append(
                 "CREATE UNIQUE INDEX `{}_{}_idx` ON `{}`(`{}`);".format(
