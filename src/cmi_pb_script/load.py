@@ -131,6 +131,7 @@ def read_config_files(table_table_path, condition_parser):
         "column": {"required": True},
         "datatype": {"required": True},
         "rule": {"required": False},
+        "index": {"required": False}
     }
     path = table_table_path
     rows = read_tsv(path)
