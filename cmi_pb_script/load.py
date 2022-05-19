@@ -835,14 +835,14 @@ if __name__ == "__main__":
             "table",
             help="A TSV file containing high-level information about the data in the database",
         )
-        p.add_argument("db_dir", help="The directory in which to save the database file")
+        p.add_argument("db_path", help="The path to which to save the database file")
         args = p.parse_args()
 
         CONFIG = read_config_files(
             args.table, Lark(grammar, parser="lalr", transformer=TreeToDict())
         )
 
-        with sqlite3.connect(f"{args.db_dir}/cmi-pb.db") as CONN:
+        with sqlite3.connect(args.db_path) as CONN:
             CONFIG["db"] = CONN
             CONFIG["db"].execute("PRAGMA foreign_keys = ON")
             configure_and_load_db(CONFIG)
