@@ -312,12 +312,11 @@ def verify_table_deps_and_sort(table_list, constraints):
             end_index = len(cycle) - 1
             for i, child in enumerate(cycle):
                 if i < end_index:
-                    dep_name = cycle[i + 1]
                     dep = [d for d in trees[table_name] if d["child"] == child].pop()
                     message += "tree({}) references {}".format(child, dep["parent"])
                 if i < (end_index - 1):
                     message += " and "
-            raise CycleError(message)
+            raise CycleError(message) from None
 
     foreign_keys = constraints["foreign"]
     under_keys = constraints["under"]
@@ -668,7 +667,7 @@ def create_table(config, table_name):
     output.append(");")
     # Loop through the tree constraints and if any of their associated child columns do not already
     # have an associated unique or primary index, create one implicitly here:
-    for i, tree in enumerate(table_constraints["tree"]):
+    for tree in table_constraints["tree"]:
         if tree["child"] not in (table_constraints["unique"] + table_constraints["primary"]):
             output.append(
                 "CREATE UNIQUE INDEX `{}_{}_idx` ON `{}`(`{}`);".format(
