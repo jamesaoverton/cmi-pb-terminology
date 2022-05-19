@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 from os import path
 
 here = path.abspath(path.dirname(__file__))
@@ -27,7 +27,6 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
     install_requires=install_requires,
-    packages=find_packages(exclude="test"),
+    packages=["cmi_pb_script"],
     python_requires=">=3.6, <4",
-    package_data={"cmi_pb_server": ["templates/*.html"]},
 )

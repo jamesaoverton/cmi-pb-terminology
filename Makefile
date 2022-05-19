@@ -259,7 +259,7 @@ update-tsv:
 	rm -f $(GS_TSVS) $(API_TSVS) $(ZIP_TSVS)
 	make update-gs-tsv update-api-tsv update-zip-tsv
 
-build/cmi-pb.sql: src/cmi_pb_script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv src/cmi_pb_script/validate.py | build
+build/cmi-pb.sql: cmi_pb_script src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv cmi_pb_script | build
 	python3 $< $(word 2,$^) $| > $@
 
 # The database file we be created as a side-effect of calling src/cmi_pb_script/load.py to create the sql file:
@@ -268,10 +268,10 @@ build/cmi-pb.db: build/cmi-pb.sql
 output:
 	mkdir -p $@
 
-output/messages.tsv: src/cmi_pb_script/export.py build/cmi-pb.db | output
+output/messages.tsv: cmi_pb_script build/cmi-pb.db | output
 	python3 $< messages $(word 2,$^) $| prefix import test_tree_under
 
-output/%.tsv: src/cmi_pb_script/export.py build/cmi-pb.db | output
+output/%.tsv: cmi_pb_script build/cmi-pb.db | output
 	python3 $< data $(word 2,$^) $| $*
 
 .PHONY: test

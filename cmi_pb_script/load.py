@@ -58,7 +58,7 @@ def read_config_files(table_table_path, condition_parser):
     def read_tsv(path):
         """Given a path, read a TSV file and return a list of row dicts."""
         with open(path) as f:
-            rows = csv.DictReader(f, delimiter="\t")
+            rows = csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
             rows = list(rows)
             if len(rows) < 1:
                 raise TSVReadError(f"No rows in {path}")
@@ -448,7 +448,7 @@ def configure_db(config, write_sql_to_stdout=False, write_to_db=False):
             # Open a DictReader to get the first row from which we will read the column names of the
             # table. Note that although we discard the rest this should not be inefficient. Since
             # DictReader is implemented as an Iterator it does not read the whole file.
-            rows = csv.DictReader(f, delimiter="\t")
+            rows = csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
 
             # Update columns
             defined_columns = config["table"][table_name]["column"]
@@ -459,7 +459,7 @@ def configure_db(config, write_sql_to_stdout=False, write_to_db=False):
                 try:
                     f.close()
                     with open(path, "r") as f2:
-                        rows = csv.reader(f2, delimiter="\t")
+                        rows = csv.reader(f2, delimiter="\t", quoting=csv.QUOTE_NONE)
                         actual_columns = next(rows)
                 except StopIteration:
                     raise StopIteration(f"No rows in {path}") from None
@@ -515,7 +515,7 @@ def load_db(config):
     for table_name in table_list:
         path = config["table"][table_name]["path"]
         with open(path) as f:
-            rows = csv.DictReader(f, delimiter="\t")
+            rows = csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
             # Collect data into fixed-length chunks or blocks
             # See: https://docs.python.org/3.9/library/itertools.html#itertools-recipes
             chunks = itertools.zip_longest(*([iter(rows)] * CHUNK_SIZE))
