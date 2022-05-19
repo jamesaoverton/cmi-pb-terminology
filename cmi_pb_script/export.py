@@ -133,7 +133,7 @@ def export_data(args):
                     writer.writeheader()
                     for row in rows:
                         del row["row_number"]
-                        writer.writerow(row)
+                        writer.writerow({k: v.replace("\\n", "\\\\n") for k, v in row.items()})
             except sqlite3.OperationalError as e:
                 print(f"ERROR while exporting {table}: {e}", file=sys.stderr)
 
