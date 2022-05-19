@@ -14,7 +14,7 @@ from subprocess import DEVNULL, run
 pwd = os.path.dirname(os.path.realpath(__file__))
 sys.path.append("{}/../src/script".format(pwd))
 
-from load import (
+from cmi_pb_script.load import (
     grammar,
     TreeToDict,
     read_config_files,
@@ -22,8 +22,8 @@ from load import (
     update_row,
     insert_new_row,
 )
-from export import export_data, export_messages
-from validate import validate_row, get_matching_values
+from cmi_pb_script.export import export_data, export_messages
+from cmi_pb_script.validate import validate_row, get_matching_values
 
 
 def test_load_contents(db_file, this_script):
