@@ -178,7 +178,9 @@ def export_messages(args):
         for column_key in [ckey for ckey in row if ckey.endswith("_meta")]:
             meta = json.loads(row[column_key])
             if not meta["valid"]:
-                columnid = column_key.removesuffix("_meta")
+                columnid = column_key
+                if columnid.endswith("_meta"):
+                    columnid = columnid[:-5]
                 if a1:
                     columnid = col_to_a1(
                         columnid, [c for c in row if c != "row_number" and not c.endswith("_meta")]
