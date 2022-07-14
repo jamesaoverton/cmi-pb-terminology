@@ -164,7 +164,7 @@ def export_messages(args):
 
     def create_message_rows(table, row, primary_keys):
         if a1 or not primary_keys:
-            row_number = "{}".format(row["row_number"])
+            row_number = "{}".format(row["row_number"] + 1)
         else:
             row_number = []
             for pk in primary_keys:
@@ -190,9 +190,11 @@ def export_messages(args):
                     m = {
                         "table": table,
                         "level": message["level"],
-                        "rule_id": message["rule"],
+                        "rule id": message["rule"],
+                        "rule": message["rule"],
                         "message": message["message"],
-                        "value": meta["value"],
+                        #"value": meta["value"],
+                        "suggestion": "",
                     }
                     if not a1:
                         m.update({"row": row_number, "column": columnid})
@@ -215,7 +217,7 @@ def export_messages(args):
 
     with sqlite3.connect(db) as conn:
         if a1:
-            fieldnames = ["table", "cell", "level", "rule_id", "message", "value"]
+            fieldnames = ["table", "cell", "level", "rule id", "rule", "message", "suggestion"]
         else:
             fieldnames = ["table", "row", "column", "level", "rule_id", "message", "value"]
         with open(f"{output_dir}/messages.tsv", "w", newline="\n") as csvfile:
