@@ -40,7 +40,7 @@ def validate_row(config, table_name, row, existing_row=True, row_number=None):
                 config, table_name, column_name, cell, result_row, prev_results=[]
             )
             cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
-            cell = validate_unique_constraints(
+            cell = validate_cell_unique_constraints(
                 config,
                 table_name,
                 column_name,
@@ -195,7 +195,7 @@ def validate_rows_constraints(config, table_name, rows):
         for column_name, cell in row.items():
             if cell.get("nulltype") is None:
                 cell = validate_cell_foreign_constraints(config, table_name, column_name, cell)
-                cell = validate_unique_constraints(
+                cell = validate_cell_unique_constraints(
                     config,
                     table_name,
                     column_name,
@@ -295,7 +295,7 @@ def validate_cell_trees(config, table_name, column_name, cell, context, prev_res
         prev_selects = " UNION ".join(
             [
                 safe_sql(
-                    "SELECT :c_value, :p_value",
+                    f"SELECT :c_value AS `{child_col}`, :p_value AS `{parent_col}`",
                     {"c_value": p[child_col]["value"], "p_value": p[parent_col]["value"]},
                 )
                 for p in prev_results
@@ -426,7 +426,7 @@ def validate_cell_rules(config, table_name, column_name, context, cell):
     return cell
 
 
-def validate_unique_constraints(
+def validate_cell_unique_constraints(
     config, table_name, column_name, cell, context, prev_results, existing_row, row_number
 ):
     """
@@ -650,7 +650,7 @@ def validate_tree_foreign_keys(config, table_name, extra_row=None, row_number=No
             .execute(
                 f"{with_clause} "
                 f"SELECT "
-                f"  t1.row_number, t1.`{parent_col}`, "
+                f"  t1.`row_number`, t1.`{parent_col}`, "
                 f"  CASE "
                 f"    WHEN t1.`{parent_col}_meta` IS NOT NULL "
                 f"      THEN JSON(t1.`{parent_col}_meta`) "

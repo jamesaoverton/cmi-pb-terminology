@@ -529,7 +529,7 @@ def load_db(config):
         # We need to wait until all of the rows for a table have been loaded before validating the
         # "foreign" constraints on a table's trees, since this checks if the values of one column
         # (the tree's parent) are all contained in another column (the tree's child):
-        # We also need to wait before validating a table's "under" constraints. Although the teee
+        # We also need to wait before validating a table's "under" constraints. Although the tree
         # associated with such a constraint need not be defined on the same table, it can be.
         records_to_update = validate_tree_foreign_keys(config, table_name) + validate_under(
             config, table_name
