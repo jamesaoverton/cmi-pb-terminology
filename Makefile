@@ -6,6 +6,7 @@
 # - Download the [`cmi-pb.owl`](cmi-pb.owl) file
 # - Download the [`cmi-pb.db`](build/cmi-pb.db) database file
 
+MAKEFLAGS=--warn-undefined-variables
 
 .PHONY: all
 all: build/cmi-pb.db build/predicates.txt
@@ -18,16 +19,16 @@ update:
 TABLES := src/ontology/upper.tsv src/ontology/terminology.tsv build/proteins.tsv
 PREFIXES := --prefixes build/prefixes.json
 ROBOT := java -jar build/robot.jar $(PREFIXES)
-ROBOT_TREE := java -jar build/robot-tree.jar $(PREFIXES)
+LDTAB := java -jar build/ldtab.jar
 
 build:
 	mkdir -p $@
 
 build/robot.jar: | build
-	curl -L -o $@ https://build.obolibrary.io/job/ontodev/job/robot/job/master/lastSuccessfulBuild/artifact/bin/robot.jar
+	curl -L -o $@ "https://build.obolibrary.io/job/ontodev/job/robot/job/master/lastSuccessfulBuild/artifact/bin/robot.jar"
 
-build/robot-tree.jar: | build
-	curl -L -o $@ https://build.obolibrary.io/job/ontodev/job/robot/job/tree-view/lastSuccessfulBuild/artifact/bin/robot.jar
+build/ldtab.jar: | build
+	curl -L -o $@ "https://github.com/ontodev/ldtab.clj/releases/download/v2022-03-03/ldtab.jar"
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
@@ -47,8 +48,8 @@ build/rdftab: | build
 build/terminology.xlsx: | build
 	curl -L -o $@ https://docs.google.com/spreadsheets/d/1xCrNM8Rv3v04ii1Fd8GMNTSwHzreo74t4DGsAeTsMbk/export?format=xlsx
 
-src/ontology/%.tsv: build/terminology.xlsx
-	xlsx2csv -d tab --sheetname $* $< > $@
+#src/ontology/%.tsv: build/terminology.xlsx
+#	xlsx2csv -d tab --sheetname $* $< > $@
 
 build/prefixes.json: src/ontology/prefixes.tsv
 	echo '{ "@context": {' > $@
@@ -69,23 +70,25 @@ cmi-pb.owl: build/prefixes.json $(TABLES) build/imports.owl | build/robot.jar
 	--include-annotations true \
 	--output $@
 
-build/cmi-pb-tree.html: cmi-pb.owl | build/robot-tree.jar
-	$(ROBOT_TREE) tree --input $< --tree $@
-
-build/prefixes.sql: src/ontology/prefixes.tsv | build
-	echo "CREATE TABLE IF NOT EXISTS prefix (" > $@
-	echo "  prefix TEXT PRIMARY KEY," >> $@
-	echo "  base TEXT NOT NULL" >> $@
-	echo ");" >> $@
-	echo "INSERT OR IGNORE INTO prefix VALUES" >> $@
-	tail -n+2 $< | $(SQL_SED) \
-	>> $@
-	echo '("CMI-PB", "http://example.com/cmi-pb/");' >> $@
-
-build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
+#build/cmi-pb.db: build/prefixes.sql cmi-pb.owl | build/rdftab
+#	rm -f $@
+#	sqlite3 $@ < $<
+#	build/rdftab $@ < cmi-pb.owl
+build/ontology.db: build/prefixes.sql cmi-pb.owl | build/rdftab
 	rm -f $@
 	sqlite3 $@ < $<
 	build/rdftab $@ < cmi-pb.owl
+
+build/ontology.sql: build/ontology.db
+	sqlite3 $< '.dump "statements"' | sed 's/statements/ontology/g' > $@
+
+.PHONY: load_ontology
+load_ontology: build/cmi-pb.db build/ontology.sql
+	sqlite3 $< < $(word 2,$^)
+
+load_ontology_2: build/cmi-pb.db cmi-pb.owl | build/ldtab.jar
+	sqlite3 $< <<< "CREATE TABLE statement (assertion INT NOT NULL, retraction INT NOT NULL DEFAULT 0, graph TEXT NOT NULL, subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL, datatype TEXT NOT NULL, annotation TEXT);"
+	$(LDTAB) import $^
 
 
 ### Uniprot Proteins
@@ -122,9 +125,9 @@ build/proteins.tsv: src/build_proteins.py build/proteins.db build/olink_prot_inf
 
 IMPORTS := bfo chebi cl cob go obi pr vo
 OWL_IMPORTS := $(foreach I,$(IMPORTS),build/$(I).owl.gz)
-DBS := build/cmi-pb.db $(foreach I,$(IMPORTS),build/$(I).db)
 MODULES := $(foreach I,$(IMPORTS),build/$(I)-import.ttl)
 
+DBS := $(foreach I,$(IMPORTS),build/$(I).db) build/cmi-pb.db build/ontology.db
 dbs: $(DBS)
 
 $(OWL_IMPORTS): | build
@@ -165,3 +168,107 @@ clean-imports:
 	rm -rf $(OWL_IMPORTS)
 
 refresh-imports: clean-imports build/imports.owl
+
+
+### Build Tables
+
+### Tables from Google Sheet
+GSTSV := "https://docs.google.com/spreadsheets/d/1KlG4KAuuHel8X3G3AGYraOio-8S9k7UkEdDr6avWnTM/export?format=tsv"
+src/table.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=0"
+
+src/column.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1859463123"
+
+src/datatype.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1518754913"
+
+src/prefix.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1105305212"
+
+src/ontology/import.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=1380652872"
+
+src/ontology/gate.tsv: | build
+	curl -L -o $@ "$(GSTSV)&gid=2143856188"
+
+GS_TSVS := src/table.tsv src/column.tsv src/datatype.tsv src/ontology/import.tsv src/ontology/gate.tsv
+
+.PHONY: fetch-gs-tsv
+fetch-gs-tsv: $(GS_TSVS)
+
+.PHONY: update-gs-tsv
+update-gs-tsv:
+	rm -f $(GS_TSVS)
+	make fetch-gs-tsv
+
+### Tables from CMI-PB API
+API_TSVS := build/cell_type.tsv build/gene.tsv build/protein.tsv build/olink_prot_info.tsv build/transcript.tsv
+$(API_TSVS): | build
+	$(eval NAME := $(basename $(notdir $@)))
+	curl -L -o $@.csv -H 'accept: text/csv' "https://www.cmi-pb.org:443/api/v2/$(NAME)"
+	xsv fmt -t "	" -o $@ $@.csv
+	rm $@.csv
+
+.PHONY: fetch-api-tsv
+fetch-api-tsv: $(API_TSVS)
+
+.PHONY: update-api-tsv
+update-api-tsv:
+	rm -f $(API_TSVS)
+	make fetch-api-tsv
+
+### Tables from CMI-PB Download
+build/2021_cmipb_challenge.zip: | build/
+	curl -L -o $@ "https://www.cmi-pb.org/downloads/cmipb_challenge_datasets/2021_cmipb_challenge/2021_cmipb_challenge.zip"
+
+build/2021_cmipb_challenge/: build/2021_cmipb_challenge.zip
+	cd build && unzip -o 2021_cmipb_challenge.zip
+	touch $@
+
+ZIP_TABLES := subject specimen ab_titer live_cell_percentages olink_prot_exp rnaseq
+ZIP_TSVS := $(foreach x,$(ZIP_TABLES),build/$(x).tsv)
+
+$(ZIP_TSVS): build/2021_cmipb_challenge/
+	$(eval NAME := $(basename $(notdir $@)))
+	xsv cat rows $<2020LD_$(NAME).csv $<2021BD_$(NAME).csv \
+	| head -n35000 \
+	> $@.csv
+	xsv fixlengths --output $@ $@.csv
+	rm $@.csv
+
+.PHONY: fetch-zip-tsv
+fetch-zip-tsv: $(ZIP_TSVS)
+
+.PHONY: update-zip-tsv
+update-zip-tsv:
+	rm -f $(ZIP_TSVS)
+	make fetch-zip-tsv
+
+.PHONY: update-tsv
+update-tsv:
+	rm -f $(GS_TSVS) $(API_TSVS) $(ZIP_TSVS)
+	make update-gs-tsv update-api-tsv update-zip-tsv
+
+build/cmi-pb.sql: src/script/load.py src/table.tsv src/column.tsv src/datatype.tsv src/prefix.tsv src/ontology/import.tsv src/script/validate.py | build
+	python3 $< $(word 2,$^) $| > $@
+
+# The database file we be created as a side-effect of calling src/script/load.py to create the sql file:
+build/cmi-pb.db: build/cmi-pb.sql
+
+output:
+	mkdir -p $@
+
+output/messages.tsv: src/script/export.py build/cmi-pb.db | output
+	python3 $< messages $(word 2,$^) $| prefix import test_tree_under
+
+output/%.tsv: src/script/export.py build/cmi-pb.db | output
+	python3 $< data $(word 2,$^) $| $*
+
+.PHONY: test
+test: | build
+	test/test.py build/cmi-pb.db
+
+.PHONY: clean
+clean:
+	rm -rf build output test/output/*_actual

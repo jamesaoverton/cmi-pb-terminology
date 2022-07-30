@@ -1,0 +1,33 @@
+table	cell	level	rule_id	message	value
+prefix	A5	error	key:primary	Values of prefix must be unique	VO
+prefix	B5	error	key:unique	Values of base must be unique	http://purl.obolibrary.org/obo/VO_
+prefix	A10	error	key:primary	Values of prefix must be unique	rdf
+prefix	B10	error	key:unique	Values of base must be unique	http://www.w3.org/1999/02/22-rdf-syntax-ns#
+import	A1	error	key:foreign	Value MOB of column source is not in prefix.prefix	MOB
+import	C1	error	datatype:trimmed_line	label should be a line of text that does not begin or end with whitespace	   mobecular entity
+import	A10	error	key:foreign	Value BOB of column source is not in prefix.prefix	BOB
+import	B10	error	key:unique	Values of id must be unique	VO:0000001
+import	C10	error	key:primary	Values of label must be unique	vaccine
+import	C10	error	tree:child-unique	Values of label must be unique	vaccine
+import	A2	error	key:foreign	Value ZOB of column source is not in prefix.prefix	ZOB
+import	A3	error	key:foreign	Value JOB of column source is not in prefix.prefix	JOB
+import	A4	error	key:foreign	Value SOB of column source is not in prefix.prefix	SOB
+import	E4	error	tree:cycle	Cyclic dependency: (label: bar, parent: car), (label: car, parent: foo), (label: foo, parent: bar) for tree(parent) of label	bar
+import	A5	error	key:foreign	Value YOB of column source is not in prefix.prefix	YOB
+import	E5	error	tree:foreign	Value jafar of column parent is not in column label	jafar
+import	E6	error	tree:foreign	Value owl:Thing of column parent is not in column label	owl:Thing
+import	A7	error	datatype:nonspace	source should be text without whitespace	CO B
+import	A7	error	datatype:word	source should be a single word: letters, numbers, underscore	CO B
+import	A7	error	datatype:prefix	source should be a prefix for a CURIE	CO B
+import	A7	error	key:foreign	Value CO B of column source is not in prefix.prefix	CO B
+import	B8	error	key:unique	Values of id must be unique	COB:0000013
+foobar	D1	error	rule:foo-2	bar cannot be null if foo is not null	x
+foobar	D1	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
+foobar	C2	error	under:not-under	Value 'e' of column xyzzy is not under 'd'	e
+foobar	D2	error	rule:foo-1	bar must be null whenever foo is null	
+foobar	C3	error	under:not-under	Value 'f' of column xyzzy is not under 'd'	f
+foobar	C4	error	under:not-under	Value 'g' of column xyzzy is not under 'd'	g
+foobar	D4	error	rule:foo-4	bar must be 'y' or 'z' if foo is 'x'	x
+foobar	C5	error	under:not-under	Value 'h' of column xyzzy is not under 'd'	h
+foobar	C7	error	under:not-in-tree	Value z of column xyzzy is not in foobar.child	z
+foobar	A9	error	key:foreign	Value i of column child exists only in foreign_table_conflict.other_foreign_column	i

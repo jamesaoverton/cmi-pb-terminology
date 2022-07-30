@@ -1,0 +1,10 @@
+1|BFO||http://purl.obolibrary.org/obo/BFO_|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+2|COB||http://purl.obolibrary.org/obo/COB_||http://purl.obolibrary.org/obo/cob.owl||http://purl.obolibrary.org/obo/cob/releases/2021-09-13/cob-native.owl|
+3|SCHMO||http://purl.obolibrary.org/obo/VO_|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+4|VO||http://purl.obolibrary.org/obo/SCHMO_|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+6|dc||http://purl.org/dc/terms/|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+7|oio||http://www.geneontology.org/formats/oboInOwl#|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+8|owl||http://www.w3.org/2002/07/owl#|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+9|rdf||http://www.w3.org/1999/02/22-rdf-syntax-ns#|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+11|rdfs||http://www.w3.org/2000/01/rdf-schema#|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
+12|xsd||http://www.w3.org/2001/XMLSchema#|||{"value":"","valid":true,"messages":[],"nulltype":"empty"}||{"value":"","valid":true,"messages":[],"nulltype":"empty"}
